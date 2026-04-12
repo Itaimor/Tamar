@@ -1,16 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import BottomNav from "@/components/BottomNav";
+import ChatScreen from "@/components/ChatScreen";
+import AnalysisScreen from "@/components/AnalysisScreen";
+import HistoryScreen from "@/components/HistoryScreen";
+import InsightsScreen from "@/components/InsightsScreen";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+type Tab = "chat" | "analysis" | "history" | "insights";
+
+const Index = () => {
+  const [activeTab, setActiveTab] = useState<Tab>("chat");
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background max-w-lg mx-auto flex flex-col">
+      <div className="flex-1 overflow-y-auto pb-20">
+        {activeTab === "chat" && <ChatScreen />}
+        {activeTab === "analysis" && <AnalysisScreen />}
+        {activeTab === "history" && <HistoryScreen />}
+        {activeTab === "insights" && <InsightsScreen />}
+      </div>
+      <BottomNav active={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
