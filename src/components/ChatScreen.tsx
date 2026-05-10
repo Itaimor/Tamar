@@ -1,29 +1,85 @@
-import { Camera, Mic, Send, BarChart3 } from "lucide-react";
+import { Camera, Mic, Send, BarChart3, Loader2 } from "lucide-react";
 import tamarLogo from "@/assets/tamar-logo.png";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState, useRef, useEffect } from "react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { toast } from "sonner";
 
-const mockMessages = [
-  {
-    role: "user" as const,
-    text: "I just ate a bowl of pasta with garlic sauce.",
+const apiKey = import.meta.env.VITE_GEMINI_TAMAR_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const model = genAI ? genAI.getGenerativeModel({
+  model: "gemini-3.1-flash-lite",
+  systemInstruction: {
+    role: "system",
+    parts: [{ text: "You are Tamar, a professional and empathetic AI Health Assistant specializing in IBS and digestive health. Your goal is to help users log their meals, analyze potential triggers, and provide soothing recommendations based on their symptoms. Keep responses concise, supportive, and informative. Always clarify that you are an AI and not a doctor." }]
   },
+}) : null;
+
+const initialMessages = [
   {
     role: "ai" as const,
-    text: "Logged ✅ Based on your history, **garlic** has a **65% chance** of causing discomfort within 3 hours. Would you like a tea recommendation to help soothe your stomach?",
-  },
-  {
-    role: "user" as const,
-    text: "Yes, please recommend something.",
-  },
-  {
-    role: "ai" as const,
-    text: "I'd recommend **ginger-lemon tea** — it's been shown to reduce bloating by up to 40% in your profile. Steep fresh ginger for 5 minutes for best results. 🍵",
+    text: "Hello! I'm Tamar, your digestive health companion. How can I help you today? You can log a meal, ask about symptoms, or request an analysis of your recent history.",
   },
 ];
 
 const chips = ["Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
 
 const ChatScreen = () => {
+  const [messages, setMessages] = useState(initialMessages);
+  const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (e?: React.FormEvent | string) => {
+    const text = typeof e === "string" ? e : inputValue;
+    if (!text.trim() || isLoading) return;
+
+    if (!model) {
+      toast.error("Gemini API key is missing or invalid. Please check your .env file.");
+      return;
+    }
+
+    const userMessage = { role: "user" as const, text };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+    setIsLoading(true);
+
+    try {
+      // The Gemini API requires history to start with a 'user' message.
+      // We find the first user message and take everything from there.
+      const history = messages
+        .map(m => ({
+          role: m.role === "user" ? "user" as const : "model" as const,
+          parts: [{ text: m.text }],
+        }));
+
+      const firstUserIndex = history.findIndex(m => m.role === "user");
+      const validHistory = firstUserIndex !== -1 ? history.slice(firstUserIndex) : [];
+
+      const chat = model.startChat({
+        history: validHistory,
+      });
+
+      const result = await chat.sendMessage(text);
+      const responseText = result.response.text();
+
+      setMessages((prev) => [...prev, { role: "ai" as const, text: responseText }]);
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      toast.error("Failed to get response from Tamar. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background md:bg-card md:border md:rounded-3xl md:shadow-lg md:overflow-hidden md:mb-4">
       {/* Header */}
@@ -36,8 +92,8 @@ const ChatScreen = () => {
           <div>
             <h2 className="text-base font-bold text-foreground">Tamar</h2>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-safe animate-pulse"></span>
-              AI Health Assistant
+              <span className={`h-1.5 w-1.5 rounded-full ${isLoading ? "bg-warning animate-bounce" : "bg-safe animate-pulse"}`}></span>
+              {isLoading ? "Tamar is thinking..." : "AI Health Assistant"}
             </p>
           </div>
         </div>
@@ -50,27 +106,42 @@ const ChatScreen = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-6">
-        {mockMessages.map((msg, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div className={`${msg.role === "user" ? "chat-bubble-user" : "chat-bubble-ai"} shadow-sm md:max-w-[70%] lg:max-w-[65%]`}>
-              <p className="text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
-                {msg.text.split(/(\*\*.*?\*\*)/g).map((part, j) =>
-                  part.startsWith("**") && part.endsWith("**") ? (
-                    <strong key={j} className="font-bold">{part.slice(2, -2)}</strong>
-                  ) : (
-                    <span key={j}>{part}</span>
-                  )
-                )}
-              </p>
-            </div>
-          </motion.div>
-        ))}
+        <AnimatePresence mode="popLayout">
+          {messages.map((msg, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div className={`${msg.role === "user" ? "chat-bubble-user" : "chat-bubble-ai"} shadow-sm md:max-w-[70%] lg:max-w-[65%]`}>
+                <p className="text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {msg.text.split(/(\*\*.*?\*\*)/g).map((part, j) =>
+                    part.startsWith("**") && part.endsWith("**") ? (
+                      <strong key={j} className="font-bold">{part.slice(2, -2)}</strong>
+                    ) : (
+                      <span key={j}>{part}</span>
+                    )
+                  )}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+          {isLoading && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-start"
+            >
+              <div className="chat-bubble-ai flex items-center gap-2 py-3 px-4">
+                <Loader2 size={16} className="animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Tamar is typing...</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Footer Area */}
@@ -78,28 +149,42 @@ const ChatScreen = () => {
         {/* Chips */}
         <div className="pb-4 flex gap-2 overflow-x-auto no-scrollbar">
           {chips.map((chip) => (
-            <button key={chip} className="tamar-chip whitespace-nowrap text-[11px] md:text-xs">
+            <button
+              key={chip}
+              onClick={() => handleSendMessage(chip)}
+              disabled={isLoading}
+              className="tamar-chip whitespace-nowrap text-[11px] md:text-xs disabled:opacity-50"
+            >
               {chip}
             </button>
           ))}
         </div>
 
         {/* Input bar */}
-        <div className="relative flex items-center gap-2 group">
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+          className="relative flex items-center gap-2 group"
+        >
           <div className="flex-1 flex items-center gap-3 bg-muted hover:bg-muted/80 focus-within:bg-muted/60 transition-all rounded-2xl px-4 py-3 md:py-4 border border-transparent focus-within:border-primary/20">
             <Camera size={20} className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors" strokeWidth={1.5} />
             <input
               type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
               placeholder="Message Tamar..."
               className="flex-1 bg-transparent text-sm md:text-base outline-none placeholder:text-muted-foreground"
-              readOnly
+              disabled={isLoading}
             />
             <Mic size={20} className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors" strokeWidth={1.5} />
           </div>
-          <button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl h-11 w-11 md:h-14 md:w-14 flex items-center justify-center transition-all shadow-md active:scale-95 shrink-0">
-            <Send size={20} className="md:size-24" />
+          <button
+            type="submit"
+            disabled={!inputValue.trim() || isLoading}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl h-11 w-11 md:h-14 md:w-14 flex items-center justify-center transition-all shadow-md active:scale-95 shrink-0 disabled:opacity-50 disabled:grayscale"
+          >
+            {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
