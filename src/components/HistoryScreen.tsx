@@ -116,24 +116,24 @@ const HistoryScreen = () => {
           </div>
 
           {/* Meals */}
-          <div className="space-y-2.5">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {day.meals.map((meal, mi) => {
               const mood = moodConfig[meal.mood];
               return (
-                <div key={mi} className="tamar-card flex items-center gap-3 p-3">
+                <div key={mi} className="tamar-card flex items-center gap-3 p-4">
                   <img
                     src={meal.image}
                     alt={meal.name}
-                    className="w-14 h-14 rounded-xl object-cover"
+                    className="w-16 h-16 rounded-xl object-cover"
                     loading="lazy"
-                    width={56}
-                    height={56}
+                    width={64}
+                    height={64}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{meal.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{meal.time} · {meal.calories} kcal</p>
+                    <p className="text-base font-semibold text-foreground">{meal.name}</p>
+                    <p className="text-xs text-muted-foreground">{meal.time} · {meal.calories} kcal</p>
                   </div>
-                  <span className={`text-[10px] font-medium px-2 py-1 rounded-full whitespace-nowrap ${mood.className}`}>
+                  <span className={`text-[10px] font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${mood.className}`}>
                     {mood.emoji} {mood.label}
                   </span>
                 </div>
