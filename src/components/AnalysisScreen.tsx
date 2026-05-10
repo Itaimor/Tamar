@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
 import { TrendingUp, AlertTriangle, Shield } from "lucide-react";
+import ComingSoonOverlay from "./ComingSoonOverlay";
+
 
 const triggerFoods = [
   { name: "Garlic", risk: 85, color: "risk-high" },
@@ -36,7 +38,9 @@ const getRiskBg = (risk: number) => {
 
 const AnalysisScreen = () => {
   return (
-    <div className="px-4 pt-6 pb-4 space-y-6">
+    <div className="px-4 pt-6 pb-4 space-y-6 relative min-h-[calc(100vh-200px)]">
+      <ComingSoonOverlay />
+
       <div>
         <h1 className="text-2xl font-bold text-foreground">Analysis</h1>
         <p className="text-sm text-muted-foreground mt-1">Your personalized trigger report</p>

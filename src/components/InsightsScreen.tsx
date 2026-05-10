@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import { Droplets, Moon, Brain, Clock } from "lucide-react";
+import ComingSoonOverlay from "./ComingSoonOverlay";
+
 import foodSalmon from "@/assets/food-salmon.jpg";
 import foodRiceBowl from "@/assets/food-rice-bowl.jpg";
 import foodOatmeal from "@/assets/food-oatmeal.jpg";
@@ -30,7 +32,9 @@ const safeRecipes = [
 
 const InsightsScreen = () => {
   return (
-    <div className="px-4 pt-6 pb-4 space-y-6">
+    <div className="px-4 pt-6 pb-4 space-y-6 relative min-h-[calc(100vh-200px)]">
+      <ComingSoonOverlay />
+
       <div>
         <h1 className="text-2xl font-bold text-foreground">Insights</h1>
         <p className="text-sm text-muted-foreground mt-1">Environment & safe foods</p>

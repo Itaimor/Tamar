@@ -1,4 +1,6 @@
 import { motion } from "framer-motion";
+import ComingSoonOverlay from "./ComingSoonOverlay";
+
 import foodAvocado from "@/assets/food-avocado-toast.jpg";
 import foodSalmon from "@/assets/food-salmon.jpg";
 import foodGingerTea from "@/assets/food-ginger-tea.jpg";
@@ -93,7 +95,9 @@ const diaryData: DayLog[] = [
 
 const HistoryScreen = () => {
   return (
-    <div className="px-4 pt-6 pb-4 space-y-6">
+    <div className="px-4 pt-6 pb-4 space-y-6 relative min-h-[calc(100vh-200px)]">
+      <ComingSoonOverlay />
+
       <div>
         <h1 className="text-2xl font-bold text-foreground">Diary</h1>
         <p className="text-sm text-muted-foreground mt-1">Your meal history & mood log</p>
