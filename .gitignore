@@ -23,4 +23,19 @@ dist-ssr
 *.sln
 *.sw?
 
+# Python virtual environments
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+
+# .env files
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
