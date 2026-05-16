@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Search, Bell, User } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import AuthDialog from "@/components/AuthDialog";
+import { useAuth } from "@/components/AuthProvider";
 
 interface NavbarProps {
   forceSolid?: boolean;
@@ -8,8 +10,23 @@ interface NavbarProps {
 
 const Navbar = ({ forceSolid = false }: NavbarProps) => {
   const [scrolled, setScrolled] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    "";
+
+  const initials = displayName
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -88,11 +105,17 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
         <div className="flex items-center gap-6">
           <Search className="w-5 h-5 text-gray-300 cursor-pointer hover:text-white transition-colors" />
           <Bell className="w-5 h-5 text-gray-300 cursor-pointer hover:text-white transition-colors" />
-          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center cursor-pointer overflow-hidden hover:ring-2 ring-white/20 transition-all">
-            <User className="w-5 h-5 text-white" />
-          </div>
+          <button
+            type="button"
+            aria-label={user ? "Open account" : "Sign up"}
+            onClick={() => setAuthOpen(true)}
+            className="w-9 h-9 bg-primary rounded-full flex items-center justify-center cursor-pointer overflow-hidden hover:ring-2 ring-white/30 transition-all text-sm font-bold text-white"
+          >
+            {user && initials ? initials : <User className="w-5 h-5 text-white" />}
+          </button>
         </div>
       </div>
+      <AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
     </nav>
   );
 };

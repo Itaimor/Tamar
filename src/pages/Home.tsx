@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
-import { Play, Plus, Info, ChevronRight, ChevronLeft, Search, Bell, User } from "lucide-react";
+import { Play, Plus, Info, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
+import { recordRecipeInteraction } from "@/lib/recipeInteractions";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const sections = [
     {
@@ -65,6 +68,21 @@ const Home = () => {
     }
   ];
 
+  const handleRecipeUse = async (item: { id: number; title: string }) => {
+    if (user) {
+      await recordRecipeInteraction({
+        userId: user.id,
+        recipeId: item.id,
+        recipeTitle: item.title,
+        interactionType: "started",
+      });
+    } else {
+      toast.info("Sign up to save recipe activity for future recommendations.");
+    }
+
+    navigate("/app");
+  };
+
   return (
     <div className="min-h-screen bg-[#141414] text-white font-sans selection:bg-primary selection:text-white overflow-x-hidden">
       <Navbar />
@@ -94,7 +112,12 @@ const Home = () => {
           </p>
           <div className="flex flex-wrap gap-4">
             <Button 
-              onClick={() => navigate("/app")}
+              onClick={() =>
+                handleRecipeUse({
+                  id: 1,
+                  title: "Mediterranean Harvest Bowl",
+                })
+              }
               className="bg-white text-black hover:bg-white/90 gap-3 px-8 py-7 text-xl font-bold transition-all hover:scale-105 active:scale-95"
             >
               <Play className="fill-current w-6 h-6" /> Start Cooking
@@ -134,9 +157,17 @@ const Home = () => {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors">
+                        <button
+                          type="button"
+                          aria-label={`Start ${item.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleRecipeUse(item);
+                          }}
+                          className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
+                        >
                           <Play className="fill-black text-black w-4 h-4 ml-0.5" />
-                        </div>
+                        </button>
                         <div className="w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors">
                           <Plus className="text-white w-4 h-4" />
                         </div>
