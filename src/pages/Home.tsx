@@ -1,4 +1,5 @@
-import { Play, Plus, Info, ChevronRight } from "lucide-react";
+import { useRef } from "react";
+import { Play, Plus, Info, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -9,6 +10,19 @@ import { recordRecipeInteraction } from "@/lib/recipeInteractions";
 const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const handleScroll = (idx: number, direction: "left" | "right") => {
+    const container = rowRefs.current[idx];
+    if (container) {
+      const scrollAmount = container.clientWidth * 0.75;
+      if (direction === "left") {
+        container.scrollLeft -= scrollAmount;
+      } else {
+        container.scrollLeft += scrollAmount;
+      }
+    }
+  };
 
   const sections = [
     {
@@ -98,15 +112,15 @@ const Home = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
         
-        <div className="absolute bottom-[15%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
+        <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
           <div className="flex items-center gap-2 mb-4">
             <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
             <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
           </div>
-          <h2 className="text-5xl md:text-7xl font-black mb-6 tracking-tight leading-tight">
+          <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
             Mediterranean <br /> Harvest Bowl
           </h2>
-          <p className="text-lg md:text-xl text-gray-200 mb-8 line-clamp-3 font-medium max-w-lg leading-relaxed">
+          <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 line-clamp-3 font-medium max-w-lg leading-relaxed">
             Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl. 
             A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.
           </p>
@@ -118,22 +132,22 @@ const Home = () => {
                   title: "Mediterranean Harvest Bowl",
                 })
               }
-              className="bg-white text-black hover:bg-white/90 gap-3 px-8 py-7 text-xl font-bold transition-all hover:scale-105 active:scale-95"
+              className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold transition-all hover:scale-105 active:scale-95"
             >
-              <Play className="fill-current w-6 h-6" /> Start Cooking
+              <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
             </Button>
             <Button 
               variant="secondary" 
-              className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-8 py-7 text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
+              className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
             >
-              <Info className="w-6 h-6" /> More Info
+              <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
             </Button>
           </div>
         </div>
       </div>
 
       {/* Content Rows */}
-      <div className="pb-24 -mt-32 md:-mt-48 relative z-10 space-y-12">
+      <div className="pb-24 -mt-20 md:-mt-32 relative z-10 space-y-12">
         {sections.map((section, idx) => (
           <div key={idx} className="pl-4 md:pl-12 group/row">
             <div className="flex items-center justify-between pr-4 md:pr-12 mb-3">
@@ -143,8 +157,29 @@ const Home = () => {
               </h3>
             </div>
             
-            <div className="relative">
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-6 pr-12 scroll-smooth">
+            <div className="relative group/carousel">
+              {/* Left Scroll Button */}
+              <button
+                onClick={() => handleScroll(idx, "left")}
+                className="absolute left-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 opacity-0 group-hover/carousel:opacity-100 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-r-md"
+                aria-label="Scroll left"
+              >
+                <ChevronLeft className="w-8 h-8 transition-transform duration-300 hover:scale-125" />
+              </button>
+
+              {/* Right Scroll Button */}
+              <button
+                onClick={() => handleScroll(idx, "right")}
+                className="absolute right-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 opacity-0 group-hover/carousel:opacity-100 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-l-md"
+                aria-label="Scroll right"
+              >
+                <ChevronRight className="w-8 h-8 transition-transform duration-300 hover:scale-125" />
+              </button>
+
+              <div 
+                ref={(el) => (rowRefs.current[idx] = el)}
+                className="flex gap-2 overflow-x-auto no-scrollbar pb-6 pr-12 scroll-smooth"
+              >
                 {section.items.map((item) => (
                   <div 
                     key={item.id} 
