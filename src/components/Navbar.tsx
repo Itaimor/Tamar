@@ -40,6 +40,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
 
   const isActive = (path: string) => {
     if (path === "/" && location.pathname === "/") return true;
+    if (path === "/cookbook" && location.pathname === "/cookbook") return true;
     if (path.includes("tab=")) {
       const tab = path.split("tab=")[1];
       const params = new URLSearchParams(location.search);
@@ -71,6 +72,13 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               className={linkClass("/")}
             >
               Home
+            </a>
+            <a 
+              href="#" 
+              onClick={(e) => { e.preventDefault(); navigate("/cookbook"); }}
+              className={linkClass("/cookbook")}
+            >
+              CookBook
             </a>
             <a 
               href="#" 

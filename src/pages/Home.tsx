@@ -1,16 +1,62 @@
-import { useRef } from "react";
-import { Play, Plus, Info, ChevronRight, ChevronLeft } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Play, Plus, Info, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
-import { recordRecipeInteraction } from "@/lib/recipeInteractions";
+import { recordRecipeInteraction, fetchSavedRecipes, toggleSaveRecipe } from "@/lib/recipeInteractions";
+import { recipeSections } from "@/lib/recipes";
 
 const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadSavedRecipes = async () => {
+      if (user) {
+        try {
+          const saved = await fetchSavedRecipes(user.id);
+          setSavedRecipeIds(saved.map((r: any) => r.recipe_id));
+        } catch (error) {
+          console.error("Failed to load saved recipes:", error);
+        }
+      } else {
+        setSavedRecipeIds([]);
+      }
+    };
+    loadSavedRecipes();
+  }, [user]);
+
+  const handleToggleSave = async (item: { id: number; title: string }) => {
+    if (!user) {
+      toast.info("Please sign up or sign in to save recipes to your CookBook.");
+      return;
+    }
+
+    const isCurrentlySaved = savedRecipeIds.includes(String(item.id));
+    try {
+      const isSaved = await toggleSaveRecipe({
+        userId: user.id,
+        recipeId: item.id,
+        recipeTitle: item.title,
+        isCurrentlySaved,
+      });
+
+      if (isSaved) {
+        setSavedRecipeIds((prev) => [...prev, String(item.id)]);
+        toast.success(`"${item.title}" saved to your CookBook!`);
+      } else {
+        setSavedRecipeIds((prev) => prev.filter((id) => id !== String(item.id)));
+        toast.success(`"${item.title}" removed from your CookBook.`);
+      }
+    } catch (error) {
+      toast.error("Failed to update saved recipes. Please try again.");
+    }
+  };
+
 
   const handleScroll = (idx: number, direction: "left" | "right") => {
     const container = rowRefs.current[idx];
@@ -24,63 +70,7 @@ const Home = () => {
     }
   };
 
-  const sections = [
-    {
-      title: "Curated for You",
-      items: [
-        { id: 1, title: "Gourmet Mediterranean Bowl", image: "/images/hero.png" },
-        { id: 2, title: "Zesty Quinoa Salad", image: "/images/salad.png" },
-        { id: 3, title: "Artisan Wood-Fired Pizza", image: "/images/pizza.png" },
-        { id: 4, title: "Avocado Toast Deluxe", image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=800&auto=format&fit=crop" },
-        { id: 5, title: "Fresh Berry Smoothie", image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?q=80&w=800&auto=format&fit=crop" },
-        { id: 6, title: "Grilled Salmon with Asparagus", image: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?q=80&w=800&auto=format&fit=crop" },
-      ]
-    },
-    {
-      title: "Trending in Your Area",
-      items: [
-        { id: 7, title: "Classic Margherita Pizza", image: "/images/pizza.png" },
-        { id: 8, title: "Rainbow Poke Bowl", image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=800&auto=format&fit=crop" },
-        { id: 9, title: "Truffle Mushroom Pasta", image: "https://images.unsplash.com/photo-1473093226795-af9932fe5856?q=80&w=800&auto=format&fit=crop" },
-        { id: 10, title: "Spicy Tuna Roll", image: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?q=80&w=800&auto=format&fit=crop" },
-        { id: 11, title: "Greek Goddess Salad", image: "/images/salad.png" },
-        { id: 12, title: "Wagyu Beef Burger", image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=800&auto=format&fit=crop" },
-      ]
-    },
-    {
-      title: "Bursting with Flavor",
-      items: [
-        { id: 13, title: "Spicy Thai Red Curry", image: "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?q=80&w=800&auto=format&fit=crop" },
-        { id: 14, title: "Sizzling Garlic Shrimp", image: "https://images.unsplash.com/photo-1559742811-822873691df8?q=80&w=800&auto=format&fit=crop" },
-        { id: 15, title: "Moroccan Spiced Lamb", image: "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=800&auto=format&fit=crop" },
-        { id: 16, title: "Loaded Nachos Supreme", image: "https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?q=80&w=800&auto=format&fit=crop" },
-        { id: 17, title: "Buffalo Cauliflower Wings", image: "https://images.unsplash.com/photo-1527477396000-e27163b481c2?q=80&w=800&auto=format&fit=crop" },
-        { id: 18, title: "Chipotle Chicken Tacos", image: "https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?q=80&w=800&auto=format&fit=crop" },
-      ]
-    },
-    {
-      title: "Healthy & Mindful",
-      items: [
-        { id: 19, title: "Detox Green Bowl", image: "/images/salad.png" },
-        { id: 20, title: "Roasted Sweet Potato Bowl", image: "https://images.unsplash.com/photo-1511690656952-34342bb7c2f2?q=80&w=800&auto=format&fit=crop" },
-        { id: 21, title: "Lentil & Kale Soup", image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=800&auto=format&fit=crop" },
-        { id: 22, title: "Chia Seed Pudding", image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=800&auto=format&fit=crop" },
-        { id: 23, title: "Steamed Sea Bass", image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?q=80&w=800&auto=format&fit=crop" },
-        { id: 24, title: "Zucchini Noodles with Pesto", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?q=80&w=800&auto=format&fit=crop" },
-      ]
-    },
-    {
-      title: "Quick & Satisfying",
-      items: [
-        { id: 25, title: "15-Minute Carbonara", image: "https://images.unsplash.com/photo-1612874742237-6526221588e3?q=80&w=800&auto=format&fit=crop" },
-        { id: 26, title: "Sheet Pan Fajitas", image: "https://images.unsplash.com/photo-1534353473418-4cfa6c56fd38?q=80&w=800&auto=format&fit=crop" },
-        { id: 27, title: "Caprese Sandwich", image: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?q=80&w=800&auto=format&fit=crop" },
-        { id: 28, title: "Quick Egg Fried Rice", image: "https://images.unsplash.com/photo-1512058560366-cd2427ff06d0?q=80&w=800&auto=format&fit=crop" },
-        { id: 29, title: "Hummus Veggie Wrap", image: "https://images.unsplash.com/photo-1540713434306-58505cf1b6fc?q=80&w=800&auto=format&fit=crop" },
-        { id: 30, title: "Honey Garlic Chicken", image: "https://images.unsplash.com/photo-1527477396000-e27163b481c2?q=80&w=800&auto=format&fit=crop" },
-      ]
-    }
-  ];
+  const sections = recipeSections;
 
   const handleRecipeUse = async (item: { id: number; title: string }) => {
     if (user) {
@@ -203,9 +193,25 @@ const Home = () => {
                         >
                           <Play className="fill-black text-black w-4 h-4 ml-0.5" />
                         </button>
-                        <div className="w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors">
-                          <Plus className="text-white w-4 h-4" />
-                        </div>
+                        <button
+                          type="button"
+                          aria-label={savedRecipeIds.includes(String(item.id)) ? `Remove ${item.title} from cookbook` : `Save ${item.title} to cookbook`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleSave(item);
+                          }}
+                          className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                            savedRecipeIds.includes(String(item.id))
+                              ? "bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600"
+                              : "border-gray-400 hover:border-white"
+                          }`}
+                        >
+                          {savedRecipeIds.includes(String(item.id)) ? (
+                            <Check className="text-white w-4 h-4" />
+                          ) : (
+                            <Plus className="text-white w-4 h-4" />
+                          )}
+                        </button>
                         <div className="ml-auto w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors">
                           <ChevronRight className="text-white w-4 h-4 rotate-90" />
                         </div>
