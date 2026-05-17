@@ -62,7 +62,7 @@ export const recipeSections: RecipeSection[] = [
       { id: 25, title: "15-Minute Carbonara", image: "https://images.unsplash.com/photo-1612874742237-6526221588e3?q=80&w=800&auto=format&fit=crop", match: "94%", time: "15m" },
       { id: 26, title: "Sheet Pan Fajitas", image: "https://images.unsplash.com/photo-1534353473418-4cfa6c56fd38?q=80&w=800&auto=format&fit=crop", match: "96%", time: "18m" },
       { id: 27, title: "Caprese Sandwich", image: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?q=80&w=800&auto=format&fit=crop", match: "95%", time: "8m" },
-      { id: 28, title: "Quick Egg Fried Rice", image: "https://images.unsplash.com/photo-1512058560366-cd2427ff06d0?q=80&w=800&auto=format&fit=crop", match: "93%", time: "12m" },
+      { id: 28, title: "Quick Egg Fried Rice", image: "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=800&auto=format&fit=crop", match: "93%", time: "12m" },
       { id: 29, title: "Hummus Veggie Wrap", image: "https://images.unsplash.com/photo-1540713434306-58505cf1b6fc?q=80&w=800&auto=format&fit=crop", match: "92%", time: "7m" },
       { id: 30, title: "Honey Garlic Chicken", image: "https://images.unsplash.com/photo-1527477396000-e27163b481c2?q=80&w=800&auto=format&fit=crop", match: "95%", time: "15m" },
     ]
