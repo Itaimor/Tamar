@@ -2,18 +2,7 @@ import { Camera, Mic, Send, BarChart3, Loader2 } from "lucide-react";
 import tamarLogo from "@/assets/tamar-logo.png";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { toast } from "sonner";
-
-const apiKey = import.meta.env.VITE_GEMINI_TAMAR_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const model = genAI ? genAI.getGenerativeModel({
-  model: "gemini-3.1-flash-lite",
-  systemInstruction: {
-    role: "system",
-    parts: [{ text: "You are Tamar, a professional and empathetic AI Health Assistant specializing in IBS and digestive health. Your goal is to help users log their meals, analyze potential triggers, and provide soothing recommendations based on their symptoms. Keep responses concise, supportive, and informative. Always clarify that you are an AI and not a doctor." }]
-  },
-}) : null;
 
 const initialMessages = [
   {
@@ -42,11 +31,6 @@ const ChatScreen = () => {
     const text = typeof e === "string" ? e : inputValue;
     if (!text.trim() || isLoading) return;
 
-    if (!model) {
-      toast.error("Gemini API key is missing or invalid. Please check your .env file.");
-      return;
-    }
-
     const userMessage = { role: "user" as const, text };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
@@ -64,12 +48,24 @@ const ChatScreen = () => {
       const firstUserIndex = history.findIndex(m => m.role === "user");
       const validHistory = firstUserIndex !== -1 ? history.slice(firstUserIndex) : [];
 
-      const chat = model.startChat({
-        history: validHistory,
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: text,
+          history: validHistory,
+        }),
       });
 
-      const result = await chat.sendMessage(text);
-      const responseText = result.response.text();
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to fetch response from Tamar backend");
+      }
+
+      const data = await response.json();
+      const responseText = data.text;
 
       setMessages((prev) => [...prev, { role: "ai" as const, text: responseText }]);
     } catch (error) {
