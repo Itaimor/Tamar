@@ -218,9 +218,9 @@ const Home = () => {
                       </div>
                       <p className="font-bold text-sm md:text-base mb-1">{item.title}</p>
                       <div className="flex items-center gap-2 text-[10px] font-bold">
-                        <span className="text-green-500">98% Match</span>
+                        <span className="text-green-500">{item.match || "95%"} Match</span>
                         <span className="border border-gray-500 px-1 rounded-sm text-gray-400">HD</span>
-                        <span className="text-gray-400">15m</span>
+                        <span className="text-gray-400">{item.time || "15m"}</span>
                       </div>
                     </div>
                   </div>
