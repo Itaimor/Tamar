@@ -58,6 +58,30 @@ const Home = () => {
   };
 
 
+  const [scrollStates, setScrollStates] = useState<{
+    [key: number]: { canScrollLeft: boolean; canScrollRight: boolean };
+  }>({});
+
+  const updateScrollButtons = (idx: number) => {
+    const container = rowRefs.current[idx];
+    if (container) {
+      const { scrollLeft, scrollWidth, clientWidth } = container;
+      const canScrollLeft = scrollLeft > 1;
+      const canScrollRight = scrollLeft + clientWidth < scrollWidth - 2;
+
+      setScrollStates((prev) => {
+        const current = prev[idx];
+        if (current && current.canScrollLeft === canScrollLeft && current.canScrollRight === canScrollRight) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [idx]: { canScrollLeft, canScrollRight },
+        };
+      });
+    }
+  };
+
   const handleScroll = (idx: number, direction: "left" | "right") => {
     const container = rowRefs.current[idx];
     if (container) {
@@ -71,6 +95,27 @@ const Home = () => {
   };
 
   const sections = recipeSections;
+
+  useEffect(() => {
+    // Initial check once elements are rendered
+    const timer = setTimeout(() => {
+      sections.forEach((_, idx) => {
+        updateScrollButtons(idx);
+      });
+    }, 150);
+
+    const handleResize = () => {
+      sections.forEach((_, idx) => {
+        updateScrollButtons(idx);
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [sections]);
 
   const handleRecipeUse = async (item: { id: number; title: string }) => {
     if (user) {
@@ -93,15 +138,15 @@ const Home = () => {
 
       {/* Hero Section */}
       <div className="relative h-[85vh] w-full">
-        <img 
-          src="/images/hero.png" 
-          alt="Featured Recipe" 
+        <img
+          src="/images/hero.png"
+          alt="Featured Recipe"
           className="w-full h-full object-cover"
         />
         {/* Gradients to blend image */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
-        
+
         <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
           <div className="flex items-center gap-2 mb-4">
             <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
@@ -111,11 +156,11 @@ const Home = () => {
             Mediterranean <br /> Harvest Bowl
           </h2>
           <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 line-clamp-3 font-medium max-w-lg leading-relaxed">
-            Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl. 
+            Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl.
             A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.
           </p>
           <div className="flex flex-wrap gap-4">
-            <Button 
+            <Button
               onClick={() =>
                 handleRecipeUse({
                   id: 1,
@@ -126,8 +171,8 @@ const Home = () => {
             >
               <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
             </Button>
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
             >
               <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
@@ -146,12 +191,16 @@ const Home = () => {
                 <ChevronRight className="w-5 h-5 opacity-0 group-hover/row:opacity-100 transition-all -ml-2 group-hover/row:ml-0" />
               </h3>
             </div>
-            
+
             <div className="relative group/carousel">
               {/* Left Scroll Button */}
               <button
                 onClick={() => handleScroll(idx, "left")}
-                className="absolute left-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 opacity-0 group-hover/carousel:opacity-100 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-r-md"
+                className={`absolute left-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-r-md ${
+                  scrollStates[idx]?.canScrollLeft
+                    ? "opacity-0 group-hover/carousel:opacity-100 pointer-events-auto"
+                    : "opacity-0 pointer-events-none"
+                }`}
                 aria-label="Scroll left"
               >
                 <ChevronLeft className="w-8 h-8 transition-transform duration-300 hover:scale-125" />
@@ -160,25 +209,30 @@ const Home = () => {
               {/* Right Scroll Button */}
               <button
                 onClick={() => handleScroll(idx, "right")}
-                className="absolute right-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 opacity-0 group-hover/carousel:opacity-100 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-l-md"
+                className={`absolute right-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-l-md ${
+                  scrollStates[idx]?.canScrollRight !== false
+                    ? "opacity-0 group-hover/carousel:opacity-100 pointer-events-auto"
+                    : "opacity-0 pointer-events-none"
+                }`}
                 aria-label="Scroll right"
               >
                 <ChevronRight className="w-8 h-8 transition-transform duration-300 hover:scale-125" />
               </button>
 
-              <div 
+              <div
                 ref={(el) => (rowRefs.current[idx] = el)}
+                onScroll={() => updateScrollButtons(idx)}
                 className="flex gap-2 overflow-x-auto no-scrollbar pb-6 pr-12 scroll-smooth"
               >
                 {section.items.map((item) => (
-                  <div 
-                    key={item.id} 
+                  <div
+                    key={item.id}
                     className="flex-none w-[220px] md:w-[320px] aspect-video relative group cursor-pointer rounded-sm overflow-hidden transition-all duration-300 hover:scale-110 hover:z-30 shadow-2xl"
                   >
-                    <img 
-                      src={item.image} 
-                      alt={item.title} 
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
                       <div className="flex items-center gap-2 mb-2">
@@ -200,11 +254,10 @@ const Home = () => {
                             event.stopPropagation();
                             handleToggleSave(item);
                           }}
-                          className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                            savedRecipeIds.includes(String(item.id))
+                          className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer ${savedRecipeIds.includes(String(item.id))
                               ? "bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600"
                               : "border-gray-400 hover:border-white"
-                          }`}
+                            }`}
                         >
                           {savedRecipeIds.includes(String(item.id)) ? (
                             <Check className="text-white w-4 h-4" />
