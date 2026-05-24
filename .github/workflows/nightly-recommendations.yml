@@ -1,0 +1,36 @@
+name: Nightly Recommendations
+
+on:
+  schedule:
+    # Runs every day at 02:00 UTC.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  recommend:
+    name: Refresh SVD recommendations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: RecommenderSys/requirements.txt
+
+      - name: Install recommender dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r RecommenderSys/requirements.txt
+
+      - name: Run recommendation batch
+        run: python RecommenderSys/recommend_batch.py

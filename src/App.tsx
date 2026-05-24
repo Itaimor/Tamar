@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import Index from "./pages/Index.tsx";
 import Home from "./pages/Home.tsx";
 import CookBook from "./pages/CookBook.tsx";
+import RecipeDetail from "./pages/RecipeDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -21,6 +22,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/cookbook" element={<CookBook />} />
+            <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
             <Route path="/app" element={<Index />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

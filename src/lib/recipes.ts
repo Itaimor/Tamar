@@ -17,6 +17,17 @@ export interface RecipeSection {
   items: RecipeItem[];
 }
 
+const mapRecipeRow = (item: any): RecipeItem => ({
+  id: Number(item.id),
+  title: item.name || String(item.id),
+  image: item.image_url || "/images/empty_plate.png",
+  time: item.minutes ? `${item.minutes}m` : "15m",
+  ingredients: item.ingredients,
+  steps: item.steps,
+  description: item.description,
+  is_ibs_friendly: item.is_ibs_friendly,
+});
+
 // Mock recipes removed. This structure defines the homepage sections.
 export const recipeSections: RecipeSection[] = [
   {
@@ -70,16 +81,13 @@ export const fetchRecipeById = async (recipeId: string | number): Promise<Recipe
         .maybeSingle();
 
       if (data && !error) {
-        return {
-          id: Number(data.id),
-          title: data.name || String(data.id),
-          image: data.image_url || "/images/empty_plate.png",
-          time: data.minutes ? `${data.minutes}m` : "15m",
-          ingredients: data.ingredients,
-          steps: data.steps,
-          description: data.description,
-          is_ibs_friendly: data.is_ibs_friendly,
-        };
+        return mapRecipeRow(data);
+      }
+
+      if (numericId >= 1 && numericId <= 30) {
+        const fallback = await fetchDefaultRecipes(30);
+        const mappedRecipe = fallback[(numericId - 1) % fallback.length];
+        if (mappedRecipe) return mappedRecipe;
       }
     } catch (err) {
       console.error("Failed to fetch recipe from Supabase:", err);
@@ -101,21 +109,18 @@ export const fetchRecipesByIds = async (recipeIds: (string | number)[]): Promise
         .in("id", numericIds);
 
       if (data && !error) {
-        const mapped = data.map((item: any) => ({
-          id: Number(item.id),
-          title: item.name || String(item.id),
-          image: item.image_url || "/images/empty_plate.png",
-          time: item.minutes ? `${item.minutes}m` : "15m",
-          ingredients: item.ingredients,
-          steps: item.steps,
-          description: item.description,
-          is_ibs_friendly: item.is_ibs_friendly,
-        }));
+        const mapped = data.map(mapRecipeRow);
+        const fallbackRecipes =
+          mapped.length < numericIds.length ? await fetchDefaultRecipes(Math.max(30, numericIds.length)) : [];
         
         // Sort according to input recipeIds order and supply fallback if missing
-        return numericIds.map(id => {
+        return numericIds.map((id) => {
           const found = mapped.find(m => m.id === id);
           if (found) return found;
+          if (id >= 1 && id <= 30 && fallbackRecipes.length > 0) {
+            const mappedRecipe = fallbackRecipes[(id - 1) % fallbackRecipes.length];
+            if (mappedRecipe) return mappedRecipe;
+          }
           return getRecipeById(id);
         });
       }
@@ -137,16 +142,7 @@ export const fetchDefaultRecipes = async (limit: number = 12): Promise<RecipeIte
         .limit(limit);
 
       if (data && !error) {
-        return data.map((item: any) => ({
-          id: Number(item.id),
-          title: item.name || String(item.id),
-          image: item.image_url || "/images/empty_plate.png",
-          time: item.minutes ? `${item.minutes}m` : "15m",
-          ingredients: item.ingredients,
-          steps: item.steps,
-          description: item.description,
-          is_ibs_friendly: item.is_ibs_friendly,
-        }));
+        return data.map(mapRecipeRow);
       }
     } catch (err) {
       console.error("Failed to fetch default recipes from Supabase:", err);

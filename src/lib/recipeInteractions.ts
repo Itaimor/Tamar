@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-export type RecipeInteractionType = "view" | "start" | "save" | "complete" | "dismiss";
+export type RecipeInteractionType = "viewed" | "started" | "saved" | "completed" | "dismissed";
 
 type RecipeInteraction = {
   userId: string;
@@ -32,7 +32,7 @@ export const fetchSavedRecipes = async (userId: string) => {
     .from("recipe_interactions")
     .select("*")
     .eq("user_id", userId)
-    .in("interaction_type", ["save"])
+    .in("interaction_type", ["saved", "save"])
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -65,7 +65,7 @@ export const toggleSaveRecipe = async ({
       .delete()
       .eq("user_id", userId)
       .eq("recipe_id", stringRecipeId)
-      .in("interaction_type", ["save"]);
+      .in("interaction_type", ["saved", "save"]);
 
     if (error) {
       console.error("Error unsaving recipe:", error);
@@ -81,13 +81,13 @@ export const toggleSaveRecipe = async ({
       .delete()
       .eq("user_id", userId)
       .eq("recipe_id", stringRecipeId)
-      .in("interaction_type", ["save"]);
+      .in("interaction_type", ["saved", "save"]);
 
     const { error } = await supabase.from("recipe_interactions").insert({
       user_id: userId,
       recipe_id: stringRecipeId,
       recipe_title: recipeTitle,
-      interaction_type: "save",
+      interaction_type: "saved",
     });
 
     if (error) {

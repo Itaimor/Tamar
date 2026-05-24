@@ -51,6 +51,10 @@ const CookBook = () => {
     navigate("/app");
   };
 
+  const handleRecipeDetails = (recipeId: string | number) => {
+    navigate(`/recipes/${recipeId}`);
+  };
+
   const handleRemoveSave = async (event: React.MouseEvent, item: any) => {
     event.stopPropagation();
     if (!user) return;
@@ -146,7 +150,7 @@ const CookBook = () => {
                 <div
                   key={item.id}
                   className="bg-[#181818] rounded-xl border border-white/5 overflow-hidden relative group cursor-pointer transition-all duration-300 hover:scale-105 hover:z-20 hover:shadow-[0_0_30px_rgba(229,9,20,0.15)] flex flex-col"
-                  onClick={() => handleRecipeUse(recipeDetails)}
+                  onClick={() => handleRecipeDetails(item.recipe_id)}
                 >
                   <div className="aspect-video w-full relative overflow-hidden">
                     <img

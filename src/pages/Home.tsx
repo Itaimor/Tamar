@@ -276,6 +276,10 @@ const Home = () => {
     navigate("/app");
   };
 
+  const handleRecipeDetails = (item: { id: number }) => {
+    navigate(`/recipes/${item.id}`);
+  };
+
   return (
     <div className="min-h-screen bg-[#141414] text-white font-sans selection:bg-primary selection:text-white overflow-x-hidden">
       <Navbar />
@@ -316,6 +320,7 @@ const Home = () => {
               <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
             </Button>
             <Button
+              onClick={() => navigate("/recipes/1")}
               variant="secondary"
               className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
             >
@@ -466,6 +471,7 @@ const Home = () => {
                   <div
                     key={item.id}
                     className="flex-none w-[220px] md:w-[320px] aspect-video relative group cursor-pointer rounded-sm overflow-hidden transition-all duration-300 hover:scale-110 hover:z-30 shadow-2xl"
+                    onClick={() => handleRecipeDetails(item)}
                   >
                     <img
                       src={item.image}
