@@ -5,15 +5,14 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
-import { recordRecipeInteraction, fetchSavedRecipes, toggleSaveRecipe } from "@/lib/recipeInteractions";
-import { recipeSections, getRecipeById, RecipeItem, fetchRecipesByIds } from "@/lib/recipes";
+import { recordRecipeInteraction, fetchSavedRecipes, fetchUserInteractionCount, toggleSaveRecipe } from "@/lib/recipeInteractions";
+import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
-import { getMedoidRecipes, calculateUserVector, getRecommendationsFromVector } from "@/lib/coldStart";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Home = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
   const [curatedRecipes, setCuratedRecipes] = useState<RecipeItem[]>([]);
@@ -21,9 +20,12 @@ const Home = () => {
   const [flavorRecipes, setFlavorRecipes] = useState<RecipeItem[]>([]);
   const [healthyRecipes, setHealthyRecipes] = useState<RecipeItem[]>([]);
   const [quickRecipes, setQuickRecipes] = useState<RecipeItem[]>([]);
+  const [onboardingRecipes, setOnboardingRecipes] = useState<RecipeItem[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
   const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
   const [feedback, setFeedback] = useState<Record<number, number>>({});
+  const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
+  const [onboardingBusy, setOnboardingBusy] = useState(false);
 
   useEffect(() => {
     const loadSavedRecipes = async () => {
@@ -45,15 +47,48 @@ const Home = () => {
     const loadRecommendations = async () => {
       if (user && supabase) {
         try {
+          const interactionCount = await fetchUserInteractionCount(user.id);
+          if (interactionCount === 0) {
+            const starters = await fetchColdStartRecipes(5);
+            const defaultRecs = await fetchDefaultRecipes(6);
+            setOnboardingRecipes(starters.length > 0 ? starters : defaultRecs.slice(0, 5));
+            setCuratedRecipes(defaultRecs);
+            setCurrentMedoidIdx(0);
+            setFeedback({});
+            setIsOnboardingCompleted(false);
+            return;
+          }
+
+          if (session?.access_token) {
+            const refreshResponse = await fetch("/api/refresh-recommendations", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ user_id: user.id }),
+            });
+
+            if (!refreshResponse.ok) {
+              const message = await refreshResponse.text();
+              console.error("Recommendation refresh failed:", refreshResponse.status, message);
+            }
+          }
+
           const { data, error } = await supabase
             .from("user_recommendations")
-            .select("recommended_recipe_ids, match_scores")
+            .select("recommended_recipe_ids, match_scores, updated_at")
             .eq("user_id", user.id)
             .maybeSingle();
 
           if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
             const recIds = data.recommended_recipe_ids as string[];
             const loaded = await fetchRecipesByIds(recIds);
+            console.info("Loaded CF recommendations", {
+              userId: user.id,
+              recIds,
+              updatedAt: data.updated_at,
+            });
             
             // Map the personalized match scores from database
             const mapped = loaded.map((recipe, index) => {
@@ -75,40 +110,18 @@ const Home = () => {
         }
       }
 
-      // Check local storage for vector fallback
-      const localVectorStr = localStorage.getItem("tamar_user_vector");
-      if (localVectorStr) {
-        try {
-          const localVector = JSON.parse(localVectorStr);
-          const recIds = getRecommendationsFromVector(localVector);
-          const loaded = await fetchRecipesByIds(recIds.slice(0, 6));
-          
-          // Compute dynamic cosine similarity match scores
-          const mapped = loaded.map(recipe => {
-            const recipeVector = latentRecipes[recipe.id]?.vector || [0, 0, 0, 0];
-            const sim = cosineSimilarity(localVector, recipeVector);
-            const normalizedSim = Math.max(0, Math.min(1, (sim + 1) / 2));
-            return {
-              ...recipe,
-              match: `${Math.round(normalizedSim * 100)}%`
-            };
-          });
-          
-          setCuratedRecipes(mapped);
-          setIsOnboardingCompleted(true);
-          return;
-        } catch (e) {
-          console.error("Error parsing local vector:", e);
-        }
+      if (user) {
+        setIsOnboardingCompleted(true);
+        const defaultRecs = await fetchDefaultRecipes(6);
+        setCuratedRecipes(defaultRecs);
+        return;
       }
 
-      // If no database or local recommendations, prompt onboarding
-      setIsOnboardingCompleted(false);
       const defaultRecs = await fetchDefaultRecipes(6);
       setCuratedRecipes(defaultRecs);
     };
     loadRecommendations();
-  }, [user]);
+  }, [user, session?.access_token, recommendationRefreshKey]);
 
   useEffect(() => {
     const loadOtherSections = async () => {
@@ -147,70 +160,65 @@ const Home = () => {
         setSavedRecipeIds((prev) => prev.filter((id) => id !== String(item.id)));
         toast.success(`"${item.title}" removed from your CookBook.`);
       }
+      setRecommendationRefreshKey((key) => key + 1);
     } catch (error) {
       toast.error("Failed to update saved recipes. Please try again.");
     }
   };
 
-  const handleOnboardingComplete = async (finalFeedback: Record<number, number>) => {
-    const userVector = calculateUserVector(finalFeedback);
-    localStorage.setItem("tamar_user_vector", JSON.stringify(userVector));
+  const handleSwipe = async (like: boolean) => {
+    if (!user || onboardingBusy) return;
 
-    const recIds = getRecommendationsFromVector(userVector);
-    const loaded = await fetchRecipesByIds(recIds.slice(0, 6));
-    
-    // Compute dynamic cosine similarity match scores
-    const matchScores = recIds.slice(0, 6).map(id => {
-      const recipeVector = latentRecipes[id]?.vector || [0, 0, 0, 0];
-      const sim = cosineSimilarity(userVector, recipeVector);
-      return Math.max(0, Math.min(1, (sim + 1) / 2));
-    });
+    const recipe = onboardingRecipes[currentMedoidIdx];
+    if (!recipe) return;
 
-    const mapped = loaded.map((recipe, index) => ({
-      ...recipe,
-      match: `${Math.round(matchScores[index] * 100)}%`
-    }));
-
-    setCuratedRecipes(mapped);
-    setIsOnboardingCompleted(true);
-    toast.success("Feed personalized based on your taste profile!");
-
-    if (user && supabase) {
-      try {
-        const stringRecIds = recIds.slice(0, 6).map(String);
-        await supabase
-          .from("user_recommendations")
-          .upsert({
-            user_id: user.id,
-            recommended_recipe_ids: stringRecIds,
-            match_scores: matchScores,
-            user_vector: userVector,
-            updated_at: new Date().toISOString()
-          });
-      } catch (err) {
-        console.error("Failed to save recommendations to database:", err);
-      }
-    }
-  };
-
-  const handleSwipe = (like: boolean) => {
-    const medoids = getMedoidRecipes();
-    const medoid = medoids[currentMedoidIdx];
-    const newFeedback = { ...feedback, [medoid.id]: like ? 1.0 : -1.0 };
+    setOnboardingBusy(true);
+    const newFeedback = { ...feedback, [recipe.id]: like ? 1.0 : -1.0 };
     setFeedback(newFeedback);
 
-    if (currentMedoidIdx < medoids.length - 1) {
-      setCurrentMedoidIdx(prev => prev + 1);
-    } else {
-      handleOnboardingComplete(newFeedback);
+    try {
+      await recordRecipeInteraction({
+        userId: user.id,
+        recipeId: recipe.id,
+        recipeTitle: recipe.title,
+        interactionType: like ? "liked" : "dismissed",
+      });
+
+      if (currentMedoidIdx < onboardingRecipes.length - 1) {
+        setCurrentMedoidIdx(prev => prev + 1);
+      } else {
+        setIsOnboardingCompleted(true);
+        setRecommendationRefreshKey((key) => key + 1);
+        toast.success("Taste profile saved. Building your CF recommendations.");
+      }
+    } catch (error) {
+      toast.error("Could not save your taste feedback. Please try again.");
+    } finally {
+      setOnboardingBusy(false);
     }
   };
 
   const handleSkipOnboarding = async () => {
+    if (user && onboardingRecipes.length > 0) {
+      try {
+        await Promise.all(
+          onboardingRecipes.map((recipe) =>
+            recordRecipeInteraction({
+              userId: user.id,
+              recipeId: recipe.id,
+              recipeTitle: recipe.title,
+              interactionType: "dismissed",
+            }),
+          ),
+        );
+      } catch (error) {
+        console.error("Failed to record skipped onboarding recipes:", error);
+      }
+    }
+
     setIsOnboardingCompleted(true);
-    const defaultRecs = await fetchDefaultRecipes(6);
-    setCuratedRecipes(defaultRecs);
-    toast.info("Onboarding skipped. Using default recipes.");
+    setRecommendationRefreshKey((key) => key + 1);
+    toast.info("Onboarding skipped. Using general recommendations.");
   };
 
   const handleResetOnboarding = async () => {
@@ -219,7 +227,6 @@ const Home = () => {
     setFeedback({});
     const defaultRecs = await fetchDefaultRecipes(6);
     setCuratedRecipes(defaultRecs);
-    localStorage.removeItem("tamar_user_vector");
   };
 
 
@@ -372,7 +379,7 @@ const Home = () => {
       <div className="pb-24 -mt-20 md:-mt-32 relative z-10 space-y-12">
         
         {/* Active Learning Cold Start Onboarding */}
-        {!isOnboardingCompleted && (
+        {!isOnboardingCompleted && onboardingRecipes.length > 0 && (
           <div className="max-w-xl mx-auto px-4 md:px-0 mb-12">
             <div className="bg-[#181818] border border-white/10 rounded-2xl overflow-hidden p-6 shadow-2xl relative">
               <div className="flex items-center gap-2 mb-4 text-primary text-xs uppercase tracking-widest font-extrabold">
@@ -393,24 +400,20 @@ const Home = () => {
                     className="absolute inset-0"
                   >
                     <img
-                      src={getMedoidRecipes()[currentMedoidIdx].image}
-                      alt={getMedoidRecipes()[currentMedoidIdx].title}
+                      src={onboardingRecipes[currentMedoidIdx].image}
+                      alt={onboardingRecipes[currentMedoidIdx].title}
                       className="w-full h-full object-cover"
                     />
-                    {getMedoidRecipes()[currentMedoidIdx].image === "/images/empty_plate.png" && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                        <span className="text-5xl font-extrabold text-white bg-black/75 px-5 py-2.5 rounded-xl border border-white/20 shadow-2xl tracking-wider">
-                          #{getMedoidRecipes()[currentMedoidIdx].id}
-                        </span>
-                      </div>
+                    {onboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
+                      <div className="absolute inset-0 bg-black/25 pointer-events-none" />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
-                        Medoid {currentMedoidIdx + 1} of {getMedoidRecipes().length}
+                        Taste match {currentMedoidIdx + 1} of {onboardingRecipes.length}
                       </span>
-                      <h5 className="text-lg font-bold text-white leading-tight">{getMedoidRecipes()[currentMedoidIdx].title}</h5>
-                      <p className="text-gray-400 text-xs mt-0.5">Cook Time: {getMedoidRecipes()[currentMedoidIdx].time}</p>
+                      <h5 className="text-lg font-bold text-white leading-tight">{onboardingRecipes[currentMedoidIdx].title}</h5>
+                      <p className="text-gray-400 text-xs mt-0.5">Cook Time: {onboardingRecipes[currentMedoidIdx].time}</p>
                     </div>
                   </motion.div>
                 </AnimatePresence>
@@ -420,6 +423,7 @@ const Home = () => {
                 <button
                   type="button"
                   onClick={() => handleSwipe(false)}
+                  disabled={onboardingBusy}
                   className="flex-1 py-3 px-4 rounded-xl border border-red-500/30 hover:border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <X className="w-4 h-4" /> Dislike
@@ -427,6 +431,7 @@ const Home = () => {
                 <button
                   type="button"
                   onClick={handleSkipOnboarding}
+                  disabled={onboardingBusy}
                   className="py-3 px-4 rounded-xl border border-white/10 hover:border-white/20 text-gray-400 hover:text-white text-xs font-semibold transition-all cursor-pointer"
                 >
                   Skip
@@ -434,6 +439,7 @@ const Home = () => {
                 <button
                   type="button"
                   onClick={() => handleSwipe(true)}
+                  disabled={onboardingBusy}
                   className="flex-1 py-3 px-4 rounded-xl border border-green-500/30 hover:border-green-500 bg-green-500/10 text-green-400 hover:bg-green-500/20 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <Heart className="w-4 h-4 fill-current" /> Like
@@ -441,7 +447,7 @@ const Home = () => {
               </div>
               
               <div className="flex justify-center gap-1.5 mt-6">
-                {getMedoidRecipes().map((_, idx) => (
+                {onboardingRecipes.map((_, idx) => (
                   <div 
                     key={idx} 
                     className={`h-1.5 rounded-full transition-all duration-300 ${

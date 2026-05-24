@@ -16,14 +16,12 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from dotenv import load_dotenv
 
 # Ensure RecommenderSys is in python search path
 sys.path.append(str(Path(__file__).resolve().parent))
 
-# Try loading supabase client
 try:
-    from supabase import create_client, Client
+    from supabase import Client
 except ImportError:
     print("Error: 'supabase' package is not installed. Please run: pip install supabase python-dotenv")
     sys.exit(1)
@@ -31,42 +29,48 @@ except ImportError:
 # Import our colleague's Matrix Factorization model
 from src.matrix_factorization import MatrixFactorizationCF
 from cold_start_active_learning import preprocess_recipe_features, cluster_item_space, select_cluster_medoids
-
-# Catalog of our 30 local recipe IDs in the frontend
-RECIPE_CATALOG = [str(i) for i in range(1, 31)]
-
-# Mapping categorical interactions to numerical weights for training
-INTERACTION_WEIGHTS = {
-    "viewed": 1.5,
-    "started": 3.5,
-    "saved": 5.0,
-    "completed": 5.0,
-    "dismissed": 0.0
-}
+from recommender_common import (
+    ARTIFACT_PATH,
+    RECIPE_CATALOG,
+    get_artifact_bucket,
+    get_artifact_storage_path,
+    load_supabase_client,
+    normalize_match_scores,
+    process_interactions_to_ratings,
+)
 
 
-def load_supabase_client() -> Client:
-    """Load configuration from root .env and return a Supabase Client."""
-    # Find .env in project root (parent directory of RecommenderSys)
-    root_dir = Path(__file__).resolve().parent.parent
-    env_path = root_dir / ".env"
-    
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path)
-    else:
-        load_dotenv()
-        
-    url = os.getenv("VITE_SUPABASE_URL")
-    # For server-side administrative writes, use the service_role key to bypass RLS.
-    # Fallback to anon/publishable key if service_role is not available.
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_PUBLISHABLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY")
-    
-    if not url or not key:
-        print("[Error] Supabase credentials missing in .env file.")
-        print("Please ensure VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.")
-        sys.exit(1)
-        
-    return create_client(url, key)
+def fetch_all_rows(
+    supabase: Client,
+    table_name: str,
+    columns: str,
+    page_size: int | None = None,
+) -> list[dict]:
+    """Fetch all rows from a Supabase table using range pagination."""
+    page_size = page_size or int(os.getenv("SUPABASE_FETCH_PAGE_SIZE", "1000"))
+    rows: list[dict] = []
+    start = 0
+
+    while True:
+        end = start + page_size - 1
+        response = (
+            supabase.table(table_name)
+            .select(columns)
+            .range(start, end)
+            .execute()
+        )
+
+        page = response.data or []
+        rows.extend(page)
+
+        if len(page) < page_size:
+            break
+
+        start += page_size
+        if len(rows) % (page_size * 25) == 0:
+            print(f"  fetched {len(rows):,} rows from {table_name}...")
+
+    return rows
 
 
 def fetch_interactions(supabase: Client) -> pd.DataFrame:
@@ -74,8 +78,7 @@ def fetch_interactions(supabase: Client) -> pd.DataFrame:
     print("Fetching active user interactions from Supabase...")
     
     try:
-        response = supabase.table("recipe_interactions").select("user_id, recipe_id, interaction_type").execute()
-        data = response.data
+        data = fetch_all_rows(supabase, "recipe_interactions", "user_id, recipe_id, interaction_type")
         if not data:
             return pd.DataFrame(columns=["user_id", "recipe_id", "interaction_type"])
         return pd.DataFrame(data)
@@ -89,8 +92,7 @@ def fetch_historical_interactions(supabase: Client) -> pd.DataFrame:
     print("Fetching historical interactions from Supabase...")
     
     try:
-        response = supabase.table("historical_interactions").select("user_id, recipe_id, rating").execute()
-        data = response.data
+        data = fetch_all_rows(supabase, "historical_interactions", "user_id, recipe_id, rating")
         if not data:
             return pd.DataFrame(columns=["user_id", "recipe_id", "rating"])
         df = pd.DataFrame(data)
@@ -103,19 +105,46 @@ def fetch_historical_interactions(supabase: Client) -> pd.DataFrame:
         return pd.DataFrame(columns=["user_id", "recipe_id", "rating"])
 
 
-def process_interactions_to_ratings(interactions_df: pd.DataFrame) -> pd.DataFrame:
-    """Maps categorical interactions to numeric rating values and aggregates duplicates."""
-    if interactions_df.empty:
-        return pd.DataFrame(columns=["user_id", "recipe_id", "rating"])
-        
-    # Map interaction type to weights
-    interactions_df["weight"] = interactions_df["interaction_type"].map(INTERACTION_WEIGHTS).fillna(1.0)
-    
-    # Aggregate multiple interactions by taking the maximum rating for a user-recipe pair
-    ratings_df = interactions_df.groupby(["user_id", "recipe_id"])["weight"].max().reset_index()
-    ratings_df.columns = ["user_id", "recipe_id", "rating"]
-    
-    return ratings_df
+def upload_artifact_to_storage(supabase: Client, artifact_path: Path = ARTIFACT_PATH) -> None:
+    """Upload the trained CF artifact to private Supabase Storage for online serving."""
+    if not artifact_path.exists():
+        print(f"[Warning] Artifact does not exist, skipping upload: {artifact_path}")
+        return
+
+    bucket = get_artifact_bucket()
+    storage_path = get_artifact_storage_path()
+
+    try:
+        with artifact_path.open("rb") as file:
+            supabase.storage.from_(bucket).upload(
+                storage_path,
+                file,
+                file_options={
+                    "content-type": "application/octet-stream",
+                    "upsert": "true",
+                },
+            )
+        print(f"Uploaded CF artifact to Supabase Storage: {bucket}/{storage_path}")
+    except Exception as e:
+        if "Bucket not found" not in str(e):
+            print(f"[Warning] Failed to upload CF artifact to Supabase Storage: {e}")
+            return
+
+        try:
+            print(f"Storage bucket {bucket} not found. Creating private bucket...")
+            supabase.storage.create_bucket(bucket, options={"public": False})
+            with artifact_path.open("rb") as file:
+                supabase.storage.from_(bucket).upload(
+                    storage_path,
+                    file,
+                    file_options={
+                        "content-type": "application/octet-stream",
+                        "upsert": "true",
+                    },
+                )
+            print(f"Uploaded CF artifact to Supabase Storage: {bucket}/{storage_path}")
+        except Exception as retry_error:
+            print(f"[Warning] Failed to create/upload CF artifact bucket: {retry_error}")
 
 
 def compute_recommendations():
@@ -124,8 +153,8 @@ def compute_recommendations():
     # 1. Fetch dynamic recipe catalog from Supabase
     print("Fetching recipe catalog from Supabase...")
     try:
-        recipes_response = supabase.table("recipes").select("id").execute()
-        recipe_catalog = [str(r["id"]) for r in recipes_response.data]
+        recipes_data = fetch_all_rows(supabase, "recipes", "id")
+        recipe_catalog = [str(r["id"]) for r in recipes_data]
     except Exception as e:
         print(f"[Error] Failed to fetch recipes from database: {e}")
         recipe_catalog = []
@@ -141,7 +170,7 @@ def compute_recommendations():
     
     # 3. Get active profiles
     try:
-        profiles = supabase.table("profiles").select("id").execute().data
+        profiles = fetch_all_rows(supabase, "profiles", "id")
         active_users = [p["id"] for p in profiles]
     except Exception as e:
         print(f"[Error] Failed to fetch user profiles: {e}")
@@ -199,6 +228,9 @@ def compute_recommendations():
     
     model = MatrixFactorizationCF(n_factors=10, n_epochs=30, rating_scale=(0, 5))
     model.fit(padded_ratings)
+    model.save_item_factor_artifact(ARTIFACT_PATH)
+    print(f"Saved trained CF item factors to {ARTIFACT_PATH}")
+    upload_artifact_to_storage(supabase, ARTIFACT_PATH)
     
     print(f"Generating recommendations for {len(active_users)} active users...")
     
@@ -221,20 +253,25 @@ def compute_recommendations():
         predictions.sort(key=lambda x: x[1], reverse=True)
         
         # Take top 6 recipe IDs
-        top_k = [p[0] for p in predictions[:6]]
+        top_predictions = predictions[:6]
+        top_k = [p[0] for p in top_predictions]
+        top_scores = [p[1] for p in top_predictions]
         
         # If user has seen almost everything, fill back up with general items
         if len(top_k) < 6:
             remaining = [r for r in recipe_catalog if r not in top_k and r not in interacted_recipes]
             top_k.extend(remaining[:(6 - len(top_k))])
+            top_scores.extend([3.0] * (len(top_k) - len(top_scores)))
             
         # If still empty (e.g. user interacted with everything), fall back to general catalog
         if not top_k:
             top_k = recipe_catalog[:6]
+            top_scores = [3.0] * len(top_k)
             
         recommendation_payloads.append({
             "user_id": user_id,
             "recommended_recipe_ids": top_k,
+            "match_scores": normalize_match_scores(top_scores),
             "updated_at": datetime.utcnow().isoformat()
         })
         

@@ -173,3 +173,31 @@ export const fetchDefaultRecipes = async (limit: number = 12): Promise<RecipeIte
   const allLocal = recipeSections.flatMap(sec => sec.items);
   return allLocal.slice(0, limit);
 };
+
+export const fetchColdStartRecipes = async (limit: number = 5): Promise<RecipeItem[]> => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("recipes")
+        .select("*")
+        .not("name", "is", null)
+        .limit(Math.max(limit * 4, 20));
+
+      if (data && !error) {
+        const mapped = data
+          .map(mapRecipeRow)
+          .filter((recipe) => recipe.title.trim().length > 0 && !/^\d+$/.test(recipe.title.trim()));
+
+        if (mapped.length >= limit) {
+          return mapped.slice(0, limit);
+        }
+
+        return mapped;
+      }
+    } catch (err) {
+      console.error("Failed to fetch cold-start recipes from Supabase:", err);
+    }
+  }
+
+  return [];
+};

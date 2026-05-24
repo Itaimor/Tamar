@@ -1,5 +1,6 @@
 data/raw/*.csv
 data/processed/*
+artifacts/*
 __pycache__/
 *.pyc
 .DS_Store

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { CheckCircle2, Facebook, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,16 +16,23 @@ import { useAuth } from "@/components/AuthProvider";
 type AuthDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialMode?: "signup" | "signin";
 };
 
-const AuthDialog = ({ open, onOpenChange }: AuthDialogProps) => {
+const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogProps) => {
   const { configured, signIn, signOut, signUp, signInWithProvider, user } = useAuth();
-  const [mode, setMode] = useState<"signup" | "signin">("signup");
+  const [mode, setMode] = useState<"signup" | "signin">(initialMode);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setMode(initialMode);
+    }
+  }, [initialMode, open]);
 
   const handlePasswordAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

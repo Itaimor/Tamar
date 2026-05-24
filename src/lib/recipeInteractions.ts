@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-export type RecipeInteractionType = "viewed" | "started" | "saved" | "completed" | "dismissed";
+export type RecipeInteractionType = "viewed" | "started" | "saved" | "completed" | "liked" | "dismissed";
 
 type RecipeInteraction = {
   userId: string;
@@ -41,6 +41,22 @@ export const fetchSavedRecipes = async (userId: string) => {
   }
 
   return data || [];
+};
+
+export const fetchUserInteractionCount = async (userId: string) => {
+  if (!supabase) return 0;
+
+  const { count, error } = await supabase
+    .from("recipe_interactions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Error counting recipe interactions:", error);
+    throw error;
+  }
+
+  return count || 0;
 };
 
 export const toggleSaveRecipe = async ({

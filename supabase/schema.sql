@@ -15,7 +15,7 @@ create table if not exists public.recipe_interactions (
   recipe_id text not null,
   recipe_title text not null,
   interaction_type text not null check (
-    interaction_type in ('viewed', 'started', 'saved', 'completed', 'dismissed')
+    interaction_type in ('viewed', 'started', 'saved', 'completed', 'liked', 'dismissed')
   ),
   created_at timestamptz not null default now()
 );
