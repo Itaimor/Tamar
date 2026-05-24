@@ -47,14 +47,26 @@ const Home = () => {
         try {
           const { data, error } = await supabase
             .from("user_recommendations")
-            .select("recommended_recipe_ids")
+            .select("recommended_recipe_ids, match_scores")
             .eq("user_id", user.id)
             .maybeSingle();
 
           if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
             const recIds = data.recommended_recipe_ids as string[];
             const loaded = await fetchRecipesByIds(recIds);
-            setCuratedRecipes(loaded);
+            
+            // Map the personalized match scores from database
+            const mapped = loaded.map((recipe, index) => {
+              const score = data.match_scores && data.match_scores[index] !== undefined
+                ? data.match_scores[index]
+                : 0.95;
+              return {
+                ...recipe,
+                match: `${Math.round(score * 100)}%`
+              };
+            });
+            
+            setCuratedRecipes(mapped);
             setIsOnboardingCompleted(true);
             return;
           }
@@ -70,7 +82,19 @@ const Home = () => {
           const localVector = JSON.parse(localVectorStr);
           const recIds = getRecommendationsFromVector(localVector);
           const loaded = await fetchRecipesByIds(recIds.slice(0, 6));
-          setCuratedRecipes(loaded);
+          
+          // Compute dynamic cosine similarity match scores
+          const mapped = loaded.map(recipe => {
+            const recipeVector = latentRecipes[recipe.id]?.vector || [0, 0, 0, 0];
+            const sim = cosineSimilarity(localVector, recipeVector);
+            const normalizedSim = Math.max(0, Math.min(1, (sim + 1) / 2));
+            return {
+              ...recipe,
+              match: `${Math.round(normalizedSim * 100)}%`
+            };
+          });
+          
+          setCuratedRecipes(mapped);
           setIsOnboardingCompleted(true);
           return;
         } catch (e) {
@@ -134,7 +158,20 @@ const Home = () => {
 
     const recIds = getRecommendationsFromVector(userVector);
     const loaded = await fetchRecipesByIds(recIds.slice(0, 6));
-    setCuratedRecipes(loaded);
+    
+    // Compute dynamic cosine similarity match scores
+    const matchScores = recIds.slice(0, 6).map(id => {
+      const recipeVector = latentRecipes[id]?.vector || [0, 0, 0, 0];
+      const sim = cosineSimilarity(userVector, recipeVector);
+      return Math.max(0, Math.min(1, (sim + 1) / 2));
+    });
+
+    const mapped = loaded.map((recipe, index) => ({
+      ...recipe,
+      match: `${Math.round(matchScores[index] * 100)}%`
+    }));
+
+    setCuratedRecipes(mapped);
     setIsOnboardingCompleted(true);
     toast.success("Feed personalized based on your taste profile!");
 
@@ -146,6 +183,7 @@ const Home = () => {
           .upsert({
             user_id: user.id,
             recommended_recipe_ids: stringRecIds,
+            match_scores: matchScores,
             user_vector: userVector,
             updated_at: new Date().toISOString()
           });
