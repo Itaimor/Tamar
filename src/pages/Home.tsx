@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { recordRecipeInteraction, fetchSavedRecipes, toggleSaveRecipe } from "@/lib/recipeInteractions";
-import { recipeSections, getRecipeById, RecipeItem } from "@/lib/recipes";
+import { recipeSections, getRecipeById, RecipeItem, fetchRecipesByIds } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
 import { getMedoidRecipes, calculateUserVector, getRecommendationsFromVector } from "@/lib/coldStart";
 import { motion, AnimatePresence } from "framer-motion";
@@ -49,7 +49,7 @@ const Home = () => {
 
           if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
             const recIds = data.recommended_recipe_ids as string[];
-            const loaded = recIds.map(id => getRecipeById(id));
+            const loaded = await fetchRecipesByIds(recIds);
             setCuratedRecipes(loaded);
             setIsOnboardingCompleted(true);
             return;
@@ -65,7 +65,7 @@ const Home = () => {
         try {
           const localVector = JSON.parse(localVectorStr);
           const recIds = getRecommendationsFromVector(localVector);
-          const loaded = recIds.slice(0, 6).map(id => getRecipeById(id));
+          const loaded = await fetchRecipesByIds(recIds.slice(0, 6));
           setCuratedRecipes(loaded);
           setIsOnboardingCompleted(true);
           return;
@@ -113,7 +113,7 @@ const Home = () => {
     localStorage.setItem("tamar_user_vector", JSON.stringify(userVector));
 
     const recIds = getRecommendationsFromVector(userVector);
-    const loaded = recIds.slice(0, 6).map(id => getRecipeById(id));
+    const loaded = await fetchRecipesByIds(recIds.slice(0, 6));
     setCuratedRecipes(loaded);
     setIsOnboardingCompleted(true);
     toast.success("Feed personalized based on your taste profile!");
