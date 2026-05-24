@@ -17,10 +17,30 @@ export interface RecipeSection {
   items: RecipeItem[];
 }
 
+// Helper to determine if an image URL is an Unsplash placeholder or generic fallback image
+const isPlaceholderImage = (url: string | null | undefined): boolean => {
+  if (!url) return true;
+  return (
+    url.includes("photo-1546069901-ba9599a7e63c") ||
+    url.includes("photo-1512621776951-a57141f2eefd") ||
+    url === "/images/hero.png" ||
+    url === "/images/pizza.png" ||
+    url === "/images/salad.png" ||
+    url === ""
+  );
+};
+
+// Generates a deterministic match percentage between 85% and 98% based on the recipe ID
+export const getDeterministicMatchScore = (id: number): string => {
+  const score = 85 + (Math.abs(id) % 14);
+  return `${score}%`;
+};
+
 const mapRecipeRow = (item: any): RecipeItem => ({
   id: Number(item.id),
   title: item.name || String(item.id),
-  image: item.image_url || "/images/empty_plate.png",
+  image: isPlaceholderImage(item.image_url) ? "/images/empty_plate.png" : item.image_url,
+  match: getDeterministicMatchScore(Number(item.id)),
   time: item.minutes ? `${item.minutes}m` : "15m",
   ingredients: item.ingredients,
   steps: item.steps,
@@ -64,7 +84,7 @@ export const getRecipeById = (recipeId: string | number): RecipeItem => {
     id: numericId,
     title: String(numericId),
     image: "/images/empty_plate.png",
-    match: "95%",
+    match: getDeterministicMatchScore(numericId),
     time: "15m"
   };
 };

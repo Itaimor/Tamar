@@ -3,6 +3,7 @@
 create table if not exists public.user_recommendations (
   user_id uuid primary key references public.profiles(id) on delete cascade,
   recommended_recipe_ids text[] not null,
+  match_scores double precision[],
   user_vector double precision[],
   updated_at timestamptz not null default now()
 );
