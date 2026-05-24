@@ -154,6 +154,13 @@ const CookBook = () => {
                       alt={item.recipe_title}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
+                    {(recipeDetails.image === "/images/empty_plate.png" || !recipeDetails.image) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                        <span className="text-3xl font-extrabold text-white bg-black/75 px-4 py-2 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+                          #{recipeDetails.id}
+                        </span>
+                      </div>
+                    )}
                     {/* Hover Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
                       <div className="flex items-center gap-2 mb-2">

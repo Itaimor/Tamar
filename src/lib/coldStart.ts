@@ -10,11 +10,11 @@ export interface LatentRecipe {
 
 // All 5 medoid recipes mapped to our 4D latent space for active learning onboarding
 export const latentRecipes: Record<number, LatentRecipe> = {
-  3: { id: 3, title: "Artisan Wood-Fired Pizza", image: "/images/pizza.png", time: "20m", vector: [0.3, 0.5, 0.9, 0.1] },
-  4: { id: 4, title: "Avocado Toast Deluxe", image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=800&auto=format&fit=crop", time: "8m", vector: [-0.8, -0.9, -0.2, -0.4] },
-  6: { id: 6, title: "Grilled Salmon with Asparagus", image: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?q=80&w=800&auto=format&fit=crop", time: "25m", vector: [0.4, 0.2, -0.9, 0.9] },
-  13: { id: 13, title: "Spicy Thai Red Curry", image: "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?q=80&w=800&auto=format&fit=crop", time: "22m", vector: [0.8, 0.7, 0.2, 0.5] },
-  19: { id: 19, title: "Detox Green Bowl", image: "/images/salad.png", time: "10m", vector: [-0.6, -0.4, -0.8, 0.2] }
+  3: { id: 3, title: "3", image: "/images/empty_plate.png", time: "20m", vector: [0.3, 0.5, 0.9, 0.1] },
+  4: { id: 4, title: "4", image: "/images/empty_plate.png", time: "8m", vector: [-0.8, -0.9, -0.2, -0.4] },
+  6: { id: 6, title: "6", image: "/images/empty_plate.png", time: "25m", vector: [0.4, 0.2, -0.9, 0.9] },
+  13: { id: 13, title: "13", image: "/images/empty_plate.png", time: "22m", vector: [0.8, 0.7, 0.2, 0.5] },
+  19: { id: 19, title: "19", image: "/images/empty_plate.png", time: "10m", vector: [-0.6, -0.4, -0.8, 0.2] }
 };
 
 // Mathematically selected medoids representing 5 distinct culinary styles:

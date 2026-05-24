@@ -17,6 +17,10 @@ const Home = () => {
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
   const [curatedRecipes, setCuratedRecipes] = useState<RecipeItem[]>([]);
+  const [trendingRecipes, setTrendingRecipes] = useState<RecipeItem[]>([]);
+  const [flavorRecipes, setFlavorRecipes] = useState<RecipeItem[]>([]);
+  const [healthyRecipes, setHealthyRecipes] = useState<RecipeItem[]>([]);
+  const [quickRecipes, setQuickRecipes] = useState<RecipeItem[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
   const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
   const [feedback, setFeedback] = useState<Record<number, number>>({});
@@ -76,10 +80,26 @@ const Home = () => {
 
       // If no database or local recommendations, prompt onboarding
       setIsOnboardingCompleted(false);
-      setCuratedRecipes(recipeSections[0].items);
+      const defaultRecs = await fetchDefaultRecipes(6);
+      setCuratedRecipes(defaultRecs);
     };
     loadRecommendations();
   }, [user]);
+
+  useEffect(() => {
+    const loadOtherSections = async () => {
+      try {
+        const allRecipes = await fetchDefaultRecipes(30);
+        setTrendingRecipes(allRecipes.slice(0, 6));
+        setFlavorRecipes(allRecipes.slice(6, 12));
+        setHealthyRecipes(allRecipes.slice(12, 18));
+        setQuickRecipes(allRecipes.slice(18, 24));
+      } catch (error) {
+        console.error("Failed to load other sections:", error);
+      }
+    };
+    loadOtherSections();
+  }, []);
 
   const handleToggleSave = async (item: { id: number; title: string }) => {
     if (!user) {
@@ -148,17 +168,19 @@ const Home = () => {
     }
   };
 
-  const handleSkipOnboarding = () => {
+  const handleSkipOnboarding = async () => {
     setIsOnboardingCompleted(true);
-    setCuratedRecipes(recipeSections[0].items);
+    const defaultRecs = await fetchDefaultRecipes(6);
+    setCuratedRecipes(defaultRecs);
     toast.info("Onboarding skipped. Using default recipes.");
   };
 
-  const handleResetOnboarding = () => {
+  const handleResetOnboarding = async () => {
     setIsOnboardingCompleted(false);
     setCurrentMedoidIdx(0);
     setFeedback({});
-    setCuratedRecipes(recipeSections[0].items);
+    const defaultRecs = await fetchDefaultRecipes(6);
+    setCuratedRecipes(defaultRecs);
     localStorage.removeItem("tamar_user_vector");
   };
 
@@ -200,8 +222,20 @@ const Home = () => {
   };
 
   const sections = recipeSections.map((sec) => {
-    if (sec.title === "Curated for You" && curatedRecipes.length > 0) {
+    if (sec.title === "Curated for You") {
       return { ...sec, items: curatedRecipes };
+    }
+    if (sec.title === "Trending in Your Area") {
+      return { ...sec, items: trendingRecipes };
+    }
+    if (sec.title === "Bursting with Flavor") {
+      return { ...sec, items: flavorRecipes };
+    }
+    if (sec.title === "Healthy & Mindful") {
+      return { ...sec, items: healthyRecipes };
+    }
+    if (sec.title === "Quick & Satisfying") {
+      return { ...sec, items: quickRecipes };
     }
     return sec;
   });
@@ -320,6 +354,13 @@ const Home = () => {
                       alt={getMedoidRecipes()[currentMedoidIdx].title}
                       className="w-full h-full object-cover"
                     />
+                    {getMedoidRecipes()[currentMedoidIdx].image === "/images/empty_plate.png" && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                        <span className="text-5xl font-extrabold text-white bg-black/75 px-5 py-2.5 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+                          #{getMedoidRecipes()[currentMedoidIdx].id}
+                        </span>
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
@@ -431,6 +472,13 @@ const Home = () => {
                       alt={item.title}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
+                    {(item.image === "/images/empty_plate.png" || !item.image) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                        <span className="text-4xl font-extrabold text-white bg-black/70 px-4 py-2 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+                          #{item.id}
+                        </span>
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
                       <div className="flex items-center gap-2 mb-2">
                         <button
