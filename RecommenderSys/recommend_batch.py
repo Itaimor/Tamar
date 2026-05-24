@@ -168,12 +168,14 @@ def compute_recommendations():
     if combined_ratings.empty:
         print("[Warning] No user ratings or historical interactions found. Seeding default popular recipes as recommendations...")
         default_recs = recipe_catalog[:6]
+        default_scores = [round(0.95 - i*0.05, 4) for i in range(len(default_recs))]
         
         print(f"Upserting default recommendations for {len(active_users)} profiles...")
         for uid in active_users:
             payload = {
                 "user_id": uid,
                 "recommended_recipe_ids": default_recs,
+                "match_scores": default_scores,
                 "updated_at": datetime.utcnow().isoformat()
             }
             try:
@@ -220,21 +222,28 @@ def compute_recommendations():
         # Sort by predicted rating in descending order
         predictions.sort(key=lambda x: x[1], reverse=True)
         
-        # Take top 6 recipe IDs
-        top_k = [p[0] for p in predictions[:6]]
+        # Take top 6 recipe IDs with predictions
+        top_k_preds = predictions[:6]
         
         # If user has seen almost everything, fill back up with general items
-        if len(top_k) < 6:
-            remaining = [r for r in recipe_catalog if r not in top_k and r not in interacted_recipes]
-            top_k.extend(remaining[:(6 - len(top_k))])
+        if len(top_k_preds) < 6:
+            seen_ids = {p[0] for p in top_k_preds}
+            remaining = [r for r in recipe_catalog if r not in seen_ids and r not in interacted_recipes]
+            for r in remaining[:(6 - len(top_k_preds))]:
+                top_k_preds.append((r, 2.5))
             
         # If still empty (e.g. user interacted with everything), fall back to general catalog
-        if not top_k:
-            top_k = recipe_catalog[:6]
+        if not top_k_preds:
+            top_k_preds = [(r, 2.5) for r in recipe_catalog[:6]]
             
+        rec_ids = [p[0] for p in top_k_preds]
+        # Normalize prediction ratings (0-5 scale) to percentage format (0.0-1.0 scale)
+        rec_scores = [round(min(1.0, max(0.0, float(p[1]) / 5.0)), 4) for p in top_k_preds]
+        
         recommendation_payloads.append({
             "user_id": user_id,
-            "recommended_recipe_ids": top_k,
+            "recommended_recipe_ids": rec_ids,
+            "match_scores": rec_scores,
             "updated_at": datetime.utcnow().isoformat()
         })
         
