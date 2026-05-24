@@ -1,18 +1,25 @@
 import { useRef, useState, useEffect } from "react";
-import { Play, Plus, Info, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { Play, Plus, Info, ChevronRight, ChevronLeft, Check, Heart, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { recordRecipeInteraction, fetchSavedRecipes, toggleSaveRecipe } from "@/lib/recipeInteractions";
-import { recipeSections } from "@/lib/recipes";
+import { recipeSections, getRecipeById, RecipeItem } from "@/lib/recipes";
+import { supabase } from "@/lib/supabase";
+import { getMedoidRecipes, calculateUserVector, getRecommendationsFromVector } from "@/lib/coldStart";
+import { motion, AnimatePresence } from "framer-motion";
 
 const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
+  const [curatedRecipes, setCuratedRecipes] = useState<RecipeItem[]>([]);
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
+  const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
+  const [feedback, setFeedback] = useState<Record<number, number>>({});
 
   useEffect(() => {
     const loadSavedRecipes = async () => {
@@ -28,6 +35,50 @@ const Home = () => {
       }
     };
     loadSavedRecipes();
+  }, [user]);
+
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      if (user && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from("user_recommendations")
+            .select("recommended_recipe_ids")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
+            const recIds = data.recommended_recipe_ids as string[];
+            const loaded = recIds.map(id => getRecipeById(id));
+            setCuratedRecipes(loaded);
+            setIsOnboardingCompleted(true);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to load recommendations:", error);
+        }
+      }
+
+      // Check local storage for vector fallback
+      const localVectorStr = localStorage.getItem("tamar_user_vector");
+      if (localVectorStr) {
+        try {
+          const localVector = JSON.parse(localVectorStr);
+          const recIds = getRecommendationsFromVector(localVector);
+          const loaded = recIds.slice(0, 6).map(id => getRecipeById(id));
+          setCuratedRecipes(loaded);
+          setIsOnboardingCompleted(true);
+          return;
+        } catch (e) {
+          console.error("Error parsing local vector:", e);
+        }
+      }
+
+      // If no database or local recommendations, prompt onboarding
+      setIsOnboardingCompleted(false);
+      setCuratedRecipes(recipeSections[0].items);
+    };
+    loadRecommendations();
   }, [user]);
 
   const handleToggleSave = async (item: { id: number; title: string }) => {
@@ -55,6 +106,60 @@ const Home = () => {
     } catch (error) {
       toast.error("Failed to update saved recipes. Please try again.");
     }
+  };
+
+  const handleOnboardingComplete = async (finalFeedback: Record<number, number>) => {
+    const userVector = calculateUserVector(finalFeedback);
+    localStorage.setItem("tamar_user_vector", JSON.stringify(userVector));
+
+    const recIds = getRecommendationsFromVector(userVector);
+    const loaded = recIds.slice(0, 6).map(id => getRecipeById(id));
+    setCuratedRecipes(loaded);
+    setIsOnboardingCompleted(true);
+    toast.success("Feed personalized based on your taste profile!");
+
+    if (user && supabase) {
+      try {
+        const stringRecIds = recIds.slice(0, 6).map(String);
+        await supabase
+          .from("user_recommendations")
+          .upsert({
+            user_id: user.id,
+            recommended_recipe_ids: stringRecIds,
+            user_vector: userVector,
+            updated_at: new Date().toISOString()
+          });
+      } catch (err) {
+        console.error("Failed to save recommendations to database:", err);
+      }
+    }
+  };
+
+  const handleSwipe = (like: boolean) => {
+    const medoids = getMedoidRecipes();
+    const medoid = medoids[currentMedoidIdx];
+    const newFeedback = { ...feedback, [medoid.id]: like ? 1.0 : -1.0 };
+    setFeedback(newFeedback);
+
+    if (currentMedoidIdx < medoids.length - 1) {
+      setCurrentMedoidIdx(prev => prev + 1);
+    } else {
+      handleOnboardingComplete(newFeedback);
+    }
+  };
+
+  const handleSkipOnboarding = () => {
+    setIsOnboardingCompleted(true);
+    setCuratedRecipes(recipeSections[0].items);
+    toast.info("Onboarding skipped. Using default recipes.");
+  };
+
+  const handleResetOnboarding = () => {
+    setIsOnboardingCompleted(false);
+    setCurrentMedoidIdx(0);
+    setFeedback({});
+    setCuratedRecipes(recipeSections[0].items);
+    localStorage.removeItem("tamar_user_vector");
   };
 
 
@@ -94,7 +199,12 @@ const Home = () => {
     }
   };
 
-  const sections = recipeSections;
+  const sections = recipeSections.map((sec) => {
+    if (sec.title === "Curated for You" && curatedRecipes.length > 0) {
+      return { ...sec, items: curatedRecipes };
+    }
+    return sec;
+  });
 
   useEffect(() => {
     // Initial check once elements are rendered
@@ -183,6 +293,83 @@ const Home = () => {
 
       {/* Content Rows */}
       <div className="pb-24 -mt-20 md:-mt-32 relative z-10 space-y-12">
+        
+        {/* Active Learning Cold Start Onboarding */}
+        {!isOnboardingCompleted && (
+          <div className="max-w-xl mx-auto px-4 md:px-0 mb-12">
+            <div className="bg-[#181818] border border-white/10 rounded-2xl overflow-hidden p-6 shadow-2xl relative">
+              <div className="flex items-center gap-2 mb-4 text-primary text-xs uppercase tracking-widest font-extrabold">
+                <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
+                <span>Personalize Your Taste</span>
+              </div>
+              <h4 className="text-xl font-bold mb-1 text-white">Help us find your preferences</h4>
+              <p className="text-gray-400 text-xs mb-6">Swipe or tap Like/Dislike to immediately generate personalized recipe recommendations.</p>
+
+              <div className="relative aspect-video rounded-xl overflow-hidden mb-6 group border border-white/5 bg-[#141414]">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentMedoidIdx}
+                    initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -50, scale: 0.95 }}
+                    transition={{ duration: 0.25 }}
+                    className="absolute inset-0"
+                  >
+                    <img
+                      src={getMedoidRecipes()[currentMedoidIdx].image}
+                      alt={getMedoidRecipes()[currentMedoidIdx].title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
+                        Medoid {currentMedoidIdx + 1} of {getMedoidRecipes().length}
+                      </span>
+                      <h5 className="text-lg font-bold text-white leading-tight">{getMedoidRecipes()[currentMedoidIdx].title}</h5>
+                      <p className="text-gray-400 text-xs mt-0.5">Cook Time: {getMedoidRecipes()[currentMedoidIdx].time}</p>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleSwipe(false)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-red-500/30 hover:border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <X className="w-4 h-4" /> Dislike
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSkipOnboarding}
+                  className="py-3 px-4 rounded-xl border border-white/10 hover:border-white/20 text-gray-400 hover:text-white text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwipe(true)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-green-500/30 hover:border-green-500 bg-green-500/10 text-green-400 hover:bg-green-500/20 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <Heart className="w-4 h-4 fill-current" /> Like
+                </button>
+              </div>
+              
+              <div className="flex justify-center gap-1.5 mt-6">
+                {getMedoidRecipes().map((_, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      idx === currentMedoidIdx ? "w-6 bg-primary" : "w-1.5 bg-gray-600"
+                    }`} 
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {sections.map((section, idx) => (
           <div key={idx} className="pl-4 md:pl-12 group/row">
             <div className="flex items-center justify-between pr-4 md:pr-12 mb-3">
@@ -190,6 +377,16 @@ const Home = () => {
                 {section.title}
                 <ChevronRight className="w-5 h-5 opacity-0 group-hover/row:opacity-100 transition-all -ml-2 group-hover/row:ml-0" />
               </h3>
+              {section.title === "Curated for You" && isOnboardingCompleted && (
+                <button
+                  type="button"
+                  onClick={handleResetOnboarding}
+                  className="text-xs text-primary/70 hover:text-primary transition-all flex items-center gap-1 font-semibold border border-primary/20 hover:border-primary/50 px-2.5 py-1 rounded bg-[#141414] cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                  Retrain Taste
+                </button>
+              )}
             </div>
 
             <div className="relative group/carousel">
