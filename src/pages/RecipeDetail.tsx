@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clock, HeartPulse, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Clock, HeartPulse, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,11 @@ const normalizeList = (items?: string[]) =>
   (Array.isArray(items) ? items : [])
     .map((item) => String(item).trim())
     .filter(Boolean);
+
+const capitalizeFirstWord = (value: string) =>
+  value.replace(/^(\s*)([a-z])/, (_, leadingWhitespace, firstLetter) => (
+    `${leadingWhitespace}${firstLetter.toUpperCase()}`
+  ));
 
 const RecipeDetail = () => {
   const navigate = useNavigate();
@@ -53,23 +58,6 @@ const RecipeDetail = () => {
 
   const ingredients = useMemo(() => normalizeList(recipe?.ingredients), [recipe]);
   const steps = useMemo(() => normalizeList(recipe?.steps), [recipe]);
-
-  const handleStartCooking = async () => {
-    if (!recipe) return;
-
-    if (user) {
-      await recordRecipeInteraction({
-        userId: user.id,
-        recipeId: recipe.id,
-        recipeTitle: recipe.title,
-        interactionType: "started",
-      });
-    } else {
-      toast.info("Sign up to save recipe activity for future recommendations.");
-    }
-
-    navigate("/app");
-  };
 
   return (
     <div className="min-h-screen bg-[#141414] text-white font-sans">
@@ -115,11 +103,6 @@ const RecipeDetail = () => {
               <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight mb-4">
                 {recipe.title}
               </h2>
-              {recipe.description && (
-                <p className="text-base md:text-lg text-gray-200 max-w-3xl leading-relaxed mb-6">
-                  {recipe.description}
-                </p>
-              )}
               <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300 mb-7">
                 <span className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2">
                   <Clock className="w-4 h-4 text-primary" />
@@ -132,13 +115,6 @@ const RecipeDetail = () => {
                   </span>
                 )}
               </div>
-              <Button
-                onClick={handleStartCooking}
-                className="bg-white text-black hover:bg-white/90 gap-3 px-6 py-5 text-base font-bold"
-              >
-                <Play className="fill-current w-5 h-5" />
-                Start Cooking
-              </Button>
             </div>
           </section>
 
@@ -150,7 +126,7 @@ const RecipeDetail = () => {
                   {ingredients.map((ingredient, index) => (
                     <li key={`${ingredient}-${index}`} className="flex gap-3 leading-relaxed">
                       <span className="mt-2 h-2 w-2 flex-none rounded-full bg-primary" />
-                      <span>{ingredient}</span>
+                      <span>{capitalizeFirstWord(ingredient)}</span>
                     </li>
                   ))}
                 </ul>
@@ -170,7 +146,7 @@ const RecipeDetail = () => {
                       <span className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-extrabold">
                         {index + 1}
                       </span>
-                      <p className="text-gray-100 leading-relaxed pt-1.5">{step}</p>
+                      <p className="text-gray-100 leading-relaxed pt-1.5">{capitalizeFirstWord(step)}</p>
                     </li>
                   ))}
                 </ol>
