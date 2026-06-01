@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { CheckCircle2, Facebook, Loader2, Mail } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,6 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [confirmationEmail, setConfirmationEmail] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -42,16 +41,17 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
       if (mode === "signup") {
         const result = await signUp({ email, password, fullName });
         if (result.needsEmailConfirmation) {
-          setConfirmationEmail(email);
-          toast.success("Check your email to confirm your account.");
-          return;
+          toast.success("Account created. You can sign in now.");
+          setMode("signin");
+        } else {
+          toast.success("Account created.");
+          onOpenChange(false);
         }
-        toast.success("Account created.");
       } else {
         await signIn({ email, password });
         toast.success("Welcome back.");
+        onOpenChange(false);
       }
-      onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
@@ -59,13 +59,13 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
     }
   };
 
-  const handleProvider = async (provider: "google" | "facebook") => {
+  const handleProvider = async () => {
     setBusy(true);
 
     try {
-      await signInWithProvider(provider);
+      await signInWithProvider("google");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start social login.");
+      toast.error(error instanceof Error ? error.message : "Could not start Google login.");
       setBusy(false);
     }
   };
@@ -123,47 +123,24 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
           </div>
       ) : (
         <div className="space-y-5">
-          {confirmationEmail && (
-            <div className="rounded-md border border-primary/40 bg-primary/10 p-4 text-sm text-gray-200">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
-                <CheckCircle2 className="h-4 w-4" />
-                Confirm your email to finish signing up
-              </div>
-              <p>
-                We sent a confirmation link to <span className="font-semibold text-white">{confirmationEmail}</span>.
-                Open that email and confirm your account before signing in.
-              </p>
-            </div>
-          )}
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full bg-white text-black hover:bg-white/90"
+              onClick={handleProvider}
+              disabled={busy || !configured}
+            >
+              <Mail />
+              Continue with Google
+            </Button>
+          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                className="bg-white text-black hover:bg-white/90"
-                onClick={() => handleProvider("google")}
-                disabled={busy || !configured}
-              >
-                <Mail />
-                Google
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="bg-[#1877f2] text-white hover:bg-[#166fe5]"
-                onClick={() => handleProvider("facebook")}
-                disabled={busy || !configured}
-              >
-                <Facebook />
-                Facebook
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs uppercase text-gray-500">
-              <div className="h-px flex-1 bg-white/10" />
-              <span>Email</span>
-              <div className="h-px flex-1 bg-white/10" />
-            </div>
+          <div className="flex items-center gap-3 text-xs uppercase text-gray-500">
+            <div className="h-px flex-1 bg-white/10" />
+            <span>Email</span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
 
             <form className="space-y-4" onSubmit={handlePasswordAuth}>
               {mode === "signup" && (

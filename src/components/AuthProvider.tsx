@@ -9,7 +9,7 @@ type AuthContextValue = {
   configured: boolean;
   signUp: (details: { email: string; password: string; fullName: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   signIn: (details: { email: string; password: string }) => Promise<void>;
-  signInWithProvider: (provider: "google" | "facebook") => Promise<void>;
+  signInWithProvider: (provider: "google") => Promise<void>;
   signOut: () => Promise<void>;
 };
 
