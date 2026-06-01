@@ -6,7 +6,7 @@ Steps:
 2. Fetch logs from `recipe_interactions` table.
 3. Convert categorical interaction logs to numerical ratings.
 4. Train Collaborative Filtering (SVD / Matrix Factorization).
-5. For each user, predict rankings across the recipe catalog (IDs 1-30).
+5. For each user, predict rankings across the full recipe catalog from Supabase.
 6. Bulk upsert recommendations to `user_recommendations` in Supabase.
 """
 
@@ -14,7 +14,6 @@ import os
 import sys
 from pathlib import Path
 import pandas as pd
-import numpy as np
 from datetime import datetime
 
 # Ensure RecommenderSys is in python search path
@@ -26,9 +25,7 @@ except ImportError:
     print("Error: 'supabase' package is not installed. Please run: pip install supabase python-dotenv")
     sys.exit(1)
 
-# Import our colleague's Matrix Factorization model
 from src.matrix_factorization import MatrixFactorizationCF
-from cold_start_active_learning import preprocess_recipe_features, cluster_item_space, select_cluster_medoids
 from recommender_common import (
     ARTIFACT_PATH,
     RECIPE_CATALOG,
@@ -44,6 +41,7 @@ def fetch_all_rows(
     supabase: Client,
     table_name: str,
     columns: str,
+    order_by: str = "id",
     page_size: int | None = None,
 ) -> list[dict]:
     """Fetch all rows from a Supabase table using range pagination."""
@@ -56,6 +54,7 @@ def fetch_all_rows(
         response = (
             supabase.table(table_name)
             .select(columns)
+            .order(order_by)
             .range(start, end)
             .execute()
         )
@@ -67,8 +66,7 @@ def fetch_all_rows(
             break
 
         start += page_size
-        if len(rows) % (page_size * 25) == 0:
-            print(f"  fetched {len(rows):,} rows from {table_name}...")
+        print(f"  fetched {len(rows):,} rows from {table_name}...")
 
     return rows
 
@@ -155,6 +153,7 @@ def compute_recommendations():
     try:
         recipes_data = fetch_all_rows(supabase, "recipes", "id")
         recipe_catalog = [str(r["id"]) for r in recipes_data]
+        print(f"Loaded {len(recipe_catalog):,} recipes from Supabase.")
     except Exception as e:
         print(f"[Error] Failed to fetch recipes from database: {e}")
         recipe_catalog = []
@@ -172,6 +171,7 @@ def compute_recommendations():
     try:
         profiles = fetch_all_rows(supabase, "profiles", "id")
         active_users = [p["id"] for p in profiles]
+        print(f"Loaded {len(active_users):,} active profiles from Supabase.")
     except Exception as e:
         print(f"[Error] Failed to fetch user profiles: {e}")
         active_users = []
