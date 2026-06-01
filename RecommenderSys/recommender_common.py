@@ -86,3 +86,91 @@ def normalize_match_scores(scores: list[float]) -> list[float]:
 
     normalized = (arr - arr.min()) / (arr.max() - arr.min())
     return (normalized * 0.2 + 0.78).tolist()
+
+
+# ---------------------------------------------------------------------------
+# Homepage category predicates.
+#
+# Each homepage row (besides "Curated for You") corresponds to one category.
+# A recipe is "eligible" for a category if the predicate below returns True.
+# The recommender then personalizes within each category using the same CF
+# scores it already computes for Curated.
+#
+# Predicates operate on a single recipe-row dict as returned from Supabase
+# `recipes.select("id, minutes, nutrition, ingredients")`. Missing fields
+# count as not-eligible (the predicate returns False) so we never crash on
+# partially populated rows.
+# ---------------------------------------------------------------------------
+
+# Maximum cooking time in minutes for "Quick & Satisfying".
+QUICK_MINUTES_THRESHOLD = 30
+
+# Thresholds for "Healthy & Mindful" applied against the nutrition[] array,
+# which Supabase stores in this order:
+#   [calories, total_fat, sugar, sodium, protein, sat_fat, carbs]
+HEALTHY_CALORIES_THRESHOLD = 400.0
+HEALTHY_FAT_THRESHOLD = 20.0
+
+# Ingredient keywords that mark a recipe as "Bursting with Flavor".
+# Plain substring match against the lower-cased ingredients text.
+# Keep tokens specific enough to avoid false positives (e.g. "ginger" yes,
+# generic words like "sweet" no).
+FLAVOR_INGREDIENT_KEYWORDS = frozenset({
+    "chili", "chilli", "chile",
+    "ginger", "lemongrass",
+    "lemon", "lime",
+    "curry", "harissa", "sriracha", "wasabi", "tabasco",
+    "paprika", "cinnamon", "cardamom", "cumin", "turmeric", "saffron",
+    "cilantro", "coriander", "basil", "mint",
+    "soy sauce", "fish sauce", "miso",
+    "vinegar",
+})
+
+
+def is_quick(recipe: dict) -> bool:
+    """True if the recipe takes less than QUICK_MINUTES_THRESHOLD minutes."""
+    minutes = recipe.get("minutes")
+    if minutes is None:
+        return False
+    try:
+        return int(minutes) < QUICK_MINUTES_THRESHOLD
+    except (TypeError, ValueError):
+        return False
+
+
+def is_healthy(recipe: dict) -> bool:
+    """True if calories and total fat are both below the configured thresholds."""
+    nutrition = recipe.get("nutrition")
+    if not nutrition or len(nutrition) < 2:
+        return False
+    try:
+        calories = float(nutrition[0])
+        fat = float(nutrition[1])
+    except (TypeError, ValueError):
+        return False
+    return calories < HEALTHY_CALORIES_THRESHOLD and fat < HEALTHY_FAT_THRESHOLD
+
+
+def is_flavorful(recipe: dict) -> bool:
+    """True if any ingredient contains a FLAVOR_INGREDIENT_KEYWORDS substring."""
+    ingredients = recipe.get("ingredients")
+    if not ingredients:
+        return False
+    text = " ".join(str(item).lower() for item in ingredients)
+    return any(keyword in text for keyword in FLAVOR_INGREDIENT_KEYWORDS)
+
+
+# Predicate-driven category names, in the order the algorithm walks them
+# during greedy cross-category dedup. "curated" and "trending" do not use a
+# recipe predicate — Curated takes the unconstrained CF top, Trending takes a
+# global popularity ranking — but they participate in the same dedup pass.
+CATEGORY_PREDICATES = {
+    "flavor": is_flavorful,
+    "healthy": is_healthy,
+    "quick": is_quick,
+}
+
+# Order matters: a recipe assigned to an earlier category will not reappear
+# in a later one. Keep Curated first so personalization wins, Trending second
+# so the "what's hot" row is dense even when categories are picky.
+CATEGORY_ORDER = ("curated", "trending", "flavor", "healthy", "quick")
