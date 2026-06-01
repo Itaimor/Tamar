@@ -10,6 +10,8 @@ import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fet
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 
+const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
+
 const Home = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
@@ -26,6 +28,41 @@ const Home = () => {
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
+  const [cachedHeroRecipe, setCachedHeroRecipe] = useState<RecipeItem | null>(() => {
+    try {
+      const saved = window.localStorage.getItem(HERO_RECIPE_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const updateHeroCache = (recipes: RecipeItem[]) => {
+    const nextHero = recipes[0];
+    if (!nextHero) return;
+
+    setCachedHeroRecipe(nextHero);
+    try {
+      window.localStorage.setItem(HERO_RECIPE_STORAGE_KEY, JSON.stringify(nextHero));
+    } catch {
+      // Browser storage can be unavailable in private mode; the live state is enough.
+    }
+  };
+
+  const queueRecipeImages = (recipes: RecipeItem[]) => {
+    if (!session?.access_token || recipes.length === 0) return;
+
+    fetch("/api/fill-recipe-images", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ recipe_ids: recipes.map((recipe) => recipe.id) }),
+    }).catch((error) => {
+      console.info("Recipe image fill skipped:", error);
+    });
+  };
 
   useEffect(() => {
     const loadSavedRecipes = async () => {
@@ -53,6 +90,7 @@ const Home = () => {
             const defaultRecs = await fetchDefaultRecipes(6);
             setOnboardingRecipes(starters.length > 0 ? starters : defaultRecs.slice(0, 5));
             setCuratedRecipes(defaultRecs);
+            updateHeroCache(defaultRecs);
             setCurrentMedoidIdx(0);
             setFeedback({});
             setIsOnboardingCompleted(false);
@@ -151,11 +189,15 @@ const Home = () => {
         setIsOnboardingCompleted(true);
         const defaultRecs = await fetchDefaultRecipes(6);
         setCuratedRecipes(defaultRecs);
+        updateHeroCache(defaultRecs);
+        queueRecipeImages(defaultRecs);
         return;
       }
 
       const defaultRecs = await fetchDefaultRecipes(6);
       setCuratedRecipes(defaultRecs);
+      updateHeroCache(defaultRecs);
+      queueRecipeImages(defaultRecs);
     };
     loadRecommendations();
   }, [user, session?.access_token, recommendationRefreshKey]);
@@ -168,6 +210,7 @@ const Home = () => {
         setFlavorRecipes(allRecipes.slice(6, 12));
         setHealthyRecipes(allRecipes.slice(12, 18));
         setQuickRecipes(allRecipes.slice(18, 24));
+        queueRecipeImages(allRecipes.slice(0, 24));
       } catch (error) {
         console.error("Failed to load other sections:", error);
       }
@@ -362,6 +405,12 @@ const Home = () => {
     navigate(`/recipes/${item.id}`);
   };
 
+  const heroRecipe = curatedRecipes[0] || cachedHeroRecipe;
+  const heroTitle = heroRecipe?.title || "Mediterranean Harvest Bowl";
+  const heroDescription =
+    heroRecipe?.description ||
+    "Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl. A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.";
+
   return (
     <div className="min-h-screen bg-[#141414] text-white font-sans selection:bg-primary selection:text-white overflow-x-hidden">
       <Navbar />
@@ -369,8 +418,8 @@ const Home = () => {
       {/* Hero Section */}
       <div className="relative h-[85vh] w-full">
         <img
-          src="/images/hero.png"
-          alt="Featured Recipe"
+          src={heroRecipe?.image || "/images/hero.png"}
+          alt={heroTitle}
           className="w-full h-full object-cover"
         />
         {/* Gradients to blend image */}
@@ -383,18 +432,17 @@ const Home = () => {
             <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
           </div>
           <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
-            Mediterranean <br /> Harvest Bowl
+            {heroTitle}
           </h2>
           <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 line-clamp-3 font-medium max-w-lg leading-relaxed">
-            Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl.
-            A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.
+            {heroDescription}
           </p>
           <div className="flex flex-wrap gap-4">
             <Button
               onClick={() =>
                 handleRecipeUse({
-                  id: 1,
-                  title: "Mediterranean Harvest Bowl",
+                  id: heroRecipe?.id || 1,
+                  title: heroTitle,
                 })
               }
               className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold transition-all hover:scale-105 active:scale-95"
@@ -402,7 +450,7 @@ const Home = () => {
               <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
             </Button>
             <Button
-              onClick={() => navigate("/recipes/1")}
+              onClick={() => navigate(`/recipes/${heroRecipe?.id || 1}`)}
               variant="secondary"
               className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
             >
