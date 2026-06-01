@@ -10,6 +10,8 @@ import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fet
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 
+const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
+
 const Home = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
@@ -26,7 +28,26 @@ const Home = () => {
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
-  const [heroReady, setHeroReady] = useState(false);
+  const [cachedHeroRecipe, setCachedHeroRecipe] = useState<RecipeItem | null>(() => {
+    try {
+      const saved = window.localStorage.getItem(HERO_RECIPE_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const updateHeroCache = (recipes: RecipeItem[]) => {
+    const nextHero = recipes[0];
+    if (!nextHero) return;
+
+    setCachedHeroRecipe(nextHero);
+    try {
+      window.localStorage.setItem(HERO_RECIPE_STORAGE_KEY, JSON.stringify(nextHero));
+    } catch {
+      // Browser storage can be unavailable in private mode; the live state is enough.
+    }
+  };
 
   const queueRecipeImages = (recipes: RecipeItem[]) => {
     if (!session?.access_token || recipes.length === 0) return;
@@ -61,7 +82,6 @@ const Home = () => {
 
   useEffect(() => {
     const loadRecommendations = async () => {
-      setHeroReady(false);
       if (user && supabase) {
         try {
           const interactionCount = await fetchUserInteractionCount(user.id);
@@ -70,7 +90,7 @@ const Home = () => {
             const defaultRecs = await fetchDefaultRecipes(6);
             setOnboardingRecipes(starters.length > 0 ? starters : defaultRecs.slice(0, 5));
             setCuratedRecipes(defaultRecs);
-            setHeroReady(true);
+            updateHeroCache(defaultRecs);
             setCurrentMedoidIdx(0);
             setFeedback({});
             setIsOnboardingCompleted(false);
@@ -120,7 +140,7 @@ const Home = () => {
             });
             
             setCuratedRecipes(mapped);
-            setHeroReady(true);
+            updateHeroCache(mapped);
             queueRecipeImages(mapped);
             setIsOnboardingCompleted(true);
             return;
@@ -134,14 +154,14 @@ const Home = () => {
         setIsOnboardingCompleted(true);
         const defaultRecs = await fetchDefaultRecipes(6);
         setCuratedRecipes(defaultRecs);
-        setHeroReady(true);
+        updateHeroCache(defaultRecs);
         queueRecipeImages(defaultRecs);
         return;
       }
 
       const defaultRecs = await fetchDefaultRecipes(6);
       setCuratedRecipes(defaultRecs);
-      setHeroReady(true);
+      updateHeroCache(defaultRecs);
       queueRecipeImages(defaultRecs);
     };
     loadRecommendations();
@@ -350,7 +370,7 @@ const Home = () => {
     navigate(`/recipes/${item.id}`);
   };
 
-  const heroRecipe = curatedRecipes[0] || null;
+  const heroRecipe = curatedRecipes[0] || cachedHeroRecipe;
   const heroTitle = heroRecipe?.title || "Mediterranean Harvest Bowl";
   const heroDescription =
     heroRecipe?.description ||
@@ -362,20 +382,16 @@ const Home = () => {
 
       {/* Hero Section */}
       <div className="relative h-[85vh] w-full">
-        {heroReady ? (
-          <img
-            src={heroRecipe?.image || "/images/hero.png"}
-            alt={heroTitle}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-[#141414]" />
-        )}
+        <img
+          src={heroRecipe?.image || "/images/hero.png"}
+          alt={heroTitle}
+          className="w-full h-full object-cover"
+        />
         {/* Gradients to blend image */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
 
-        {heroReady && <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
+        <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
           <div className="flex items-center gap-2 mb-4">
             <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
             <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
@@ -406,7 +422,7 @@ const Home = () => {
               <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
             </Button>
           </div>
-        </div>}
+        </div>
       </div>
 
       {/* Content Rows */}
