@@ -28,8 +28,10 @@ except ImportError:
     sys.exit(1)
 
 from recommender_common import (
+    FLAVOR_SEED_KEYWORDS,
     get_artifact_bucket,
     get_artifact_storage_path,
+    is_flavorful,
     is_healthy,
     is_quick,
     load_supabase_client,
@@ -206,7 +208,7 @@ def fetch_recipes_metadata(supabase: Client, force: bool = False) -> dict[str, d
     while True:
         response = (
             supabase.table("recipes")
-            .select("id, minutes, nutrition")
+            .select("id, minutes, nutrition, ingredients")
             .order("id")
             .range(start, start + page_size - 1)
             .execute()
@@ -264,6 +266,132 @@ def compute_trending_recipe_ids(
     return counts.head(limit).index.tolist()
 
 
+# ---------------------------------------------------------------------------
+# Bursting-with-Flavor — Route A: centroid in CF embedding space.
+#
+# The CF artifact already contains a 10-dim latent embedding per recipe
+# (`item_factors`). The same embeddings drive Curated for You (where the
+# anchor is the *user* vector built from their interactions). Here we build
+# a different anchor: the average embedding of a small set of seed recipes
+# whose ingredients contain unambiguous bold-flavor terms (harissa, sriracha,
+# gochujang, ...). The Flavor row is then the recipes whose embeddings are
+# closest (cosine) to that centroid, with greedy dedup against the other rows.
+#
+# This trades two assumptions:
+#   1. The seed keywords are precise enough that the centroid points in a
+#      meaningful direction in latent space (50-200 seeds smooth out noise).
+#   2. CF "users-who-liked-X-also-liked-Y" similarity correlates with flavor
+#      similarity. Empirically: yes, because people who like one curry tend
+#      to like other curries.
+#
+# Honest framing: this is not literal flavor-from-text; it is latent
+# co-preference similarity anchored on a flavor seed set. Strong tradeoff
+# against running a sentence-transformer model on 100k recipes.
+# ---------------------------------------------------------------------------
+
+# Cached at module scope. The centroid depends on the artifact's recipe_index
+# and the cached recipes_meta; we tie its freshness to the metadata TTL so
+# new catalog rows can join the seed pool when they appear.
+_FLAVOR_CENTROID_CACHE: dict = {"centroid": None, "computed_at": None, "n_seeds": 0}
+
+
+def identify_flavor_seed_ids(recipes_meta: dict, keywords: frozenset[str]) -> list[str]:
+    """Recipe ids whose ingredients contain any seed keyword.
+
+    Substring match against the lower-cased, space-joined ingredients text —
+    same matching rule as `is_flavorful`, but called with a tighter keyword
+    set so the resulting centroid is anchored on high-precision exemplars.
+    """
+    seeds: list[str] = []
+    for rid, meta in recipes_meta.items():
+        ingredients = meta.get("ingredients") or []
+        if not ingredients:
+            continue
+        text = " ".join(str(item).lower() for item in ingredients)
+        if any(kw in text for kw in keywords):
+            seeds.append(rid)
+    return seeds
+
+
+def compute_flavor_centroid(
+    seed_ids: list[str],
+    recipe_index: dict,
+    item_factors: np.ndarray,
+) -> Optional[np.ndarray]:
+    """Average the CF embeddings of the seed recipes.
+
+    Returns a single 10-dim vector that serves as the "flavor anchor" in
+    latent space. Returns None if no seed recipes overlap the artifact's
+    catalog — caller should treat that as "no Flavor row available".
+    """
+    vectors: list[np.ndarray] = []
+    for sid in seed_ids:
+        idx = recipe_index.get(sid)
+        if idx is not None:
+            vectors.append(item_factors[idx])
+    if not vectors:
+        return None
+    return np.mean(np.array(vectors), axis=0)
+
+
+def compute_flavor_scores(
+    centroid: np.ndarray,
+    item_factors: np.ndarray,
+    recipe_ids: np.ndarray,
+) -> dict[str, float]:
+    """Cosine similarity from each recipe embedding to the flavor centroid.
+
+    Vectorized over the whole catalog (100k recipes -> microseconds). Returns
+    {recipe_id_str: similarity} for every recipe in the artifact.
+    """
+    centroid_norm = float(np.linalg.norm(centroid))
+    if centroid_norm < 1e-9:
+        return {}
+    item_norms = np.linalg.norm(item_factors, axis=1)
+    # Clamp zero-norm vectors so the division is safe; affected recipes get
+    # similarity ~0 which pushes them out of the top-K anyway.
+    safe_norms = np.where(item_norms < 1e-9, 1e-9, item_norms)
+    sims = (item_factors @ centroid) / (safe_norms * centroid_norm)
+    return {str(rid): float(sims[i]) for i, rid in enumerate(recipe_ids)}
+
+
+def get_flavor_artifact(
+    recipes_meta: dict,
+    artifact: dict,
+    force: bool = False,
+) -> tuple[Optional[np.ndarray], dict[str, float]]:
+    """Return (centroid, scores_by_id) for the Flavor row, cached across calls.
+
+    The centroid is invariant per artifact+catalog so we cache both it and
+    the full scores map. TTL matches the recipes-metadata cache.
+    """
+    now = datetime.now(timezone.utc)
+    cached_at = _FLAVOR_CENTROID_CACHE["computed_at"]
+    if (
+        not force
+        and _FLAVOR_CENTROID_CACHE["centroid"] is not None
+        and cached_at is not None
+        and (now - cached_at).total_seconds() < recipes_meta_cache_ttl_seconds()
+    ):
+        return _FLAVOR_CENTROID_CACHE["centroid"], _FLAVOR_CENTROID_CACHE["scores"]
+
+    seed_ids = identify_flavor_seed_ids(recipes_meta, FLAVOR_SEED_KEYWORDS)
+    centroid = compute_flavor_centroid(seed_ids, artifact["recipe_index"], artifact["item_factors"])
+    scores: dict[str, float] = {}
+    if centroid is not None:
+        scores = compute_flavor_scores(centroid, artifact["item_factors"], artifact["recipe_ids"])
+
+    _FLAVOR_CENTROID_CACHE["centroid"] = centroid
+    _FLAVOR_CENTROID_CACHE["scores"] = scores
+    _FLAVOR_CENTROID_CACHE["computed_at"] = now
+    _FLAVOR_CENTROID_CACHE["n_seeds"] = len(seed_ids)
+    print(
+        f"[Info] Built flavor centroid from {len(seed_ids):,} seed recipes "
+        f"({sum(1 for sid in seed_ids if sid in artifact['recipe_index'])} matched artifact)."
+    )
+    return centroid, scores
+
+
 def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tuple[str, float]]:
     """Compute Curated + Trending + Healthy + Quick recommendations and upsert all of them.
 
@@ -315,18 +443,30 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         print(f"[Warning] Failed to compute trending recipes: {exc}")
         trending_ranked_ids = []
 
+    # Flavor centroid in CF embedding space (Route A). Cached at module scope;
+    # returns ({}, None) on first call when no seeds match the artifact, which
+    # leaves the Flavor row empty and the frontend falls back to its placeholder.
+    try:
+        _flavor_centroid, flavor_scores_by_id = get_flavor_artifact(recipes_meta, artifact)
+    except Exception as exc:
+        print(f"[Warning] Failed to build flavor centroid: {exc}")
+        flavor_scores_by_id = {}
+
     # Greedy cross-category dedup. `assigned` starts populated with recipes
     # the user has already saved/liked (the existing exclusion rule) so they
     # are not surfaced in any row.
     assigned: set[str] = set(excluded_recipe_ids)
 
-    def take(source_ids, predicate, count) -> list[tuple[str, float]]:
+    def take(source_ids, predicate, count, score_lookup=None) -> list[tuple[str, float]]:
         """Pick up to `count` recipes from `source_ids` (already in priority order)
         skipping anything in `assigned` and anything failing `predicate`.
 
-        `predicate=None` means no constraint. Each picked recipe is added to
-        `assigned` so later category passes can't reuse it.
+        `predicate=None` means no constraint. `score_lookup` defaults to the
+        per-user CF scores; categories that want a different display score
+        (Flavor uses cosine-to-centroid) pass their own map. Each picked
+        recipe is added to `assigned` so later category passes can't reuse it.
         """
+        lookup = score_lookup if score_lookup is not None else score_by_id
         picked: list[tuple[str, float]] = []
         for rid in source_ids:
             if rid in assigned:
@@ -335,15 +475,18 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
                 meta = recipes_meta.get(rid)
                 if meta is None or not predicate(meta):
                     continue
-            picked.append((rid, score_by_id.get(rid, float(global_mean))))
+            picked.append((rid, float(lookup.get(rid, global_mean))))
             assigned.add(rid)
             if len(picked) == count:
                 break
         return picked
 
-    # Walk order matches CATEGORY_ORDER from recommender_common. Curated wins
-    # ties because it is the most personalized; Trending second so the
-    # popularity row stays dense before predicate-filtered rows narrow the
+    # Walk order matches CATEGORY_ORDER from recommender_common:
+    #   curated -> trending -> flavor -> healthy -> quick
+    # Curated wins ties because it is the most personalized; Trending second
+    # so the popularity row stays dense; Flavor third because its source is
+    # *not* the CF ranking (it uses cosine-to-centroid) and we want it to
+    # claim its best matches before the predicate-filtered rows narrow the
     # remaining pool.
     curated = take(cf_ranked_ids, predicate=None, count=k)
 
@@ -354,7 +497,30 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     trending_source = list(dict.fromkeys(trending_ranked_ids + cf_ranked_ids))
     trending = take(trending_source, predicate=None, count=k)
 
-    # Flavor: skipped on purpose — left NULL pending team decision.
+    # Flavor: hybrid approach combining two signals.
+    #
+    #   - Ranking by cosine similarity to the seed-recipe centroid (semantic
+    #     generalization in latent CF space — captures "this recipe is liked
+    #     by the same people who like harissa/curry/sriracha dishes").
+    #   - Filtered by `is_flavorful` so the recipe must also contain at least
+    #     one ingredient from the broader flavor keyword list (literal floor
+    #     of flavor signal — prevents the centroid from surfacing comfort
+    #     food just because it happens to be popular).
+    #
+    # The displayed match score still comes from the cosine map so the row's
+    # internal ordering reflects centroid similarity, not CF taste match.
+    flavor_ranked_ids = sorted(
+        flavor_scores_by_id.keys(),
+        key=lambda rid: flavor_scores_by_id[rid],
+        reverse=True,
+    )
+    flavor = take(
+        flavor_ranked_ids,
+        predicate=is_flavorful,
+        count=k,
+        score_lookup=flavor_scores_by_id,
+    )
+
     healthy = take(cf_ranked_ids, predicate=is_healthy, count=k)
     quick = take(cf_ranked_ids, predicate=is_quick, count=k)
 
@@ -365,8 +531,8 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
             "match_scores": normalize_match_scores([s for _, s in curated]),
             "trending_recipe_ids": [rid for rid, _ in trending],
             "trending_match_scores": normalize_match_scores([s for _, s in trending]),
-            # flavor_recipe_ids / flavor_match_scores intentionally omitted
-            # so the columns stay NULL until the flavor strategy is decided.
+            "flavor_recipe_ids": [rid for rid, _ in flavor],
+            "flavor_match_scores": normalize_match_scores([s for _, s in flavor]),
             "healthy_recipe_ids": [rid for rid, _ in healthy],
             "healthy_match_scores": normalize_match_scores([s for _, s in healthy]),
             "quick_recipe_ids": [rid for rid, _ in quick],

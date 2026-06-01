@@ -118,6 +118,7 @@ const Home = () => {
             .select(
               "recommended_recipe_ids, match_scores, " +
                 "trending_recipe_ids, trending_match_scores, " +
+                "flavor_recipe_ids, flavor_match_scores, " +
                 "healthy_recipe_ids, healthy_match_scores, " +
                 "quick_recipe_ids, quick_match_scores, " +
                 "updated_at"
@@ -147,8 +148,9 @@ const Home = () => {
               });
 
             // Pull each category's recipe rows in parallel. Empty/null arrays
-            // (e.g. flavor while the algo is being decided) yield empty lists
-            // and leave the existing placeholder set by loadOtherSections in place.
+            // yield empty lists and leave the existing placeholder set by
+            // loadOtherSections in place. Flavor used to fall here while the
+            // algo was undecided; with Route A active it is populated now.
             const loadCategoryRow = async (
               ids: string[] | null | undefined,
               scores: number[] | null | undefined,
@@ -158,10 +160,14 @@ const Home = () => {
               return withMatchScores(items, scores);
             };
 
-            const [trending, healthy, quick] = await Promise.all([
+            const [trending, flavor, healthy, quick] = await Promise.all([
               loadCategoryRow(
                 data.trending_recipe_ids as string[] | null,
                 data.trending_match_scores as number[] | null,
+              ),
+              loadCategoryRow(
+                data.flavor_recipe_ids as string[] | null,
+                data.flavor_match_scores as number[] | null,
               ),
               loadCategoryRow(
                 data.healthy_recipe_ids as string[] | null,
@@ -175,6 +181,7 @@ const Home = () => {
 
             setCuratedRecipes(withMatchScores(loaded, data.match_scores));
             if (trending.length > 0) setTrendingRecipes(trending);
+            if (flavor.length > 0) setFlavorRecipes(flavor);
             if (healthy.length > 0) setHealthyRecipes(healthy);
             if (quick.length > 0) setQuickRecipes(quick);
             setIsOnboardingCompleted(true);

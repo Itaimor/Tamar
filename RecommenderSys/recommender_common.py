@@ -126,6 +126,31 @@ FLAVOR_INGREDIENT_KEYWORDS = frozenset({
     "vinegar",
 })
 
+# Tighter, high-precision set used to *seed* the latent-space "flavor centroid"
+# for the Bursting-with-Flavor row (Route A).
+#
+# The math: each seed recipe contributes its 10-dim CF embedding to an average,
+# and the resulting centroid serves as an anchor in the same latent space as
+# the user vector. Recipes are then ranked by cosine similarity to that anchor.
+#
+# Because a seed with a wrong keyword pollutes the centroid, we use unambiguous
+# bold-flavor terms only. Less precision than FLAVOR_INGREDIENT_KEYWORDS but
+# much higher recall is fine — we only need ~50-200 well-chosen seeds to
+# stabilize the average against noise.
+FLAVOR_SEED_KEYWORDS = frozenset({
+    "harissa", "sriracha", "gochujang", "sambal", "kimchi",
+    "fish sauce", "miso", "wasabi", "tabasco",
+    "curry paste", "chili paste", "red curry", "green curry",
+    "chipotle", "ancho", "chili pepper",
+    # NOTE: "lemongrass" and "saffron" were intentionally removed.
+    # They produced ~4k seeds (most of them not "bold flavor" by themselves)
+    # which pulled the centroid toward the popular-recipe centre of the
+    # latent space and surfaced unrelated comfort food in the Flavor row.
+    # We rely on the keyword *filter* (is_flavorful) below to recover any
+    # genuinely flavorful recipes that happen to contain only lemongrass/
+    # saffron without one of the bolder tokens above.
+})
+
 
 def is_quick(recipe: dict) -> bool:
     """True if the recipe takes less than QUICK_MINUTES_THRESHOLD minutes."""
