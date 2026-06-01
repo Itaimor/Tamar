@@ -27,6 +27,21 @@ const Home = () => {
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
 
+  const queueRecipeImages = (recipes: RecipeItem[]) => {
+    if (!session?.access_token || recipes.length === 0) return;
+
+    fetch("/api/fill-recipe-images", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ recipe_ids: recipes.map((recipe) => recipe.id) }),
+    }).catch((error) => {
+      console.info("Recipe image fill skipped:", error);
+    });
+  };
+
   useEffect(() => {
     const loadSavedRecipes = async () => {
       if (user) {
@@ -102,6 +117,7 @@ const Home = () => {
             });
             
             setCuratedRecipes(mapped);
+            queueRecipeImages(mapped);
             setIsOnboardingCompleted(true);
             return;
           }
@@ -114,11 +130,13 @@ const Home = () => {
         setIsOnboardingCompleted(true);
         const defaultRecs = await fetchDefaultRecipes(6);
         setCuratedRecipes(defaultRecs);
+        queueRecipeImages(defaultRecs);
         return;
       }
 
       const defaultRecs = await fetchDefaultRecipes(6);
       setCuratedRecipes(defaultRecs);
+      queueRecipeImages(defaultRecs);
     };
     loadRecommendations();
   }, [user, session?.access_token, recommendationRefreshKey]);
@@ -131,6 +149,7 @@ const Home = () => {
         setFlavorRecipes(allRecipes.slice(6, 12));
         setHealthyRecipes(allRecipes.slice(12, 18));
         setQuickRecipes(allRecipes.slice(18, 24));
+        queueRecipeImages(allRecipes.slice(0, 24));
       } catch (error) {
         console.error("Failed to load other sections:", error);
       }
