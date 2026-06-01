@@ -26,6 +26,7 @@ const Home = () => {
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
+  const [heroReady, setHeroReady] = useState(false);
 
   const queueRecipeImages = (recipes: RecipeItem[]) => {
     if (!session?.access_token || recipes.length === 0) return;
@@ -60,6 +61,7 @@ const Home = () => {
 
   useEffect(() => {
     const loadRecommendations = async () => {
+      setHeroReady(false);
       if (user && supabase) {
         try {
           const interactionCount = await fetchUserInteractionCount(user.id);
@@ -68,6 +70,7 @@ const Home = () => {
             const defaultRecs = await fetchDefaultRecipes(6);
             setOnboardingRecipes(starters.length > 0 ? starters : defaultRecs.slice(0, 5));
             setCuratedRecipes(defaultRecs);
+            setHeroReady(true);
             setCurrentMedoidIdx(0);
             setFeedback({});
             setIsOnboardingCompleted(false);
@@ -117,6 +120,7 @@ const Home = () => {
             });
             
             setCuratedRecipes(mapped);
+            setHeroReady(true);
             queueRecipeImages(mapped);
             setIsOnboardingCompleted(true);
             return;
@@ -130,12 +134,14 @@ const Home = () => {
         setIsOnboardingCompleted(true);
         const defaultRecs = await fetchDefaultRecipes(6);
         setCuratedRecipes(defaultRecs);
+        setHeroReady(true);
         queueRecipeImages(defaultRecs);
         return;
       }
 
       const defaultRecs = await fetchDefaultRecipes(6);
       setCuratedRecipes(defaultRecs);
+      setHeroReady(true);
       queueRecipeImages(defaultRecs);
     };
     loadRecommendations();
@@ -356,16 +362,20 @@ const Home = () => {
 
       {/* Hero Section */}
       <div className="relative h-[85vh] w-full">
-        <img
-          src={heroRecipe?.image || "/images/hero.png"}
-          alt={heroTitle}
-          className="w-full h-full object-cover"
-        />
+        {heroReady ? (
+          <img
+            src={heroRecipe?.image || "/images/hero.png"}
+            alt={heroTitle}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-[#141414]" />
+        )}
         {/* Gradients to blend image */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
 
-        <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
+        {heroReady && <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
           <div className="flex items-center gap-2 mb-4">
             <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
             <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
@@ -396,7 +406,7 @@ const Home = () => {
               <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
             </Button>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Content Rows */}
