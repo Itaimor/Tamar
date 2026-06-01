@@ -344,6 +344,12 @@ const Home = () => {
     navigate(`/recipes/${item.id}`);
   };
 
+  const heroRecipe = curatedRecipes[0] || null;
+  const heroTitle = heroRecipe?.title || "Mediterranean Harvest Bowl";
+  const heroDescription =
+    heroRecipe?.description ||
+    "Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl. A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.";
+
   return (
     <div className="min-h-screen bg-[#141414] text-white font-sans selection:bg-primary selection:text-white overflow-x-hidden">
       <Navbar />
@@ -351,8 +357,8 @@ const Home = () => {
       {/* Hero Section */}
       <div className="relative h-[85vh] w-full">
         <img
-          src="/images/hero.png"
-          alt="Featured Recipe"
+          src={heroRecipe?.image || "/images/hero.png"}
+          alt={heroTitle}
           className="w-full h-full object-cover"
         />
         {/* Gradients to blend image */}
@@ -365,18 +371,17 @@ const Home = () => {
             <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
           </div>
           <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
-            Mediterranean <br /> Harvest Bowl
+            {heroTitle}
           </h2>
           <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 line-clamp-3 font-medium max-w-lg leading-relaxed">
-            Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl.
-            A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.
+            {heroDescription}
           </p>
           <div className="flex flex-wrap gap-4">
             <Button
               onClick={() =>
                 handleRecipeUse({
-                  id: 1,
-                  title: "Mediterranean Harvest Bowl",
+                  id: heroRecipe?.id || 1,
+                  title: heroTitle,
                 })
               }
               className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold transition-all hover:scale-105 active:scale-95"
@@ -384,7 +389,7 @@ const Home = () => {
               <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
             </Button>
             <Button
-              onClick={() => navigate("/recipes/1")}
+              onClick={() => navigate(`/recipes/${heroRecipe?.id || 1}`)}
               variant="secondary"
               className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
             >
