@@ -115,7 +115,14 @@ const Home = () => {
 
           const { data, error } = await supabase
             .from("user_recommendations")
-            .select("recommended_recipe_ids, match_scores, updated_at")
+            .select(
+              "recommended_recipe_ids, match_scores, " +
+                "trending_recipe_ids, trending_match_scores, " +
+                "flavor_recipe_ids, flavor_match_scores, " +
+                "healthy_recipe_ids, healthy_match_scores, " +
+                "quick_recipe_ids, quick_match_scores, " +
+                "updated_at"
+            )
             .eq("user_id", user.id)
             .maybeSingle();
 
@@ -127,21 +134,56 @@ const Home = () => {
               recIds,
               updatedAt: data.updated_at,
             });
-            
-            // Map the personalized match scores from database
-            const mapped = loaded.map((recipe, index) => {
-              const score = data.match_scores && data.match_scores[index] !== undefined
-                ? data.match_scores[index]
-                : 0.95;
-              return {
-                ...recipe,
-                match: `${Math.round(score * 100)}%`
-              };
-            });
-            
-            setCuratedRecipes(mapped);
-            updateHeroCache(mapped);
-            queueRecipeImages(mapped);
+
+            // Attach the personalized match-score band (0.78-0.98 from the
+            // recommender) onto each recipe for display in the row card.
+            const withMatchScores = (
+              recipes: RecipeItem[],
+              scores: number[] | null | undefined,
+            ): RecipeItem[] =>
+              recipes.map((recipe, index) => {
+                const score =
+                  scores && scores[index] !== undefined ? scores[index] : 0.95;
+                return { ...recipe, match: `${Math.round(score * 100)}%` };
+              });
+
+            // Pull each category's recipe rows in parallel. Empty/null arrays
+            // yield empty lists and leave the existing placeholder set by
+            // loadOtherSections in place. Flavor used to fall here while the
+            // algo was undecided; with Route A active it is populated now.
+            const loadCategoryRow = async (
+              ids: string[] | null | undefined,
+              scores: number[] | null | undefined,
+            ): Promise<RecipeItem[]> => {
+              if (!ids || ids.length === 0) return [];
+              const items = await fetchRecipesByIds(ids);
+              return withMatchScores(items, scores);
+            };
+
+            const [trending, flavor, healthy, quick] = await Promise.all([
+              loadCategoryRow(
+                data.trending_recipe_ids as string[] | null,
+                data.trending_match_scores as number[] | null,
+              ),
+              loadCategoryRow(
+                data.flavor_recipe_ids as string[] | null,
+                data.flavor_match_scores as number[] | null,
+              ),
+              loadCategoryRow(
+                data.healthy_recipe_ids as string[] | null,
+                data.healthy_match_scores as number[] | null,
+              ),
+              loadCategoryRow(
+                data.quick_recipe_ids as string[] | null,
+                data.quick_match_scores as number[] | null,
+              ),
+            ]);
+
+            setCuratedRecipes(withMatchScores(loaded, data.match_scores));
+            if (trending.length > 0) setTrendingRecipes(trending);
+            if (flavor.length > 0) setFlavorRecipes(flavor);
+            if (healthy.length > 0) setHealthyRecipes(healthy);
+            if (quick.length > 0) setQuickRecipes(quick);
             setIsOnboardingCompleted(true);
             return;
           }
