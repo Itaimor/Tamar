@@ -7,6 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { recordRecipeInteraction } from "@/lib/recipeInteractions";
 import { fetchRecipeById, RecipeItem } from "@/lib/recipes";
 import { toast } from "sonner";
+import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
 const normalizeList = (items?: string[]) =>
   (Array.isArray(items) ? items : [])
@@ -78,10 +79,11 @@ const RecipeDetail = () => {
       ) : (
         <main className="pt-24 pb-20">
           <section className="relative min-h-[52vh] flex items-end">
-            <img
+            <ImageWithSkeleton
               src={recipe.image}
               alt={recipe.title}
               className="absolute inset-0 w-full h-full object-cover"
+              skeletonClassName="bg-zinc-900 rounded-none animate-pulse"
             />
             {(recipe.image === "/images/empty_plate.png" || !recipe.image) && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">

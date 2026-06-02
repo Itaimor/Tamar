@@ -9,6 +9,8 @@ import { recordRecipeInteraction, fetchSavedRecipes, fetchUserInteractionCount, 
 import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
+import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
 
@@ -438,47 +440,74 @@ const Home = () => {
 
       {/* Hero Section */}
       <div className="relative h-[85vh] w-full">
-        <img
-          src={heroRecipe?.image || "/images/hero.png"}
-          alt={heroTitle}
-          className="w-full h-full object-cover"
-        />
-        {/* Gradients to blend image */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
+        {heroRecipe ? (
+          <>
+            <ImageWithSkeleton
+              src={heroRecipe.image}
+              alt={heroTitle}
+              className="w-full h-full object-cover"
+              skeletonClassName="bg-zinc-900 rounded-none animate-pulse"
+            />
+            {/* Gradients to blend image */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
 
-        <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
-            <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
+            <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
+                <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
+              </div>
+              <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
+                {heroTitle}
+              </h2>
+              <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 font-medium max-w-lg leading-relaxed">
+                {getFirstNSentences(heroDescription, 4)}
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <Button
+                  onClick={() =>
+                    handleRecipeUse({
+                      id: heroRecipe.id,
+                      title: heroTitle,
+                    })
+                  }
+                  className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold transition-all hover:scale-105 active:scale-95"
+                >
+                  <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
+                </Button>
+                <Button
+                  onClick={() => navigate(`/recipes/${heroRecipe.id}`)}
+                  variant="secondary"
+                  className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
+                >
+                  <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-[#181818] animate-pulse">
+            <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
+            <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 w-full max-w-2xl pr-8 space-y-6">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-20 bg-zinc-800 rounded-sm" />
+                <div className="h-4 w-32 bg-zinc-800 rounded-sm" />
+              </div>
+              <div className="space-y-3">
+                <div className="h-14 w-3/4 bg-zinc-800 rounded-md" />
+                <div className="h-14 w-1/2 bg-zinc-800 rounded-md" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-5 w-5/6 bg-zinc-800 rounded-sm" />
+                <div className="h-5 w-2/3 bg-zinc-800 rounded-sm" />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <div className="h-12 w-36 bg-zinc-800 rounded-lg" />
+                <div className="h-12 w-36 bg-zinc-800 rounded-lg" />
+              </div>
+            </div>
           </div>
-          <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
-            {heroTitle}
-          </h2>
-          <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 font-medium max-w-lg leading-relaxed">
-            {getFirstNSentences(heroDescription, 4)}
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <Button
-              onClick={() =>
-                handleRecipeUse({
-                  id: heroRecipe?.id || 1,
-                  title: heroTitle,
-                })
-              }
-              className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold transition-all hover:scale-105 active:scale-95"
-            >
-              <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
-            </Button>
-            <Button
-              onClick={() => navigate(`/recipes/${heroRecipe?.id || 1}`)}
-              variant="secondary"
-              className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
-            >
-              <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Content Rows */}
@@ -505,10 +534,11 @@ const Home = () => {
                     transition={{ duration: 0.25 }}
                     className="absolute inset-0"
                   >
-                    <img
+                    <ImageWithSkeleton
                       src={onboardingRecipes[currentMedoidIdx].image}
                       alt={onboardingRecipes[currentMedoidIdx].title}
                       className="w-full h-full object-cover"
+                      skeletonClassName="bg-zinc-800"
                     />
                     {onboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
                       <div className="absolute inset-0 bg-black/25 pointer-events-none" />
@@ -617,68 +647,78 @@ const Home = () => {
                 onScroll={() => updateScrollButtons(idx)}
                 className="flex gap-2 overflow-x-auto no-scrollbar pb-6 pr-12 scroll-smooth"
               >
-                {section.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex-none w-[220px] md:w-[320px] aspect-video relative group cursor-pointer rounded-sm overflow-hidden transition-all duration-300 hover:scale-110 hover:z-30 shadow-2xl"
-                    onClick={() => handleRecipeDetails(item)}
-                  >
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    />
-                    {(item.image === "/images/empty_plate.png" || !item.image) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                        <span className="text-4xl font-extrabold text-white bg-black/70 px-4 py-2 rounded-xl border border-white/20 shadow-2xl tracking-wider">
-                          #{item.id}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <button
-                          type="button"
-                          aria-label={`Start ${item.title}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleRecipeUse(item);
-                          }}
-                          className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
-                        >
-                          <Play className="fill-black text-black w-4 h-4 ml-0.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={savedRecipeIds.includes(String(item.id)) ? `Remove ${item.title} from cookbook` : `Save ${item.title} to cookbook`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleToggleSave(item);
-                          }}
-                          className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer ${savedRecipeIds.includes(String(item.id))
-                              ? "bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600"
-                              : "border-gray-400 hover:border-white"
-                            }`}
-                        >
-                          {savedRecipeIds.includes(String(item.id)) ? (
-                            <Check className="text-white w-4 h-4" />
-                          ) : (
-                            <Plus className="text-white w-4 h-4" />
-                          )}
-                        </button>
-                        <div className="ml-auto w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors">
-                          <ChevronRight className="text-white w-4 h-4 rotate-90" />
+                {section.items.length > 0 ? (
+                  section.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex-none w-[220px] md:w-[320px] aspect-video relative group cursor-pointer rounded-sm overflow-hidden transition-all duration-300 hover:scale-110 hover:z-30 shadow-2xl"
+                      onClick={() => handleRecipeDetails(item)}
+                    >
+                      <ImageWithSkeleton
+                        src={item.image}
+                        alt={item.title}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        skeletonClassName="bg-zinc-800"
+                      />
+                      {(item.image === "/images/empty_plate.png" || !item.image) && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                          <span className="text-4xl font-extrabold text-white bg-black/70 px-4 py-2 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+                            #{item.id}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <button
+                            type="button; start cooking"
+                            aria-label={`Start ${item.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleRecipeUse(item);
+                            }}
+                            className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
+                          >
+                            <Play className="fill-black text-black w-4 h-4 ml-0.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={savedRecipeIds.includes(String(item.id)) ? `Remove ${item.title} from cookbook` : `Save ${item.title} to cookbook`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleToggleSave(item);
+                            }}
+                            className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer ${savedRecipeIds.includes(String(item.id))
+                                ? "bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600"
+                                : "border-gray-400 hover:border-white"
+                              }`}
+                          >
+                            {savedRecipeIds.includes(String(item.id)) ? (
+                              <Check className="text-white w-4 h-4" />
+                            ) : (
+                              <Plus className="text-white w-4 h-4" />
+                            )}
+                          </button>
+                          <div className="ml-auto w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors">
+                            <ChevronRight className="text-white w-4 h-4 rotate-90" />
+                          </div>
+                        </div>
+                        <p className="font-bold text-sm md:text-base mb-1">{item.title}</p>
+                        <div className="flex items-center gap-2 text-[10px] font-bold">
+                          <span className="text-green-500">{item.match || "95%"} Match</span>
+                          <span className="border border-gray-500 px-1 rounded-sm text-gray-400">HD</span>
+                          <span className="text-gray-400">{item.time || "15m"}</span>
                         </div>
                       </div>
-                      <p className="font-bold text-sm md:text-base mb-1">{item.title}</p>
-                      <div className="flex items-center gap-2 text-[10px] font-bold">
-                        <span className="text-green-500">{item.match || "95%"} Match</span>
-                        <span className="border border-gray-500 px-1 rounded-sm text-gray-400">HD</span>
-                        <span className="text-gray-400">{item.time || "15m"}</span>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  Array.from({ length: 5 }).map((_, sIdx) => (
+                    <div
+                      key={sIdx}
+                      className="flex-none w-[220px] md:w-[320px] aspect-video relative rounded-sm overflow-hidden bg-zinc-900 animate-pulse border border-white/5"
+                    />
+                  ))
+                )}
               </div>
             </div>
           </div>

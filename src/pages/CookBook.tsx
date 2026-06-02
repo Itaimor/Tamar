@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { fetchSavedRecipes, toggleSaveRecipe, recordRecipeInteraction } from "@/lib/recipeInteractions";
 import { getRecipeById } from "@/lib/recipes";
 import AuthDialog from "@/components/AuthDialog";
+import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
 const CookBook = () => {
   const navigate = useNavigate();
@@ -153,10 +154,11 @@ const CookBook = () => {
                   onClick={() => handleRecipeDetails(item.recipe_id)}
                 >
                   <div className="aspect-video w-full relative overflow-hidden">
-                    <img
+                    <ImageWithSkeleton
                       src={recipeDetails.image}
                       alt={item.recipe_title}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      skeletonClassName="bg-zinc-800"
                     />
                     {(recipeDetails.image === "/images/empty_plate.png" || !recipeDetails.image) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
