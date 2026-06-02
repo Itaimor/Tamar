@@ -405,7 +405,7 @@ const Home = () => {
       toast.info("Sign up to save recipe activity for future recommendations.");
     }
 
-    navigate("/app");
+    navigate(`/recipes/${item.id}`);
   };
 
   const handleRecipeDetails = (item: { id: number }) => {

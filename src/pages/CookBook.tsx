@@ -48,7 +48,7 @@ const CookBook = () => {
         interactionType: "started",
       });
     }
-    navigate("/app");
+    navigate(`/recipes/${recipe.id}`);
   };
 
   const handleRecipeDetails = (recipeId: string | number) => {
