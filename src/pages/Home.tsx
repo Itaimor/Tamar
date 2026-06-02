@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
-import { recordRecipeInteraction, fetchSavedRecipes, fetchUserInteractionCount, toggleSaveRecipe } from "@/lib/recipeInteractions";
+import { recordRecipeInteraction, fetchSavedRecipes, fetchTasteFeedbackCount, toggleSaveRecipe } from "@/lib/recipeInteractions";
 import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
@@ -65,6 +65,14 @@ const Home = () => {
     }
   };
 
+  const loadTasteOnboardingRecipes = async () => {
+    const starters = await fetchColdStartRecipes(5);
+    if (starters.length > 0) return starters;
+
+    const defaults = await fetchDefaultRecipes(6);
+    return defaults.slice(0, 5);
+  };
+
   const queueRecipeImages = (recipes: RecipeItem[]) => {
     if (!session?.access_token || recipes.length === 0) return;
 
@@ -100,11 +108,11 @@ const Home = () => {
     const loadRecommendations = async () => {
       if (user && supabase) {
         try {
-          const interactionCount = await fetchUserInteractionCount(user.id);
-          if (interactionCount === 0) {
-            const starters = await fetchColdStartRecipes(5);
+          const tasteFeedbackCount = await fetchTasteFeedbackCount(user.id);
+          if (tasteFeedbackCount === 0) {
+            const starters = await loadTasteOnboardingRecipes();
             const defaultRecs = await fetchDefaultRecipes(6);
-            setOnboardingRecipes(starters.length > 0 ? starters : defaultRecs.slice(0, 5));
+            setOnboardingRecipes(starters);
             setCuratedRecipes(defaultRecs);
             updateHeroCache(defaultRecs);
             setCurrentMedoidIdx(0);
@@ -325,6 +333,8 @@ const Home = () => {
   };
 
   const handleResetOnboarding = async () => {
+    const starters = await loadTasteOnboardingRecipes();
+    setOnboardingRecipes(starters);
     setIsOnboardingCompleted(false);
     setCurrentMedoidIdx(0);
     setFeedback({});

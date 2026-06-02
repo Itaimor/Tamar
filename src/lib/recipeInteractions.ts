@@ -59,6 +59,23 @@ export const fetchUserInteractionCount = async (userId: string) => {
   return count || 0;
 };
 
+export const fetchTasteFeedbackCount = async (userId: string) => {
+  if (!supabase) return 0;
+
+  const { count, error } = await supabase
+    .from("recipe_interactions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("interaction_type", ["liked", "dismissed"]);
+
+  if (error) {
+    console.error("Error counting taste feedback interactions:", error);
+    throw error;
+  }
+
+  return count || 0;
+};
+
 export const toggleSaveRecipe = async ({
   userId,
   recipeId,
