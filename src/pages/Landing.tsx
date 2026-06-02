@@ -1,11 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, LockKeyhole, Sparkles, UserPlus } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import AuthDialog from "@/components/AuthDialog";
 import { Button } from "@/components/ui/button";
 
 const Landing = () => {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup");
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.openSignIn) {
+      openAuth("signin");
+      // Clear location state to avoid reopening on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   const openAuth = (mode: "signup" | "signin") => {
     setAuthMode(mode);
@@ -13,7 +23,7 @@ const Landing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white font-sans overflow-hidden">
+    <div className="min-h-screen bg-[#141414] text-white font-sans">
       <header className="fixed left-0 right-0 top-0 z-40 flex items-center justify-between px-5 py-4 md:px-12">
         <div className="flex items-center gap-2">
           <img src="/favicon.ico" alt="Tamar Logo" className="h-9 w-9 rounded-lg border border-primary/20 shadow-lg" />
@@ -39,12 +49,12 @@ const Landing = () => {
         </div>
       </header>
 
-      <main className="relative min-h-screen">
+      <main className="relative flex min-h-screen flex-col justify-between px-5 pb-12 pt-28 md:px-12">
         <img src="/images/hero.png" alt="Mediterranean harvest bowl" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-black/20" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-black/30" />
 
-        <section className="relative z-10 flex min-h-screen items-center px-5 pb-24 pt-28 md:px-12">
+        <section className="relative z-10 flex flex-1 items-center py-12 md:py-20">
           <div className="max-w-3xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-primary">
               <LockKeyhole className="h-3.5 w-3.5" />
@@ -77,7 +87,7 @@ const Landing = () => {
           </div>
         </section>
 
-        <section className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-8 md:px-12">
+        <section className="relative z-10 w-full mt-auto">
           <div className="grid max-w-5xl grid-cols-1 gap-3 md:grid-cols-3">
             {[
               ["Private cookbook", "Saved recipes stay tied to your account."],
