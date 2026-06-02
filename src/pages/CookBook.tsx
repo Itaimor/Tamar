@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { fetchSavedRecipes, toggleSaveRecipe, recordRecipeInteraction } from "@/lib/recipeInteractions";
-import { getRecipeById } from "@/lib/recipes";
+import { getRecipeById, fetchRecipesByIds, RecipeItem } from "@/lib/recipes";
 import AuthDialog from "@/components/AuthDialog";
 import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
@@ -16,6 +16,7 @@ const CookBook = () => {
   const [savedRecipes, setSavedRecipes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
+  const [recipesMap, setRecipesMap] = useState<Record<string, RecipeItem>>({});
 
   useEffect(() => {
     const loadRecipes = async () => {
@@ -24,6 +25,20 @@ const CookBook = () => {
         try {
           const data = await fetchSavedRecipes(user.id);
           setSavedRecipes(data);
+
+          if (data && data.length > 0) {
+            const recipeIds = data.map((item: any) => item.recipe_id);
+            const recipes = await fetchRecipesByIds(recipeIds);
+            const map: Record<string, RecipeItem> = {};
+            recipes.forEach((r) => {
+              if (r) {
+                map[String(r.id)] = r;
+              }
+            });
+            setRecipesMap(map);
+          } else {
+            setRecipesMap({});
+          }
         } catch (error) {
           toast.error("Failed to load saved recipes.");
         } finally {
@@ -31,6 +46,7 @@ const CookBook = () => {
         }
       } else {
         setSavedRecipes([]);
+        setRecipesMap({});
         setLoading(false);
       }
     };
@@ -146,7 +162,7 @@ const CookBook = () => {
           /* Saved Recipes Grid */
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
             {savedRecipes.map((item) => {
-              const recipeDetails = getRecipeById(item.recipe_id);
+              const recipeDetails = recipesMap[String(item.recipe_id)] || getRecipeById(item.recipe_id);
               return (
                 <div
                   key={item.id}
