@@ -439,7 +439,7 @@ const Home = () => {
       <Navbar />
 
       {/* Hero Section */}
-      <div className="relative h-[85vh] w-full">
+      <div className="relative h-[85vh] min-h-[600px] md:min-h-[750px] w-full">
         {heroRecipe ? (
           <>
             <ImageWithSkeleton
@@ -452,15 +452,15 @@ const Home = () => {
             <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
 
-            <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
+            <div className="absolute bottom-32 md:bottom-48 left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
               <div className="flex items-center gap-2 mb-4">
                 <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
                 <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
               </div>
-              <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
+              <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
                 {heroTitle}
               </h2>
-              <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 font-medium max-w-lg leading-relaxed">
+              <p className="text-sm sm:text-base md:text-lg text-gray-200 mb-6 md:mb-8 font-medium max-w-lg leading-relaxed">
                 {getFirstNSentences(heroDescription, 4)}
               </p>
               <div className="flex flex-wrap gap-4">
@@ -471,16 +471,16 @@ const Home = () => {
                       title: heroTitle,
                     })
                   }
-                  className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold transition-all hover:scale-105 active:scale-95"
+                  className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-sm md:px-8 md:py-6 md:text-lg font-bold transition-all hover:scale-105 active:scale-95"
                 >
-                  <Play className="fill-current w-5 h-5 md:w-6 md:h-6" /> Start Cooking
+                  <Play className="fill-current w-4 h-4 md:w-5 md:h-5" /> Start Cooking
                 </Button>
                 <Button
                   onClick={() => navigate(`/recipes/${heroRecipe.id}`)}
                   variant="secondary"
-                  className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-base md:px-8 md:py-7 md:text-xl font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
+                  className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-sm md:px-8 md:py-6 md:text-lg font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
                 >
-                  <Info className="w-5 h-5 md:w-6 md:h-6" /> More Info
+                  <Info className="w-4 h-4 md:w-5 md:h-5" /> More Info
                 </Button>
               </div>
             </div>
@@ -488,7 +488,7 @@ const Home = () => {
         ) : (
           <div className="absolute inset-0 bg-[#181818] animate-pulse">
             <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
-            <div className="absolute bottom-[18%] md:bottom-[24%] left-4 md:left-12 w-full max-w-2xl pr-8 space-y-6">
+            <div className="absolute bottom-32 md:bottom-48 left-4 md:left-12 w-full max-w-2xl pr-8 space-y-6">
               <div className="flex items-center gap-2">
                 <div className="h-5 w-20 bg-zinc-800 rounded-sm" />
                 <div className="h-4 w-32 bg-zinc-800 rounded-sm" />
