@@ -673,33 +673,10 @@ const Home = () => {
 
       {/* Footer */}
       <footer className="px-4 md:px-12 py-20 bg-[#141414] border-t border-white/5 text-gray-500 text-sm">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl">
-          <div className="space-y-4">
-            <p className="hover:underline cursor-pointer">Audio and Subtitles</p>
-            <p className="hover:underline cursor-pointer">Media Center</p>
-            <p className="hover:underline cursor-pointer">Privacy</p>
-            <p className="hover:underline cursor-pointer">Contact Us</p>
-          </div>
-          <div className="space-y-4">
-            <p className="hover:underline cursor-pointer">Audio Description</p>
-            <p className="hover:underline cursor-pointer">Investor Relations</p>
-            <p className="hover:underline cursor-pointer">Legal Notices</p>
-          </div>
-          <div className="space-y-4">
-            <p className="hover:underline cursor-pointer">Help Center</p>
-            <p className="hover:underline cursor-pointer">Jobs</p>
-            <p className="hover:underline cursor-pointer">Cookie Preferences</p>
-          </div>
-          <div className="space-y-4">
-            <p className="hover:underline cursor-pointer">Gift Cards</p>
-            <p className="hover:underline cursor-pointer">Terms of Use</p>
-            <p className="hover:underline cursor-pointer">Corporate Information</p>
-          </div>
-        </div>
-        <div className="mt-12">
-          <Button variant="outline" className="border-gray-500 text-gray-500 hover:text-white hover:border-white rounded-none">
-            Service Code
-          </Button>
+        <div className="max-w-4xl mx-auto text-center space-y-4">
+          <p className="text-lg md:text-xl font-light italic text-gray-400 leading-relaxed">
+            "If you are what you eat, then I only want to eat the good stuff" (Remy, Ratatouille)
+          </p>
           <p className="mt-8 text-xs">© 2026-2027 Tamar Food, Inc.</p>
         </div>
       </footer>
