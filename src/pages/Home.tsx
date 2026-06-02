@@ -12,6 +12,20 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
 
+const getFirstNSentences = (text: string, n: number): string => {
+  if (!text) return "";
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "." || text[i] === "!") {
+      count++;
+      if (count === n) {
+        return text.slice(0, i + 1);
+      }
+    }
+  }
+  return text;
+};
+
 const Home = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
@@ -441,8 +455,8 @@ const Home = () => {
           <h2 className="text-5xl md:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
             {heroTitle}
           </h2>
-          <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 line-clamp-3 font-medium max-w-lg leading-relaxed">
-            {heroDescription}
+          <p className="text-lg md:text-xl text-gray-200 mb-6 md:mb-8 font-medium max-w-lg leading-relaxed">
+            {getFirstNSentences(heroDescription, 4)}
           </p>
           <div className="flex flex-wrap gap-4">
             <Button
