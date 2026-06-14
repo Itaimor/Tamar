@@ -315,7 +315,7 @@ def main():
     }
     
     # Train NMF models for different dimensions k
-    k_values = [5, 10, 15, 20, 30]
+    k_values = [15]
     
     for k in k_values:
         print(f"\n--- Training NMF model with k = {k} ---")
