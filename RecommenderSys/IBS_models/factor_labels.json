@@ -1,0 +1,302 @@
+{
+  "factor_0": {
+    "label": "Fruit, Yogurt & Red Wine",
+    "top_foods": [
+      "940 - Water, tap",
+      "114 - Yogurt, fruit variety, lowfat milk",
+      "631 - Banana, raw",
+      "934 - Wine, table, red",
+      "632 - Strawberries, raw",
+      "751 - Lettuce, raw",
+      "921 - Coffee, made from ground, regular",
+      "741 - Tomatoes, raw",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "721 - Endive, chicory, escarole, or romaine lettuce, raw",
+      "513 - Bread, wheat or cracked wheat",
+      "421 - Almonds, NFS",
+      "752 - Corn, yellow, cooked, from fresh, fat not added in cooking",
+      "261 - Salmon, baked or broiled",
+      "731 - Carrots, raw"
+    ]
+  },
+  "factor_1": {
+    "label": "Caffeine, Soda & Quick Meals",
+    "top_foods": [
+      "924 - Soft drink, cola-type",
+      "921 - Coffee, made from ground, regular",
+      "940 - Water, tap",
+      "252 - Ham, sliced, prepackaged or deli, luncheon meat",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "511 - Roll, white, soft",
+      "131 - Ice cream, regular, flavors other than chocolate",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "271 - Chicken or turkey with barbecue sauce, skin not eaten",
+      "215 - Ground beef or patty, cooked, NS as to percent lean (formerly NS as to regular, lean, or extra lean)",
+      "272 - Meat loaf made with beef",
+      "712 - White potato chips, regular cut",
+      "531 - Cake, chocolate, devil's food, or fudge, with icing, coating, or filling, made from home recipe or purchased ready-to-eat",
+      "141 - Cheese, natural, Cheddar or American type",
+      "144 - Cheese, processed, American or Cheddar type"
+    ]
+  },
+  "factor_2": {
+    "label": "Chicken, Rice & Bottled Water",
+    "top_foods": [
+      "941 - Water, bottled, unsweetened",
+      "241 - Chicken, breast, roasted, broiled, or baked, skin not eaten",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "631 - Banana, raw",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "751 - Lettuce, raw",
+      "924 - Soft drink, cola-type",
+      "741 - Tomatoes, raw",
+      "261 - Salmon, baked or broiled",
+      "511 - Roll, white, soft",
+      "513 - Bread, wheat or cracked wheat",
+      "271 - Chicken or turkey with barbecue sauce, skin not eaten",
+      "274 - Tuna salad",
+      "753 - Mixed vegetables (corn, lima beans, peas, green beans, and carrots), cooked, from frozen, fat not added in cooking"
+    ]
+  },
+  "factor_3": {
+    "label": "Alcoholic Beverages & Snacks",
+    "top_foods": [
+      "931 - Beer",
+      "935 - Vodka",
+      "940 - Water, tap",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "252 - Ham, sliced, prepackaged or deli, luncheon meat",
+      "933 - Rum and cola",
+      "744 - Tomato catsup",
+      "271 - Chicken or turkey with barbecue sauce, skin not eaten",
+      "921 - Coffee, made from ground, regular",
+      "215 - Ground beef or patty, cooked, NS as to percent lean (formerly NS as to regular, lean, or extra lean)",
+      "511 - Roll, white, soft",
+      "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "755 - Mustard",
+      "751 - Lettuce, raw",
+      "211 - Beef steak, broiled or baked, lean only eaten"
+    ]
+  },
+  "factor_4": {
+    "label": "Unsweetened Tea, Rice & Poultry",
+    "top_foods": [
+      "923 - Tea, leaf, unsweetened",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "271 - Chicken or turkey with barbecue sauce, skin not eaten",
+      "756 - Vegetable soup, home recipe",
+      "274 - Tuna salad",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "752 - Corn, yellow, cooked, from fresh, fat not added in cooking",
+      "716 - Potato salad with egg",
+      "911 - Sugar, white, granulated or lump",
+      "531 - Cake, chocolate, devil's food, or fudge, with icing, coating, or filling, made from home recipe or purchased ready-to-eat",
+      "532 - Cookie, chocolate chip",
+      "511 - Roll, white, soft",
+      "734 - Sweetpotato, baked, peel not eaten, fat not added in cooking",
+      "132 - Pudding, rice",
+      "543 - Crackers, saltine"
+    ]
+  },
+  "factor_5": {
+    "label": "Fruit Juice, Pasta & Salty Snacks",
+    "top_foods": [
+      "925 - Fruit juice drink, with high vitamin C",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "252 - Ham, sliced, prepackaged or deli, luncheon meat",
+      "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "744 - Tomato catsup",
+      "274 - Tuna salad",
+      "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "123 - Sour cream",
+      "271 - Chicken or turkey with barbecue sauce, skin not eaten",
+      "511 - Roll, white, soft",
+      "535 - Doughnut, cake type",
+      "141 - Cheese, natural, Cheddar or American type",
+      "917 - Hard candy",
+      "935 - Vodka",
+      "211 - Beef steak, broiled or baked, lean only eaten"
+    ]
+  },
+  "factor_6": {
+    "label": "Corn Tortillas, Beans & Eggs",
+    "top_foods": [
+      "522 - Tortilla, corn",
+      "411 - Pinto, calico, or red Mexican beans, dry, cooked, fat added in cooking",
+      "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "412 - Refried beans",
+      "211 - Beef steak, broiled or baked, lean only eaten",
+      "926 - Red Bull Energy Drink",
+      "921 - Coffee, made from ground, regular",
+      "744 - Tomato catsup",
+      "924 - Soft drink, cola-type",
+      "215 - Ground beef or patty, cooked, NS as to percent lean (formerly NS as to regular, lean, or extra lean)",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "634 - Guacamole, NFS",
+      "611 - Orange, raw",
+      "631 - Banana, raw",
+      "710 - White potato, NFS"
+    ]
+  },
+  "factor_7": {
+    "label": "Mashed Potatoes, Gravy & Poultry",
+    "top_foods": [
+      "715 - White potato, mashed, NFS",
+      "752 - Corn, yellow, cooked, from fresh, fat not added in cooking",
+      "285 - Gravy, beef or meat",
+      "241 - Chicken, breast, roasted, broiled, or baked, skin not eaten",
+      "711 - White potato, boiled, without peel, NS as to fat added in cooking",
+      "221 - Pork chop, broiled or baked, lean only eaten",
+      "211 - Beef steak, broiled or baked, lean only eaten",
+      "214 - Beef, roast, roasted, lean only eaten",
+      "521 - Biscuit, baking powder or buttermilk type, commercially baked",
+      "811 - Butter, stick, salted",
+      "272 - Meat loaf made with beef",
+      "921 - Coffee, made from ground, regular",
+      "924 - Soft drink, cola-type",
+      "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "940 - Water, tap"
+    ]
+  },
+  "factor_8": {
+    "label": "Apple Juice, Rice & Chicken",
+    "top_foods": [
+      "641 - Apple juice",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "241 - Chicken, breast, roasted, broiled, or baked, skin not eaten",
+      "940 - Water, tap",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "631 - Banana, raw",
+      "752 - Corn, yellow, cooked, from fresh, fat not added in cooking",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "513 - Bread, wheat or cracked wheat",
+      "734 - Sweetpotato, baked, peel not eaten, fat not added in cooking",
+      "252 - Ham, sliced, prepackaged or deli, luncheon meat",
+      "571 - Cheerios",
+      "743 - Tomato and vegetable juice, mostly tomato",
+      "719 - Plantain, fried, NS as to green or ripe",
+      "414 - Soy sauce"
+    ]
+  },
+  "factor_9": {
+    "label": "Chicken Pot Pie & Coffee",
+    "top_foods": [
+      "273 - Chicken or turkey pot pie",
+      "921 - Coffee, made from ground, regular",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "924 - Soft drink, cola-type",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "531 - Cake, chocolate, devil's food, or fudge, with icing, coating, or filling, made from home recipe or purchased ready-to-eat",
+      "631 - Banana, raw",
+      "911 - Sugar, white, granulated or lump",
+      "940 - Water, tap",
+      "311 - Egg, whole, fried",
+      "122 - Cream substitute, powdered",
+      "917 - Hard candy",
+      "543 - Crackers, saltine",
+      "532 - Cookie, chocolate chip",
+      "513 - Bread, wheat or cracked wheat"
+    ]
+  },
+  "factor_10": {
+    "label": "Cafe con Leche & Dairy Products",
+    "top_foods": [
+      "115 - Cafe con leche",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "132 - Pudding, rice",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "911 - Sugar, white, granulated or lump",
+      "631 - Banana, raw",
+      "535 - Doughnut, cake type",
+      "940 - Water, tap",
+      "511 - Roll, white, soft",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "734 - Sweetpotato, baked, peel not eaten, fat not added in cooking",
+      "719 - Plantain, fried, NS as to green or ripe",
+      "642 - Mango nectar",
+      "118 - Cocoa (or chocolate) flavored beverage powder with sugar, dry mix, not reconstituted",
+      "532 - Cookie, chocolate chip"
+    ]
+  },
+  "factor_11": {
+    "label": "Noodle Soups & Dairy",
+    "top_foods": [
+      "584 - Soup, mostly noodles",
+      "940 - Water, tap",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "311 - Egg, whole, fried",
+      "633 - Fruit salad, fresh or raw, (excluding citrus fruits), no dressing",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "756 - Vegetable soup, home recipe",
+      "543 - Crackers, saltine",
+      "631 - Banana, raw",
+      "513 - Bread, wheat or cracked wheat",
+      "743 - Tomato and vegetable juice, mostly tomato",
+      "921 - Coffee, made from ground, regular",
+      "710 - White potato, NFS",
+      "914 - Jelly, all flavors",
+      "731 - Carrots, raw"
+    ]
+  },
+  "factor_12": {
+    "label": "Cheeseburgers, French Fries & Cola",
+    "top_foods": [
+      "275 - Double cheeseburger (2 patties), with tomato and/or catsup, on bun",
+      "714 - White potato, french fries, from frozen, deep fried",
+      "924 - Soft drink, cola-type",
+      "744 - Tomato catsup",
+      "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "241 - Chicken, breast, roasted, broiled, or baked, skin not eaten",
+      "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "940 - Water, tap",
+      "917 - Hard candy",
+      "322 - Egg, cheese, and ham on English muffin",
+      "926 - Red Bull Energy Drink",
+      "935 - Vodka",
+      "712 - White potato chips, regular cut",
+      "916 - Ice pop",
+      "535 - Doughnut, cake type"
+    ]
+  },
+  "factor_13": {
+    "label": "Chicken Soup, Citrus & Tortillas",
+    "top_foods": [
+      "283 - Chicken vegetable soup with rice, Mexican style (Sopa / Caldo de Pollo)",
+      "611 - Orange, raw",
+      "522 - Tortilla, corn",
+      "921 - Coffee, made from ground, regular",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "631 - Banana, raw",
+      "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "416 - Lentil soup",
+      "756 - Vegetable soup, home recipe",
+      "642 - Mango nectar",
+      "911 - Sugar, white, granulated or lump",
+      "719 - Plantain, fried, NS as to green or ripe",
+      "261 - Salmon, baked or broiled",
+      "413 - Lentils, dry, cooked, fat added in cooking",
+      "561 - Spaghetti, cooked, fat not added in cooking"
+    ]
+  },
+  "factor_14": {
+    "label": "Orange Juice, Bananas & Ice Cream",
+    "top_foods": [
+      "612 - Orange juice, canned, bottled or in a carton",
+      "631 - Banana, raw",
+      "131 - Ice cream, regular, flavors other than chocolate",
+      "311 - Egg, whole, fried",
+      "111 - Milk, cow's, fluid, 2% fat",
+      "533 - Pie, apple, two crust",
+      "532 - Cookie, chocolate chip",
+      "913 - Honey",
+      "221 - Pork chop, broiled or baked, lean only eaten",
+      "811 - Butter, stick, salted",
+      "551 - Pancakes, plain",
+      "511 - Roll, white, soft",
+      "226 - Pork bacon, NS as to fresh, smoked or cured, cooked",
+      "633 - Fruit salad, fresh or raw, (excluding citrus fruits), no dressing",
+      "571 - Cheerios"
+    ]
+  }
+}

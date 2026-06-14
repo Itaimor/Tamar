@@ -1,0 +1,1812 @@
+{
+  "51624": [
+    {
+      "food_group": "511 - Roll, white, soft",
+      "collaborative_score": 33.07561151796347,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 7.825027031882051
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 64,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 64/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "111 - Milk, cow's, fluid, 2% fat",
+      "collaborative_score": 23.975456094131207,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 7.545099718288955
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 34,
+        "risk_constipation": 64
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 34/100 and constipation risk score of 64/100."
+    },
+    {
+      "food_group": "940 - Water, tap",
+      "collaborative_score": 21.753242264658294,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 14.22881318351333
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 3,
+        "risk_constipation": 45
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 3/100 and constipation risk score of 45/100."
+    },
+    {
+      "food_group": "751 - Lettuce, raw",
+      "collaborative_score": 20.023132244835484,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 8.704513928233705
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 19,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 19/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "911 - Sugar, white, granulated or lump",
+      "collaborative_score": 17.473191217257277,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.5394198580552056
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 54,
+        "risk_constipation": 68
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 54/100 and constipation risk score of 68/100."
+    },
+    {
+      "food_group": "532 - Cookie, chocolate chip",
+      "collaborative_score": 16.592314118110785,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.6245690589178943
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "917 - Hard candy",
+      "collaborative_score": 16.53042038627373,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.206326816258711
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "122 - Cream substitute, powdered",
+      "collaborative_score": 15.725219320441662,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.056626769638635
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "collaborative_score": 15.622703060301145,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 7.369635226516909
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 18,
+        "risk_constipation": 71
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 18/100 and constipation risk score of 71/100."
+    },
+    {
+      "food_group": "513 - Bread, wheat or cracked wheat",
+      "collaborative_score": 15.58891054481628,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 6.717430373719325
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 27,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 27/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "741 - Tomatoes, raw",
+      "collaborative_score": 14.744703357789671,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 7.914763167379286
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 21,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 21/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "252 - Ham, sliced, prepackaged or deli, luncheon meat",
+      "collaborative_score": 14.669931390456075,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 8.483024588623806
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 68,
+        "risk_constipation": 56
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 68/100 and constipation risk score of 56/100."
+    },
+    {
+      "food_group": "241 - Chicken, breast, roasted, broiled, or baked, skin not eaten",
+      "collaborative_score": 13.73596438695991,
+      "associated_factor": {
+        "factor_id": 2,
+        "label": "Chicken, Rice & Bottled Water",
+        "loading_weight": 5.433971255744483
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 44,
+        "risk_constipation": 67
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Chicken, Rice & Bottled Water' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 44/100 and constipation risk score of 67/100."
+    },
+    {
+      "food_group": "831 - Mayonnaise, regular",
+      "collaborative_score": 12.828605220878085,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 4.657488392308333
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 40,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 40/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "collaborative_score": 11.978778753522073,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.756638827688386
+      },
+      "fodmap_profile": {
+        "category": "Polyols",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 55,
+        "risk_constipation": 58
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Medium severity Polyols FODMAP profile, and an estimated diarrhea risk score of 55/100 and constipation risk score of 58/100."
+    },
+    {
+      "food_group": "535 - Doughnut, cake type",
+      "collaborative_score": 10.274605776011272,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.1453248794062247
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 56,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 56/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "752 - Corn, yellow, cooked, from fresh, fat not added in cooking",
+      "collaborative_score": 9.12292224053449,
+      "associated_factor": {
+        "factor_id": 7,
+        "label": "Mashed Potatoes, Gravy & Poultry",
+        "loading_weight": 7.690256072140628
+      },
+      "fodmap_profile": {
+        "category": "Polyols",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 22,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Mashed Potatoes, Gravy & Poultry' dietary pattern, which is not strongly associated with diarrhea. It has a Medium severity Polyols FODMAP profile, and an estimated diarrhea risk score of 22/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "531 - Cake, chocolate, devil's food, or fudge, with icing, coating, or filling, made from home recipe or purchased ready-to-eat",
+      "collaborative_score": 9.035839155740561,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.213610351369138
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 53,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 53/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "144 - Cheese, processed, American or Cheddar type",
+      "collaborative_score": 8.23584205503875,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.031116576877977
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 60,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 60/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "543 - Crackers, saltine",
+      "collaborative_score": 8.21842044567262,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 2.7985820363452
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 43,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 43/100 and constipation risk score of 62/100."
+    }
+  ],
+  "51628": [
+    {
+      "food_group": "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "collaborative_score": 26.515299296477654,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 8.17984035561468
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 69,
+        "risk_constipation": 59
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 69/100 and constipation risk score of 59/100."
+    },
+    {
+      "food_group": "111 - Milk, cow's, fluid, 2% fat",
+      "collaborative_score": 26.417138869361295,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 7.545099718288955
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 34,
+        "risk_constipation": 64
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 34/100 and constipation risk score of 64/100."
+    },
+    {
+      "food_group": "751 - Lettuce, raw",
+      "collaborative_score": 23.49590907317326,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 8.704513928233705
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 19,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 19/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "631 - Banana, raw",
+      "collaborative_score": 21.680395531851342,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 11.307716383857231
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 0,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 0/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "513 - Bread, wheat or cracked wheat",
+      "collaborative_score": 18.01843364461416,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 6.717430373719325
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 27,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 27/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "755 - Mustard",
+      "collaborative_score": 17.83852452567594,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.2849991024746705
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 59
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 59/100."
+    },
+    {
+      "food_group": "811 - Butter, stick, salted",
+      "collaborative_score": 17.053438346613365,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.590561934996388
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 44,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 44/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "752 - Corn, yellow, cooked, from fresh, fat not added in cooking",
+      "collaborative_score": 16.93872021826946,
+      "associated_factor": {
+        "factor_id": 7,
+        "label": "Mashed Potatoes, Gravy & Poultry",
+        "loading_weight": 7.690256072140628
+      },
+      "fodmap_profile": {
+        "category": "Polyols",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 22,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Mashed Potatoes, Gravy & Poultry' dietary pattern, which is not strongly associated with diarrhea. It has a Medium severity Polyols FODMAP profile, and an estimated diarrhea risk score of 22/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "collaborative_score": 16.115113715691148,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 9.811421745093506
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 70
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 70/100."
+    },
+    {
+      "food_group": "141 - Cheese, natural, Cheddar or American type",
+      "collaborative_score": 16.057513215779085,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.1786441642112
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 43,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 43/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "744 - Tomato catsup",
+      "collaborative_score": 15.994959614072464,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 4.739056215025469
+      },
+      "fodmap_profile": {
+        "category": "Excess Fructose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 57,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity Excess Fructose FODMAP profile, and an estimated diarrhea risk score of 57/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "144 - Cheese, processed, American or Cheddar type",
+      "collaborative_score": 12.317157910565339,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.031116576877977
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 60,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 60/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "311 - Egg, whole, fried",
+      "collaborative_score": 12.297973747702475,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.155635161151116
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 42,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 42/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "543 - Crackers, saltine",
+      "collaborative_score": 12.293313043487839,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 2.7985820363452
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 43,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 43/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "532 - Cookie, chocolate chip",
+      "collaborative_score": 12.239470606506561,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.6245690589178943
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "collaborative_score": 10.38464754880388,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.756638827688386
+      },
+      "fodmap_profile": {
+        "category": "Polyols",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 55,
+        "risk_constipation": 58
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Medium severity Polyols FODMAP profile, and an estimated diarrhea risk score of 55/100 and constipation risk score of 58/100."
+    },
+    {
+      "food_group": "917 - Hard candy",
+      "collaborative_score": 9.481955323096647,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.206326816258711
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "226 - Pork bacon, NS as to fresh, smoked or cured, cooked",
+      "collaborative_score": 9.45898750593734,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 1.3041398806151334
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 54,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 54/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "714 - White potato, french fries, from frozen, deep fried",
+      "collaborative_score": 9.35415227857778,
+      "associated_factor": {
+        "factor_id": 12,
+        "label": "Cheeseburgers, French Fries & Cola",
+        "loading_weight": 14.4158518655411
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 73,
+        "risk_constipation": 48
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Cheeseburgers, French Fries & Cola' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 73/100 and constipation risk score of 48/100."
+    },
+    {
+      "food_group": "712 - White potato chips, regular cut",
+      "collaborative_score": 8.502323829439602,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.283538128502846
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 62,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 62/100 and constipation risk score of 60/100."
+    }
+  ],
+  "51629": [
+    {
+      "food_group": "921 - Coffee, made from ground, regular",
+      "collaborative_score": 30.79586182809757,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 8.990831926444228
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 24,
+        "risk_constipation": 58
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 24/100 and constipation risk score of 58/100."
+    },
+    {
+      "food_group": "744 - Tomato catsup",
+      "collaborative_score": 23.330415126317092,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 4.739056215025469
+      },
+      "fodmap_profile": {
+        "category": "Excess Fructose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 57,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity Excess Fructose FODMAP profile, and an estimated diarrhea risk score of 57/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "911 - Sugar, white, granulated or lump",
+      "collaborative_score": 19.720237810471268,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.5394198580552056
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 54,
+        "risk_constipation": 68
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 54/100 and constipation risk score of 68/100."
+    },
+    {
+      "food_group": "940 - Water, tap",
+      "collaborative_score": 19.54142931412563,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 14.22881318351333
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 3,
+        "risk_constipation": 45
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 3/100 and constipation risk score of 45/100."
+    },
+    {
+      "food_group": "811 - Butter, stick, salted",
+      "collaborative_score": 16.714818094071674,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.590561934996388
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 44,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 44/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "271 - Chicken or turkey with barbecue sauce, skin not eaten",
+      "collaborative_score": 15.843226313481553,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 5.042185473059131
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 63,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 63/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "122 - Cream substitute, powdered",
+      "collaborative_score": 14.974988468424616,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.056626769638635
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "215 - Ground beef or patty, cooked, NS as to percent lean (formerly NS as to regular, lean, or extra lean)",
+      "collaborative_score": 14.044249250787239,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.7780378284431855
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 59,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 59/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "631 - Banana, raw",
+      "collaborative_score": 13.040874208709296,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 11.307716383857231
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 0,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 0/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "917 - Hard candy",
+      "collaborative_score": 11.200643500785393,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.206326816258711
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "712 - White potato chips, regular cut",
+      "collaborative_score": 11.055391772920636,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.283538128502846
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 62,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 62/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "collaborative_score": 10.323721655071328,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 7.369635226516909
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 18,
+        "risk_constipation": 71
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 18/100 and constipation risk score of 71/100."
+    },
+    {
+      "food_group": "140 - Cheese, NFS",
+      "collaborative_score": 10.18228498752236,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 1.932002133843168
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 52,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 52/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "311 - Egg, whole, fried",
+      "collaborative_score": 9.36502155115768,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.155635161151116
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 42,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 42/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "collaborative_score": 9.250020122091032,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 9.811421745093506
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 70
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 70/100."
+    },
+    {
+      "food_group": "535 - Doughnut, cake type",
+      "collaborative_score": 8.497307779339339,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.1453248794062247
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 56,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 56/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "543 - Crackers, saltine",
+      "collaborative_score": 8.261223588125956,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 2.7985820363452
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 43,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 43/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "422 - Peanut butter",
+      "collaborative_score": 7.478789873335544,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 3.7024656711081705
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 38,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 38/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "532 - Cookie, chocolate chip",
+      "collaborative_score": 7.418827162750938,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.6245690589178943
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "226 - Pork bacon, NS as to fresh, smoked or cured, cooked",
+      "collaborative_score": 7.406844979650998,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 1.3041398806151334
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 54,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 54/100 and constipation risk score of 63/100."
+    }
+  ],
+  "51630": [
+    {
+      "food_group": "911 - Sugar, white, granulated or lump",
+      "collaborative_score": 22.333147280355288,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.5394198580552056
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 54,
+        "risk_constipation": 68
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 54/100 and constipation risk score of 68/100."
+    },
+    {
+      "food_group": "532 - Cookie, chocolate chip",
+      "collaborative_score": 19.62498057616246,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.6245690589178943
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "940 - Water, tap",
+      "collaborative_score": 17.67461292375037,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 14.22881318351333
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 3,
+        "risk_constipation": 45
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 3/100 and constipation risk score of 45/100."
+    },
+    {
+      "food_group": "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "collaborative_score": 17.61576795361016,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 8.17984035561468
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 69,
+        "risk_constipation": 59
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 69/100 and constipation risk score of 59/100."
+    },
+    {
+      "food_group": "511 - Roll, white, soft",
+      "collaborative_score": 16.641809048059415,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 7.825027031882051
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 64,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 64/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "744 - Tomato catsup",
+      "collaborative_score": 16.631351663846395,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 4.739056215025469
+      },
+      "fodmap_profile": {
+        "category": "Excess Fructose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 57,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity Excess Fructose FODMAP profile, and an estimated diarrhea risk score of 57/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "831 - Mayonnaise, regular",
+      "collaborative_score": 15.822728691382732,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 4.657488392308333
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 40,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 40/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "261 - Salmon, baked or broiled",
+      "collaborative_score": 12.996570153384843,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 6.30482541560917
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 24,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 24/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "917 - Hard candy",
+      "collaborative_score": 12.108943398594656,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.206326816258711
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "611 - Orange, raw",
+      "collaborative_score": 12.085101514867484,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 6.145416840608036
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 21,
+        "risk_constipation": 66
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 21/100 and constipation risk score of 66/100."
+    },
+    {
+      "food_group": "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "collaborative_score": 11.048834119718997,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 9.811421745093506
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 70
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 70/100."
+    },
+    {
+      "food_group": "122 - Cream substitute, powdered",
+      "collaborative_score": 10.311659741656577,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.056626769638635
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "924 - Soft drink, cola-type",
+      "collaborative_score": 10.282095545760793,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 11.51853289632414
+      },
+      "fodmap_profile": {
+        "category": "Excess Fructose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 76,
+        "risk_constipation": 54
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Excess Fructose FODMAP profile, and an estimated diarrhea risk score of 76/100 and constipation risk score of 54/100."
+    },
+    {
+      "food_group": "411 - Pinto, calico, or red Mexican beans, dry, cooked, fat added in cooking",
+      "collaborative_score": 10.266133806755576,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 11.0561053273973
+      },
+      "fodmap_profile": {
+        "category": "GOS",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 39,
+        "risk_constipation": 75
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity GOS FODMAP profile, and an estimated diarrhea risk score of 39/100 and constipation risk score of 75/100."
+    },
+    {
+      "food_group": "721 - Endive, chicory, escarole, or romaine lettuce, raw",
+      "collaborative_score": 10.247915866716754,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 6.998368855181768
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 21,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 21/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "421 - Almonds, NFS",
+      "collaborative_score": 9.314139972982986,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 6.68621893547424
+      },
+      "fodmap_profile": {
+        "category": "GOS",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 23,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Medium severity GOS FODMAP profile, and an estimated diarrhea risk score of 23/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "913 - Honey",
+      "collaborative_score": 9.210199558677642,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.764382336358389
+      },
+      "fodmap_profile": {
+        "category": "Excess Fructose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 50,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Excess Fructose FODMAP profile, and an estimated diarrhea risk score of 50/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "934 - Wine, table, red",
+      "collaborative_score": 9.154469733826947,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 10.768061237758875
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 5,
+        "risk_constipation": 57
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 5/100 and constipation risk score of 57/100."
+    },
+    {
+      "food_group": "121 - Cream, half and half",
+      "collaborative_score": 8.432611285233989,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 2.6732200405287103
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 44,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 44/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "collaborative_score": 8.402356012993843,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.756638827688386
+      },
+      "fodmap_profile": {
+        "category": "Polyols",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 55,
+        "risk_constipation": 58
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Medium severity Polyols FODMAP profile, and an estimated diarrhea risk score of 55/100 and constipation risk score of 58/100."
+    }
+  ],
+  "51633": [
+    {
+      "food_group": "924 - Soft drink, cola-type",
+      "collaborative_score": 32.772925488279846,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 11.51853289632414
+      },
+      "fodmap_profile": {
+        "category": "Excess Fructose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 76,
+        "risk_constipation": 54
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Excess Fructose FODMAP profile, and an estimated diarrhea risk score of 76/100 and constipation risk score of 54/100."
+    },
+    {
+      "food_group": "831 - Mayonnaise, regular",
+      "collaborative_score": 28.27270665911904,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 4.657488392308333
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 40,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 40/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "252 - Ham, sliced, prepackaged or deli, luncheon meat",
+      "collaborative_score": 26.388600181541833,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 8.483024588623806
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 68,
+        "risk_constipation": 56
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 68/100 and constipation risk score of 56/100."
+    },
+    {
+      "food_group": "581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs",
+      "collaborative_score": 26.313322917744337,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 8.17984035561468
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 69,
+        "risk_constipation": 59
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 69/100 and constipation risk score of 59/100."
+    },
+    {
+      "food_group": "141 - Cheese, natural, Cheddar or American type",
+      "collaborative_score": 25.45773470052402,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.1786441642112
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 43,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 43/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "631 - Banana, raw",
+      "collaborative_score": 22.652004716581537,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 11.307716383857231
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 0,
+        "risk_constipation": 65
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 0/100 and constipation risk score of 65/100."
+    },
+    {
+      "food_group": "755 - Mustard",
+      "collaborative_score": 16.00416347682938,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.2849991024746705
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 59
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 59/100."
+    },
+    {
+      "food_group": "544 - Salty snacks, corn or cornmeal base, tortilla chips",
+      "collaborative_score": 15.029630970173965,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.756638827688386
+      },
+      "fodmap_profile": {
+        "category": "Polyols",
+        "severity": "Medium"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 55,
+        "risk_constipation": 58
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Medium severity Polyols FODMAP profile, and an estimated diarrhea risk score of 55/100 and constipation risk score of 58/100."
+    },
+    {
+      "food_group": "741 - Tomatoes, raw",
+      "collaborative_score": 13.103828322653307,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 7.914763167379286
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 21,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 21/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "917 - Hard candy",
+      "collaborative_score": 13.097527013277121,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.206326816258711
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 49,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 49/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "543 - Crackers, saltine",
+      "collaborative_score": 13.092913488491298,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 2.7985820363452
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 43,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 43/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "911 - Sugar, white, granulated or lump",
+      "collaborative_score": 13.012185599164596,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 2.5394198580552056
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 54,
+        "risk_constipation": 68
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 54/100 and constipation risk score of 68/100."
+    },
+    {
+      "food_group": "712 - White potato chips, regular cut",
+      "collaborative_score": 11.166527665463553,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.283538128502846
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 62,
+        "risk_constipation": 60
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 62/100 and constipation risk score of 60/100."
+    },
+    {
+      "food_group": "532 - Cookie, chocolate chip",
+      "collaborative_score": 10.444149443793236,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.6245690589178943
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 63
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 63/100."
+    },
+    {
+      "food_group": "131 - Ice cream, regular, flavors other than chocolate",
+      "collaborative_score": 9.40803437804133,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 7.7150060117699075
+      },
+      "fodmap_profile": {
+        "category": "Lactose",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 51,
+        "risk_constipation": 58
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Lactose FODMAP profile, and an estimated diarrhea risk score of 51/100 and constipation risk score of 58/100."
+    },
+    {
+      "food_group": "144 - Cheese, processed, American or Cheddar type",
+      "collaborative_score": 9.368639014700104,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 4.031116576877977
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 60,
+        "risk_constipation": 61
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 60/100 and constipation risk score of 61/100."
+    },
+    {
+      "food_group": "562 - Rice, white, cooked, regular, fat not added in cooking",
+      "collaborative_score": 9.343707323410102,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 7.369635226516909
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 18,
+        "risk_constipation": 71
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 18/100 and constipation risk score of 71/100."
+    },
+    {
+      "food_group": "934 - Wine, table, red",
+      "collaborative_score": 8.528237752580917,
+      "associated_factor": {
+        "factor_id": 0,
+        "label": "Fruit, Yogurt & Red Wine",
+        "loading_weight": 10.768061237758875
+      },
+      "fodmap_profile": {
+        "category": "Unknown",
+        "severity": "Unknown"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 5,
+        "risk_constipation": 57
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Fruit, Yogurt & Red Wine' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Unknown severity Unknown FODMAP profile, and an estimated diarrhea risk score of 5/100 and constipation risk score of 57/100."
+    },
+    {
+      "food_group": "535 - Doughnut, cake type",
+      "collaborative_score": 8.526246913277376,
+      "associated_factor": {
+        "factor_id": 1,
+        "label": "Caffeine, Soda & Quick Meals",
+        "loading_weight": 3.1453248794062247
+      },
+      "fodmap_profile": {
+        "category": "Fructans",
+        "severity": "High"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 56,
+        "risk_constipation": 62
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Caffeine, Soda & Quick Meals' dietary pattern, which is associated with increased risk of diarrhea. It has a High severity Fructans FODMAP profile, and an estimated diarrhea risk score of 56/100 and constipation risk score of 62/100."
+    },
+    {
+      "food_group": "321 - Egg omelet or scrambled egg, fat added in cooking",
+      "collaborative_score": 8.504704687292424,
+      "associated_factor": {
+        "factor_id": 6,
+        "label": "Corn Tortillas, Beans & Eggs",
+        "loading_weight": 9.811421745093506
+      },
+      "fodmap_profile": {
+        "category": "Low FODMAP",
+        "severity": "Low"
+      },
+      "symptom_risk": {
+        "risk_diarrhea": 45,
+        "risk_constipation": 70
+      },
+      "explanation": "Recommended because it is consumed frequently by users with eating patterns similar to yours. It is strongly associated with the 'Corn Tortillas, Beans & Eggs' dietary pattern, which is associated with decreased risk of diarrhea (protective). It has a Low severity Low FODMAP FODMAP profile, and an estimated diarrhea risk score of 45/100 and constipation risk score of 70/100."
+    }
+  ]
+}

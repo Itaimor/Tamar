@@ -1,0 +1,167 @@
+[
+  {
+    "factor_id": 0,
+    "label": "Fruit, Yogurt & Red Wine",
+    "Fructans": 10.239673013208902,
+    "GOS": 4.698253666052792,
+    "Lactose": 10.462256660575848,
+    "Excess Fructose": 3.024191707642838,
+    "Polyols": 4.318441375496166,
+    "Low FODMAP": 35.695277145699606,
+    "Unknown": 31.561906431323862
+  },
+  {
+    "factor_id": 1,
+    "label": "Caffeine, Soda & Quick Meals",
+    "Fructans": 18.734869600360913,
+    "GOS": 0.5138606832637446,
+    "Lactose": 12.802765871998481,
+    "Excess Fructose": 10.703050247685333,
+    "Polyols": 2.348349771911212,
+    "Low FODMAP": 29.919595689248375,
+    "Unknown": 24.977508135531945
+  },
+  {
+    "factor_id": 2,
+    "label": "Chicken, Rice & Bottled Water",
+    "Fructans": 12.197218230044808,
+    "GOS": 1.740549215952913,
+    "Lactose": 5.75351006822187,
+    "Excess Fructose": 5.329163528668125,
+    "Polyols": 2.3583303185560114,
+    "Low FODMAP": 55.531715525579315,
+    "Unknown": 17.089513112976963
+  },
+  {
+    "factor_id": 3,
+    "label": "Alcoholic Beverages & Snacks",
+    "Fructans": 7.604691741770736,
+    "GOS": 0.7851144047973703,
+    "Lactose": 2.4203067481350615,
+    "Excess Fructose": 5.53883231376258,
+    "Polyols": 2.2903591792899927,
+    "Low FODMAP": 25.497639489727558,
+    "Unknown": 55.863056122516696
+  },
+  {
+    "factor_id": 4,
+    "label": "Unsweetened Tea, Rice & Poultry",
+    "Fructans": 12.180443568874995,
+    "GOS": 1.640066346213195,
+    "Lactose": 5.972339611918612,
+    "Excess Fructose": 1.182953716648859,
+    "Polyols": 4.645903303266204,
+    "Low FODMAP": 59.6044203743233,
+    "Unknown": 14.773873078754837
+  },
+  {
+    "factor_id": 5,
+    "label": "Fruit Juice, Pasta & Salty Snacks",
+    "Fructans": 10.020576386596185,
+    "GOS": 0.0,
+    "Lactose": 2.1631928986002076,
+    "Excess Fructose": 53.8762344504369,
+    "Polyols": 2.630340014916259,
+    "Low FODMAP": 15.482040689276577,
+    "Unknown": 15.82761556017388
+  },
+  {
+    "factor_id": 6,
+    "label": "Corn Tortillas, Beans & Eggs",
+    "Fructans": 5.9578050633422395,
+    "GOS": 18.039536519566127,
+    "Lactose": 4.809768480147447,
+    "Excess Fructose": 7.812439349901017,
+    "Polyols": 16.66519465295412,
+    "Low FODMAP": 36.255700555500944,
+    "Unknown": 10.4595553785881
+  },
+  {
+    "factor_id": 7,
+    "label": "Mashed Potatoes, Gravy & Poultry",
+    "Fructans": 15.308197662410086,
+    "GOS": 0.9428004692051092,
+    "Lactose": 6.4661351724525185,
+    "Excess Fructose": 3.0136898367156033,
+    "Polyols": 8.429592555151036,
+    "Low FODMAP": 58.012581845559865,
+    "Unknown": 7.827002458505775
+  },
+  {
+    "factor_id": 8,
+    "label": "Apple Juice, Rice & Chicken",
+    "Fructans": 10.896569423803081,
+    "GOS": 1.0527018660051832,
+    "Lactose": 3.9394883318694287,
+    "Excess Fructose": 42.704395035395564,
+    "Polyols": 3.5282645130951598,
+    "Low FODMAP": 21.757969519527325,
+    "Unknown": 16.120611310304263
+  },
+  {
+    "factor_id": 9,
+    "label": "Chicken Pot Pie & Coffee",
+    "Fructans": 55.63678539144051,
+    "GOS": 0.8755797037003675,
+    "Lactose": 6.661872710067423,
+    "Excess Fructose": 3.637174398682551,
+    "Polyols": 0.08195157237000404,
+    "Low FODMAP": 22.73235304762441,
+    "Unknown": 10.374283176114742
+  },
+  {
+    "factor_id": 10,
+    "label": "Cafe con Leche & Dairy Products",
+    "Fructans": 6.7112016242610695,
+    "GOS": 0.6837605726828164,
+    "Lactose": 62.07202611841838,
+    "Excess Fructose": 3.772393720835035,
+    "Polyols": 1.4790882141681747,
+    "Low FODMAP": 13.858202125054383,
+    "Unknown": 11.423327624580143
+  },
+  {
+    "factor_id": 11,
+    "label": "Noodle Soups & Dairy",
+    "Fructans": 64.42216346397258,
+    "GOS": 0.5675395410624471,
+    "Lactose": 4.2394559490158805,
+    "Excess Fructose": 1.2658721390507472,
+    "Polyols": 1.1011534223846977,
+    "Low FODMAP": 16.482929453869453,
+    "Unknown": 11.920886030644217
+  },
+  {
+    "factor_id": 12,
+    "label": "Cheeseburgers, French Fries & Cola",
+    "Fructans": 36.58378173201628,
+    "GOS": 0.0,
+    "Lactose": 2.740835130631895,
+    "Excess Fructose": 15.68208440780206,
+    "Polyols": 2.4450639796212537,
+    "Low FODMAP": 30.922080793666957,
+    "Unknown": 11.626153956261579
+  },
+  {
+    "factor_id": 13,
+    "label": "Chicken Soup, Citrus & Tortillas",
+    "Fructans": 5.720854524266813,
+    "GOS": 4.354270277174441,
+    "Lactose": 6.223298102196704,
+    "Excess Fructose": 2.727385261123385,
+    "Polyols": 4.628779758341455,
+    "Low FODMAP": 63.581488347522466,
+    "Unknown": 12.763923729374751
+  },
+  {
+    "factor_id": 14,
+    "label": "Orange Juice, Bananas & Ice Cream",
+    "Fructans": 12.738488856645514,
+    "GOS": 0.5048804504743684,
+    "Lactose": 7.156641876408125,
+    "Excess Fructose": 3.098545460256022,
+    "Polyols": 0.0,
+    "Low FODMAP": 67.80935524342937,
+    "Unknown": 8.69208811278661
+  }
+]

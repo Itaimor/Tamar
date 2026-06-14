@@ -1,0 +1,164 @@
+food_group,fodmap_category,fodmap_severity
+"111 - Milk, cow's, fluid, 2% fat",Lactose,High
+"112 - Milk, evaporated, whole (formerly NS as to dilution, used in coffee or tea)",Lactose,High
+"113 - Milk, soy, ready-to-drink, not baby's",Lactose,High
+"114 - Yogurt, fruit variety, lowfat milk",Lactose,High
+115 - Cafe con leche,Lactose,High
+"116 - Meal supplement or replacement, commercially prepared, ready-to-drink",Unknown,Unknown
+"118 - Cocoa (or chocolate) flavored beverage powder with sugar, dry mix, not reconstituted",Excess Fructose,High
+"121 - Cream, half and half",Lactose,High
+"122 - Cream substitute, powdered",Lactose,High
+123 - Sour cream,Lactose,Medium
+"131 - Ice cream, regular, flavors other than chocolate",Lactose,High
+"132 - Pudding, rice",Lactose,High
+"134 - White sauce, milk sauce",Lactose,High
+"140 - Cheese, NFS",Unknown,Unknown
+"141 - Cheese, natural, Cheddar or American type",Unknown,Unknown
+"142 - Cheese, cottage, lowfat (1-2% fat)",Unknown,Unknown
+"143 - Cheese, cream",Lactose,High
+"144 - Cheese, processed, American or Cheddar type",Unknown,Unknown
+"146 - Dip, cheese base other than cream cheese",Lactose,High
+"210 - Beef, NS as to cut, cooked, NS as to fat eaten",Low FODMAP,Low
+"211 - Beef steak, broiled or baked, lean only eaten",Low FODMAP,Low
+"213 - Beef, shortribs, cooked, lean only eaten",Low FODMAP,Low
+"214 - Beef, roast, roasted, lean only eaten",Low FODMAP,Low
+"215 - Ground beef or patty, cooked, NS as to percent lean (formerly NS as to regular, lean, or extra lean)",Low FODMAP,Low
+216 - Beef jerky,Low FODMAP,Low
+"220 - Pork, NS as to cut, cooked, NS as to fat eaten",Low FODMAP,Low
+"221 - Pork chop, broiled or baked, lean only eaten",Low FODMAP,Low
+"222 - Pork steak or cutlet, broiled or baked, lean only eaten",Low FODMAP,Low
+"223 - Ham, smoked or cured, cooked, NS as to fat eaten",Unknown,Unknown
+"224 - Pork roast, NS as to cut, cooked, lean only eaten",Low FODMAP,Low
+"226 - Pork bacon, NS as to fresh, smoked or cured, cooked",Low FODMAP,Low
+"227 - Pork, spareribs, cooked, lean only eaten",Low FODMAP,Low
+"231 - Lamb chop, NS as to cut, cooked, lean only eaten",Unknown,Unknown
+"233 - Venison/deer steak, cooked, NS as to cooking method",Low FODMAP,Low
+"241 - Chicken, breast, roasted, broiled, or baked, skin not eaten",Low FODMAP,Low
+"242 - Turkey, NFS",Low FODMAP,Low
+"251 - Beef liver, fried",Low FODMAP,Low
+"252 - Ham, sliced, prepackaged or deli, luncheon meat",Unknown,Unknown
+"261 - Salmon, baked or broiled",Low FODMAP,Low
+"262 - Squid, breaded, fried",Fructans,High
+"263 - Shrimp, floured, breaded, or battered, fried",Fructans,High
+"271 - Chicken or turkey with barbecue sauce, skin not eaten",Low FODMAP,Low
+272 - Meat loaf made with beef,Low FODMAP,Low
+273 - Chicken or turkey pot pie,Fructans,High
+274 - Tuna salad,Low FODMAP,Low
+"275 - Double cheeseburger (2 patties), with tomato and/or catsup, on bun",Fructans,High
+281 - Chicken and vegetable entree with noodles (diet frozen meal),Fructans,High
+"283 - Chicken vegetable soup with rice, Mexican style (Sopa / Caldo de Pollo)",Low FODMAP,Low
+"285 - Gravy, beef or meat",Fructans,High
+"311 - Egg, whole, fried",Low FODMAP,Low
+"321 - Egg omelet or scrambled egg, fat added in cooking",Low FODMAP,Low
+"322 - Egg, cheese, and ham on English muffin",Low FODMAP,Low
+"324 - Egg white omelet or scrambled egg, fat added in cooking",Low FODMAP,Low
+"332 - Scrambled egg, made from cholesterol-free frozen mixture",Low FODMAP,Low
+"411 - Pinto, calico, or red Mexican beans, dry, cooked, fat added in cooking",GOS,High
+412 - Refried beans,GOS,High
+"413 - Lentils, dry, cooked, fat added in cooking",GOS,High
+414 - Soy sauce,Unknown,Unknown
+416 - Lentil soup,GOS,High
+"418 - Vegetarian burger or patty, meatless, no bun",Fructans,High
+"421 - Almonds, NFS",GOS,Medium
+422 - Peanut butter,Low FODMAP,Low
+"424 - Coconut milk (liquid expressed from grated coconut meat, water added)",Lactose,High
+425 - Nut mixture with dried fruit and seeds,Unknown,Unknown
+431 - Flax seeds,Unknown,Unknown
+"511 - Roll, white, soft",Fructans,High
+"512 - Bread, whole wheat, 100%",Fructans,High
+"513 - Bread, wheat or cracked wheat",Fructans,High
+"514 - Bread, rye",Fructans,High
+"515 - Bread, oatmeal",Fructans,High
+"516 - Bread, multigrain",Fructans,High
+"521 - Biscuit, baking powder or buttermilk type, commercially baked",Lactose,High
+"522 - Tortilla, corn",Polyols,Medium
+"523 - Muffin, fruit and/or nuts",Unknown,Unknown
+"524 - Bread, fruit, without nuts",Fructans,High
+"531 - Cake, chocolate, devil's food, or fudge, with icing, coating, or filling, made from home recipe or purchased ready-to-eat",Fructans,High
+"532 - Cookie, chocolate chip",Fructans,High
+"533 - Pie, apple, two crust",Fructans,High
+"534 - Cobbler, peach",Polyols,Medium
+"535 - Doughnut, cake type",Fructans,High
+"536 - Coffee cake, crumb or quick-bread type",Fructans,High
+"540 - Crackers, NS as to sweet or nonsweet",Unknown,Unknown
+"541 - Cracker, animal",Unknown,Unknown
+"542 - Crackers, saltine, low sodium",Unknown,Unknown
+"543 - Crackers, saltine",Unknown,Unknown
+"544 - Salty snacks, corn or cornmeal base, tortilla chips",Polyols,Medium
+"551 - Pancakes, plain",Fructans,High
+"552 - Waffle, plain",Unknown,Unknown
+"553 - French toast, plain",Unknown,Unknown
+"561 - Spaghetti, cooked, fat not added in cooking",Fructans,High
+"562 - Rice, white, cooked, regular, fat not added in cooking",Low FODMAP,Low
+571 - Cheerios,Unknown,Unknown
+572 - Honey Nut Cheerios,Excess Fructose,High
+"573 - Raisin Bran, Kellogg's",Unknown,Unknown
+"574 - Shredded Wheat, 100%",Fructans,High
+581 - Spaghetti with tomato sauce and meatballs or spaghetti with meat sauce or spaghetti with meat sauce and meatballs,Fructans,High
+583 - Vegetable lasagna (frozen meal),Unknown,Unknown
+"584 - Soup, mostly noodles",Fructans,High
+"611 - Orange, raw",Low FODMAP,Low
+"612 - Orange juice, canned, bottled or in a carton",Low FODMAP,Low
+621 - Raisins,Unknown,Unknown
+"631 - Banana, raw",Low FODMAP,Low
+"632 - Strawberries, raw",Unknown,Unknown
+"633 - Fruit salad, fresh or raw, (excluding citrus fruits), no dressing",Unknown,Unknown
+"634 - Guacamole, NFS",Polyols,High
+641 - Apple juice,Excess Fructose,High
+642 - Mango nectar,Excess Fructose,High
+644 - Vinegar,Unknown,Unknown
+"710 - White potato, NFS",Low FODMAP,Low
+"711 - White potato, boiled, without peel, NS as to fat added in cooking",Low FODMAP,Low
+"712 - White potato chips, regular cut",Low FODMAP,Low
+"713 - White potato, scalloped",Low FODMAP,Low
+"714 - White potato, french fries, from frozen, deep fried",Low FODMAP,Low
+"715 - White potato, mashed, NFS",Low FODMAP,Low
+716 - Potato salad with egg,Low FODMAP,Low
+717 - Potato pancake,Fructans,High
+"718 - Potato soup, cream of, prepared with milk",Lactose,High
+"719 - Plantain, fried, NS as to green or ripe",Unknown,Unknown
+"721 - Endive, chicory, escarole, or romaine lettuce, raw",Low FODMAP,Low
+"722 - Broccoli, cooked, from fresh, fat not added in cooking",Unknown,Unknown
+"723 - Broccoli cheese soup, prepared with milk",Lactose,High
+"731 - Carrots, raw",Low FODMAP,Low
+"733 - Squash, winter type, baked, fat added in cooking, no sugar added in cooking",Unknown,Unknown
+"734 - Sweetpotato, baked, peel not eaten, fat not added in cooking",Polyols,Medium
+"741 - Tomatoes, raw",Unknown,Unknown
+"742 - Tomatoes, cooked, NS as to form, NS as to method",Unknown,Unknown
+"743 - Tomato and vegetable juice, mostly tomato",Unknown,Unknown
+744 - Tomato catsup,Excess Fructose,High
+"745 - Tomato and cucumber salad made with tomato, cucumber, oil, and vinegar",Low FODMAP,Low
+"746 - Tomato soup, NFS",Unknown,Unknown
+"751 - Lettuce, raw",Low FODMAP,Low
+"752 - Corn, yellow, cooked, from fresh, fat not added in cooking",Polyols,Medium
+"753 - Mixed vegetables (corn, lima beans, peas, green beans, and carrots), cooked, from frozen, fat not added in cooking",GOS,High
+"754 - Onion rings, NS as to form, batter-dipped, baked or fried",Fructans,High
+755 - Mustard,Unknown,Unknown
+"756 - Vegetable soup, home recipe",Unknown,Unknown
+"781 - Vegetable and fruit juice blend, 100% juice, with high vitamin C plus added vitamin E and vitamin A",Unknown,Unknown
+"811 - Butter, stick, salted",Low FODMAP,Low
+813 - Tartar sauce,Unknown,Unknown
+821 - Olive oil,Low FODMAP,Low
+"831 - Mayonnaise, regular",Unknown,Unknown
+"832 - Mayonnaise, low-calorie or diet",Unknown,Unknown
+"911 - Sugar, white, granulated or lump",Unknown,Unknown
+"912 - Sugar substitute, saccharin-based, dry powder and tablets",Unknown,Unknown
+913 - Honey,Excess Fructose,High
+"914 - Jelly, all flavors",Excess Fructose,High
+915 - Gelatin dessert,Unknown,Unknown
+916 - Ice pop,Unknown,Unknown
+917 - Hard candy,Unknown,Unknown
+"918 - Chewing gum, NFS",Unknown,Unknown
+"921 - Coffee, made from ground, regular",Low FODMAP,Low
+"923 - Tea, leaf, unsweetened",Low FODMAP,Low
+"924 - Soft drink, cola-type",Excess Fructose,High
+"925 - Fruit juice drink, with high vitamin C",Excess Fructose,High
+926 - Red Bull Energy Drink,Unknown,Unknown
+928 - Nonalcoholic malt beverage,Unknown,Unknown
+931 - Beer,Unknown,Unknown
+933 - Rum and cola,Excess Fructose,High
+"934 - Wine, table, red",Unknown,Unknown
+935 - Vodka,Unknown,Unknown
+"940 - Water, tap",Low FODMAP,Low
+"941 - Water, bottled, unsweetened",Low FODMAP,Low
+942 - Glaceau Water,Low FODMAP,Low
