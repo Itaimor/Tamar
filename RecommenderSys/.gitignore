@@ -4,3 +4,6 @@ artifacts/*
 __pycache__/
 *.pyc
 .DS_Store
+
+# Large datasets and model checkpoints
+data/raw/
