@@ -9,11 +9,56 @@ The recipe database contains recipe names, ingredients, and instructions, but mo
 The app now uses a layered image strategy:
 
 1. If `recipe_images.image_url` exists, use it.
-2. If no exact image exists, infer a category from the recipe title.
-3. If the title does not match, infer a category from ingredients.
-4. If nothing matches, use a general food image.
+2. If no exact image exists, try specific title categories before broad categories.
+3. If the title does not match, try specific ingredient categories.
+4. If ingredients still do not give a clear food category, infer a broad meal type.
+5. If nothing matches, use a general food image.
 
 This means users should no longer see the empty plate for normal recipe rows.
+
+## Fallback Image Matching
+
+Fallback matching lives in `src/lib/recipes.ts`.
+
+The order is intentionally specific-first:
+
+1. Specific title rules, such as `banana bread`, `chicken soup`, `apple pie`, `shrimp pasta`, or `rice bowl`.
+2. Broad title rules, such as `chicken`, `pasta`, `salad`, `cake`, or `smoothie`.
+3. Specific ingredient rules.
+4. Meal-type rules for vague names. For example, a recipe with unclear title but ingredients such as oats, eggs, broth, rice, flour, or sugar can still map to breakfast, soup/stew, grain bowl, baked food, or dessert.
+5. Broad ingredient rules.
+6. General food fallback.
+
+Rules use word-aware matching for single-word keywords. This avoids accidental matches where a short food word appears inside an unrelated longer word.
+
+## Curated Image Pools
+
+Most fallback categories now have a small pool of curated images instead of one shared image.
+
+The selected fallback image is deterministic:
+
+```text
+recipe id % number of images in category
+```
+
+This keeps the same recipe visually stable between page loads while making rows feel more varied. Two recipes in the same category no longer always need to show the exact same image.
+
+When a fetched recipe batch is mapped for display, fallback selection also keeps track of images already used in that batch. If a later recipe lands on the same category image, the picker walks to the next image in that category pool when possible.
+
+Examples of richer categories:
+
+- `banana_bread`
+- `chocolate_cake`
+- `apple_pie`
+- `chicken_soup`
+- `beef_stew`
+- `shrimp_pasta`
+- `tuna_salad`
+- `rice_bowl`
+- `breakfast_bowl`
+- `roasted_vegetables`
+- `dips_spreads`
+- `smoothie_bowl`
 
 ## Exact Image Cache
 
@@ -29,9 +74,22 @@ That endpoint:
 
 1. Checks which recipe IDs already have images.
 2. Searches Pexels for missing recipes.
-3. Saves found image URLs into `recipe_images`.
+3. Searches Pexels again for duplicated `pexels-auto` rows in the current batch.
+4. Saves found image URLs into `recipe_images`.
 
 The first view may show a category image. Later views should show the saved exact image.
+
+To reduce repeated cached images, the endpoint asks Pexels for several candidates per recipe instead of taking only the first result. It chooses a stable image by starting at:
+
+```text
+recipe id % candidate count
+```
+
+If another recipe in the same request already chose that URL, the endpoint walks to the next candidate. This keeps images stable per recipe while making different recipes less likely to share the same cached Pexels image.
+
+Existing `pexels-auto` rows may be refreshed only when their image URL is duplicated inside the current request. This allows bad automatic duplicates to be repaired without replacing manual/admin images.
+
+The frontend also has a duplicate safeguard for visible recipe batches. If multiple recipes in the same fetched batch have the same stored image URL, those repeated cards use the richer category/meal fallback instead of showing the same image again. Duplicate checks normalize photo IDs/paths, so the same image can still be detected when query parameters differ. Images marked `manual` or `admin` are still trusted.
 
 ## Required Env Vars
 
@@ -55,13 +113,13 @@ Do not commit `.env.local`.
 
 Pexels API has usage limits. Until a higher limit is approved, the exact-image cache should grow gradually.
 
-The category fallback works immediately and does not require extra API calls.
+The category and meal-type fallbacks work immediately and do not require extra API calls.
 
 ## Future Improvements
 
 - Add Pexels attribution in the UI.
 - Add a batch script that slowly fills missing `recipe_images`.
-- Improve category rules and category image choices.
+- Continue improving category rules and curated image pools based on real recipe titles.
 - Improve Pexels search queries.
 - Add manual/admin override for bad image matches.
 - Use a paid/high-volume search API if full 100,000 recipe coverage is required quickly.

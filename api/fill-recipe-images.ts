@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
 const MAX_RECIPES_PER_REQUEST = 12;
+const PEXELS_CANDIDATES_PER_RECIPE = 8;
 
-const searchPexelsImage = async (query: string, apiKey: string) => {
+const searchPexelsImages = async (query: string, apiKey: string) => {
   const response = await fetch(
-    `https://api.pexels.com/v1/search?query=${encodeURIComponent(`${query} recipe food`)}&per_page=1&orientation=landscape`,
+    `https://api.pexels.com/v1/search?query=${encodeURIComponent(`${query} recipe food`)}&per_page=${PEXELS_CANDIDATES_PER_RECIPE}&orientation=landscape`,
     {
       headers: {
         Authorization: apiKey,
@@ -15,7 +16,26 @@ const searchPexelsImage = async (query: string, apiKey: string) => {
   if (!response.ok) return null;
 
   const body = await response.json();
-  return body.photos?.[0]?.src?.large2x || body.photos?.[0]?.src?.large || body.photos?.[0]?.src?.medium || null;
+  return (body.photos || [])
+    .map((photo: any) => photo.src?.large2x || photo.src?.large || photo.src?.medium)
+    .filter(Boolean);
+};
+
+const chooseDistinctImage = (recipeId: number, imageUrls: string[], usedImageUrls: Set<string>) => {
+  if (imageUrls.length === 0) return null;
+
+  const startIndex = Math.abs(recipeId) % imageUrls.length;
+  for (let offset = 0; offset < imageUrls.length; offset += 1) {
+    const imageUrl = imageUrls[(startIndex + offset) % imageUrls.length];
+    if (!usedImageUrls.has(imageUrl)) {
+      usedImageUrls.add(imageUrl);
+      return imageUrl;
+    }
+  }
+
+  const fallbackUrl = imageUrls[startIndex];
+  usedImageUrls.add(fallbackUrl);
+  return fallbackUrl;
 };
 
 export default async function handler(req: any, res: any) {
@@ -58,35 +78,58 @@ export default async function handler(req: any, res: any) {
 
   const { data: existingImages, error: existingError } = await supabase
     .from("recipe_images")
-    .select("recipe_id")
+    .select("recipe_id,image_url,source_tier")
     .in("recipe_id", recipeIds);
 
   if (existingError) {
     return res.status(500).json({ error: existingError.message });
   }
 
-  const existingIds = new Set((existingImages || []).map((item: any) => Number(item.recipe_id)));
-  const missingIds = recipeIds.filter((id) => !existingIds.has(id));
+  const existingById = new Map((existingImages || []).map((item: any) => [Number(item.recipe_id), item]));
+  const autoImageCounts = new Map<string, number>();
+  for (const item of existingImages || []) {
+    if (item.source_tier === "pexels-auto" && item.image_url) {
+      autoImageCounts.set(item.image_url, (autoImageCounts.get(item.image_url) || 0) + 1);
+    }
+  }
 
-  if (missingIds.length === 0) {
-    return res.status(200).json({ ok: true, inserted: 0, skipped: recipeIds.length });
+  const refreshIds = recipeIds.filter((id) => {
+    const existing = existingById.get(id);
+    if (!existing) return true;
+    return existing.source_tier === "pexels-auto" && existing.image_url && (autoImageCounts.get(existing.image_url) || 0) > 1;
+  });
+
+  if (refreshIds.length === 0) {
+    return res.status(200).json({ ok: true, inserted: 0, refreshed: 0, skipped: recipeIds.length });
   }
 
   const { data: recipes, error: recipesError } = await supabase
     .from("recipes")
     .select("id,name")
-    .in("id", missingIds);
+    .in("id", refreshIds);
 
   if (recipesError) {
     return res.status(500).json({ error: recipesError.message });
   }
 
+  const usedImageUrls = new Set(
+    (existingImages || [])
+      .filter((item: any) => !refreshIds.includes(Number(item.recipe_id)))
+      .map((item: any) => item.image_url)
+      .filter(Boolean),
+  );
+
+  const recipesById = new Map((recipes || []).map((recipe: any) => [Number(recipe.id), recipe]));
   const rows = [];
-  for (const recipe of recipes || []) {
-    const imageUrl = await searchPexelsImage(recipe.name, pexelsApiKey);
+  for (const recipeId of refreshIds) {
+    const recipe = recipesById.get(recipeId);
+    if (!recipe) continue;
+
+    const imageUrls = await searchPexelsImages(recipe.name, pexelsApiKey);
+    const imageUrl = imageUrls ? chooseDistinctImage(recipeId, imageUrls, usedImageUrls) : null;
     if (imageUrl) {
       rows.push({
-        recipe_id: Number(recipe.id),
+        recipe_id: recipeId,
         image_url: imageUrl,
         source_tier: "pexels-auto",
       });
@@ -94,7 +137,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (rows.length === 0) {
-    return res.status(200).json({ ok: true, inserted: 0, searched: recipes?.length || 0 });
+    return res.status(200).json({ ok: true, inserted: 0, refreshed: 0, searched: recipes?.length || 0 });
   }
 
   const { error: insertError } = await supabase
@@ -105,5 +148,11 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: insertError.message });
   }
 
-  return res.status(200).json({ ok: true, inserted: rows.length, searched: recipes?.length || 0 });
+  const refreshed = rows.filter((row) => existingById.has(row.recipe_id)).length;
+  return res.status(200).json({
+    ok: true,
+    inserted: rows.length - refreshed,
+    refreshed,
+    searched: recipes?.length || 0,
+  });
 }

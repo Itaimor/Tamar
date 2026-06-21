@@ -237,11 +237,11 @@ const Home = () => {
     const loadOtherSections = async () => {
       try {
         const allRecipes = await fetchDefaultRecipes(30);
-        setTrendingRecipes(allRecipes.slice(0, 6));
-        setFlavorRecipes(allRecipes.slice(6, 12));
-        setHealthyRecipes(allRecipes.slice(12, 18));
-        setQuickRecipes(allRecipes.slice(18, 24));
-        queueRecipeImages(allRecipes.slice(0, 24));
+        setTrendingRecipes(allRecipes.slice(6, 12));
+        setFlavorRecipes(allRecipes.slice(12, 18));
+        setHealthyRecipes(allRecipes.slice(18, 24));
+        setQuickRecipes(allRecipes.slice(24, 30));
+        queueRecipeImages(allRecipes.slice(0, 30));
       } catch (error) {
         console.error("Failed to load other sections:", error);
       }

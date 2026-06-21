@@ -66,9 +66,11 @@ const localRecommendationRefreshPlugin = (env: Record<string, string>) => ({
   },
 });
 
-const searchPexelsImage = async (query: string, apiKey: string) => {
+const PEXELS_CANDIDATES_PER_RECIPE = 8;
+
+const searchPexelsImages = async (query: string, apiKey: string) => {
   const response = await fetch(
-    `https://api.pexels.com/v1/search?query=${encodeURIComponent(`${query} recipe food`)}&per_page=1&orientation=landscape`,
+    `https://api.pexels.com/v1/search?query=${encodeURIComponent(`${query} recipe food`)}&per_page=${PEXELS_CANDIDATES_PER_RECIPE}&orientation=landscape`,
     {
       headers: {
         Authorization: apiKey,
@@ -79,7 +81,26 @@ const searchPexelsImage = async (query: string, apiKey: string) => {
   if (!response.ok) return null;
 
   const body = await response.json();
-  return body.photos?.[0]?.src?.large2x || body.photos?.[0]?.src?.large || body.photos?.[0]?.src?.medium || null;
+  return (body.photos || [])
+    .map((photo: any) => photo.src?.large2x || photo.src?.large || photo.src?.medium)
+    .filter(Boolean);
+};
+
+const chooseDistinctImage = (recipeId: number, imageUrls: string[], usedImageUrls: Set<string>) => {
+  if (imageUrls.length === 0) return null;
+
+  const startIndex = Math.abs(recipeId) % imageUrls.length;
+  for (let offset = 0; offset < imageUrls.length; offset += 1) {
+    const imageUrl = imageUrls[(startIndex + offset) % imageUrls.length];
+    if (!usedImageUrls.has(imageUrl)) {
+      usedImageUrls.add(imageUrl);
+      return imageUrl;
+    }
+  }
+
+  const fallbackUrl = imageUrls[startIndex];
+  usedImageUrls.add(fallbackUrl);
+  return fallbackUrl;
 };
 
 const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
@@ -137,7 +158,7 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
 
       const { data: existingImages, error: existingError } = await supabase
         .from("recipe_images")
-        .select("recipe_id")
+        .select("recipe_id,image_url,source_tier")
         .in("recipe_id", recipeIds);
 
       if (existingError) {
@@ -146,19 +167,30 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
         return;
       }
 
-      const existingIds = new Set((existingImages || []).map((item: any) => Number(item.recipe_id)));
-      const missingIds = recipeIds.filter((id: number) => !existingIds.has(id));
+      const existingById = new Map((existingImages || []).map((item: any) => [Number(item.recipe_id), item]));
+      const autoImageCounts = new Map<string, number>();
+      for (const item of existingImages || []) {
+        if (item.source_tier === "pexels-auto" && item.image_url) {
+          autoImageCounts.set(item.image_url, (autoImageCounts.get(item.image_url) || 0) + 1);
+        }
+      }
 
-      if (missingIds.length === 0) {
+      const refreshIds = recipeIds.filter((id: number) => {
+        const existing = existingById.get(id);
+        if (!existing) return true;
+        return existing.source_tier === "pexels-auto" && existing.image_url && (autoImageCounts.get(existing.image_url) || 0) > 1;
+      });
+
+      if (refreshIds.length === 0) {
         res.statusCode = 200;
-        res.end(JSON.stringify({ ok: true, inserted: 0, skipped: recipeIds.length }));
+        res.end(JSON.stringify({ ok: true, inserted: 0, refreshed: 0, skipped: recipeIds.length }));
         return;
       }
 
       const { data: recipes, error: recipesError } = await supabase
         .from("recipes")
         .select("id,name")
-        .in("id", missingIds);
+        .in("id", refreshIds);
 
       if (recipesError) {
         res.statusCode = 500;
@@ -166,12 +198,24 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
         return;
       }
 
+      const usedImageUrls = new Set(
+        (existingImages || [])
+          .filter((item: any) => !refreshIds.includes(Number(item.recipe_id)))
+          .map((item: any) => item.image_url)
+          .filter(Boolean),
+      );
+
+      const recipesById = new Map((recipes || []).map((recipe: any) => [Number(recipe.id), recipe]));
       const rows = [];
-      for (const recipe of recipes || []) {
-        const imageUrl = await searchPexelsImage(recipe.name, pexelsApiKey);
+      for (const recipeId of refreshIds) {
+        const recipe = recipesById.get(recipeId);
+        if (!recipe) continue;
+
+        const imageUrls = await searchPexelsImages(recipe.name, pexelsApiKey);
+        const imageUrl = imageUrls ? chooseDistinctImage(recipeId, imageUrls, usedImageUrls) : null;
         if (imageUrl) {
           rows.push({
-            recipe_id: Number(recipe.id),
+            recipe_id: recipeId,
             image_url: imageUrl,
             source_tier: "pexels-auto",
           });
@@ -192,7 +236,13 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
 
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ ok: true, inserted: rows.length, searched: recipes?.length || 0 }));
+      const refreshed = rows.filter((row) => existingById.has(row.recipe_id)).length;
+      res.end(JSON.stringify({
+        ok: true,
+        inserted: rows.length - refreshed,
+        refreshed,
+        searched: recipes?.length || 0,
+      }));
     });
   },
 });
