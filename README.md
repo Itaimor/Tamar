@@ -11,6 +11,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | Area | Source |
 | --- | --- |
 | Recommender architecture, risk scoring, model roles, and algorithm design | [docs/IBS_Recommender_Online_LightFM_Design.md](docs/IBS_Recommender_Online_LightFM_Design.md) |
+| IBS product relevance plan and implementation notes | [docs/ibs/IBS_RELEVANCE_PLAN.md](docs/ibs/IBS_RELEVANCE_PLAN.md) |
 | Local setup for the website plus Python recommender service | [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md) |
 | Recipe image strategy, image cache, category fallbacks, and Pexels behavior | [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md) |
 | Contribution and design-alignment rules | [CONTRIBUTING.md](CONTRIBUTING.md) |
@@ -110,6 +111,7 @@ Use the project Supabase skill and the design document before changing schema, R
 | Run the app locally | [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md) |
 | Change recipe images | [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md), then `src/lib/recipes.ts` and `api/fill-recipe-images.ts` |
 | Change recommendation logic or risk scoring | [docs/IBS_Recommender_Online_LightFM_Design.md](docs/IBS_Recommender_Online_LightFM_Design.md), then `RecommenderSys/` and related API/Supabase files |
+| Make the app more IBS-specific | [docs/ibs/IBS_RELEVANCE_PLAN.md](docs/ibs/IBS_RELEVANCE_PLAN.md), then the recommender design doc if scoring or schema changes |
 | Change saved recipes or interaction behavior | `src/lib/recipeInteractions.ts`, `src/pages/Home.tsx`, `src/pages/RecipeDetail.tsx`, and the design doc if recommendation signals change |
 | Change auth behavior | `src/components/AuthProvider.tsx`, `src/components/AuthDialog.tsx`, `src/lib/supabase.ts`, and Supabase policies if data access changes |
 | Change UI pages/components | `src/pages/`, `src/components/`, and `src/components/ui/` |

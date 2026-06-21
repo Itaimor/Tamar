@@ -8,6 +8,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { recordRecipeInteraction, fetchSavedRecipes, fetchTasteFeedbackCount, toggleSaveRecipe } from "@/lib/recipeInteractions";
 import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
+import IbsOnboardingCard from "@/components/IbsOnboardingCard";
+import { fetchIbsOnboardingCompleted } from "@/lib/ibsProfile";
 import { motion, AnimatePresence } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import ImageWithSkeleton from "@/components/ImageWithSkeleton";
@@ -40,6 +42,7 @@ const Home = () => {
   const [quickRecipes, setQuickRecipes] = useState<RecipeItem[]>([]);
   const [onboardingRecipes, setOnboardingRecipes] = useState<RecipeItem[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
+  const [isIbsOnboardingCompleted, setIsIbsOnboardingCompleted] = useState(true);
   const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
@@ -102,6 +105,25 @@ const Home = () => {
       }
     };
     loadSavedRecipes();
+  }, [user]);
+
+  useEffect(() => {
+    const loadIbsOnboardingStatus = async () => {
+      if (!user || !supabase) {
+        setIsIbsOnboardingCompleted(true);
+        return;
+      }
+
+      try {
+        const completed = await fetchIbsOnboardingCompleted(user.id);
+        setIsIbsOnboardingCompleted(completed);
+      } catch (error) {
+        console.error("Failed to load IBS onboarding status:", error);
+        setIsIbsOnboardingCompleted(false);
+      }
+    };
+
+    loadIbsOnboardingStatus();
   }, [user]);
 
   useEffect(() => {
@@ -524,6 +546,13 @@ const Home = () => {
       <div className="pb-24 -mt-20 md:-mt-32 relative z-10 space-y-12">
         
         {/* Active Learning Cold Start Onboarding */}
+        {user && !isIbsOnboardingCompleted && (
+          <IbsOnboardingCard
+            userId={user.id}
+            onCompleted={() => setIsIbsOnboardingCompleted(true)}
+          />
+        )}
+
         {!isOnboardingCompleted && onboardingRecipes.length > 0 && (
           <div className="max-w-xl mx-auto px-4 md:px-0 mb-12">
             <div className="bg-[#181818] border border-white/10 rounded-2xl overflow-hidden p-6 shadow-2xl relative">

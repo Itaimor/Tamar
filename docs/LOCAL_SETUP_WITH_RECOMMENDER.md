@@ -76,6 +76,7 @@ Fill in `.env.local`:
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+GEMINI_TAMAR_API_KEY=your-server-only-gemini-api-key
 
 RECOMMENDER_SERVICE_URL=http://127.0.0.1:8000
 RECOMMENDER_SERVICE_SECRET=dev-secret
@@ -89,6 +90,7 @@ Notes:
 
 - `VITE_SUPABASE_PUBLISHABLE_KEY` is safe for the browser.
 - `SUPABASE_SERVICE_ROLE_KEY` is private. Do not expose it in client-side code or commit it.
+- `GEMINI_TAMAR_API_KEY` is private and server-only. Do not prefix it with `VITE_`.
 - `RECOMMENDER_SERVICE_SECRET` must match between the Vite local API bridge and the Python service. Locally, `dev-secret` is fine.
 
 ## 5. Set Up Supabase Tables
@@ -102,6 +104,9 @@ In Supabase SQL Editor, run the SQL files in `supabase/migrations` in filename o
 20260524000003_add_historical_interactions_unique_key.sql
 20260524000004_create_recommender_artifacts_bucket.sql
 20260524000005_allow_liked_recipe_interactions.sql
+20260601000000_add_category_recommendation_columns.sql
+20260602000000_add_recommendation_category_rows.sql
+20260621000000_create_ibs_tables.sql
 ```
 
 You should end up with these important tables:
@@ -111,6 +116,9 @@ You should end up with these important tables:
 - `recipe_interactions`
 - `user_recommendations`
 - `recipe_images`
+- `user_ibs_profiles`
+- `user_ibs_ingredient_risks`
+- `user_ibs_checkins`
 
 And this private Storage bucket:
 

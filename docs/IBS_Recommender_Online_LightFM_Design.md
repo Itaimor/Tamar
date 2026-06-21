@@ -25,6 +25,67 @@ Allergies and strict restrictions are handled before scoring as hard filters.
 
 ---
 
+## 1.1 Implemented IBS Profile Phase
+
+The current app includes an implemented IBS profile layer whose scope is narrower than the full recommender architecture in this document.
+
+Implemented scope:
+
+- Maintain a code-side IBS ingredient catalog and aliases in `src/lib/ibsIngredients.ts`.
+- Ask a visible IBS cold-start questionnaire in `src/components/IbsOnboardingCard.tsx`.
+- Persist personal IBS ingredient grades in `public.user_ibs_ingredient_risks`.
+- Persist IBS onboarding/check-in state in `public.user_ibs_profiles`.
+- Persist completed `How I Feel` check-ins in `public.user_ibs_checkins`.
+- Add the `How I Feel` chat flow before `Analyze my Lunch`.
+
+Out of scope for the implemented phase:
+
+- Do not rerank recipes using IBS risk yet.
+- Do not change LightFM candidate generation.
+- Do not change `final_score`.
+
+The recommender layer may later consume `public.user_ibs_ingredient_risks` as the direct personal ingredient-risk signal described in later sections.
+
+Current concrete tables:
+
+```text
+user_ibs_profiles
+-----------------
+user_id
+onboarding_completed_at
+last_checkin_at
+created_at
+updated_at
+
+user_ibs_ingredient_risks
+-------------------------
+user_id
+ingredient_name
+trigger_group
+grade
+confidence
+evidence_count
+last_evidence_at
+created_at
+updated_at
+
+user_ibs_checkins
+-----------------
+id
+user_id
+severity
+symptoms
+summary
+food_windows
+matched_ingredients
+evidence
+created_at
+```
+
+`grade` is the current implemented equivalent of the future personalized ingredient `risk_score`.
+
+---
+
 # 2. Data Sources
 
 ## 2.1 Food.com Reviews and Interactions
@@ -1260,6 +1321,10 @@ Used for hard filtering.
 ## 14.3 user_ingredient_risks
 
 Stores personalized risk estimates.
+
+Implementation note:
+
+The current app stores the implemented phase in `public.user_ibs_ingredient_risks`. Its `grade` column is the user-specific IBS risk estimate in `[0, 1]`, and its `confidence` and `evidence_count` columns support later ranking/model consumption. The generic `user_ingredient_risks` shape below remains the long-term recommender design target.
 
 ```text
 user_id

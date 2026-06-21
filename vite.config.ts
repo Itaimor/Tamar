@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { createClient } from "@supabase/supabase-js";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const parseJsonBody = (req: any) =>
   new Promise<any>((resolve) => {
@@ -18,6 +19,126 @@ const parseJsonBody = (req: any) =>
       }
     });
   });
+
+type IbsCheckInMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
+
+const parseGeminiJsonObject = (text: string) => {
+  const cleaned = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "");
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  const jsonText = firstBrace >= 0 && lastBrace >= firstBrace
+    ? cleaned.slice(firstBrace, lastBrace + 1)
+    : cleaned;
+
+  return JSON.parse(jsonText);
+};
+
+const buildIbsCheckInPrompt = (messages: IbsCheckInMessage[]) => `
+You are Tamar's IBS check-in interviewer.
+
+Goal:
+Collect enough information for a structured IBS symptom and food-window check-in.
+
+You must return JSON only. No markdown. No extra prose.
+
+Required output shape:
+{
+  "assistant_message": "short user-facing message",
+  "result": {
+    "complete": false,
+    "feeling": {
+      "severity": 0,
+      "symptoms": [],
+      "summary": "",
+      "confidence": 0
+    },
+    "food_windows": {
+      "hours_0_8": [],
+      "hours_9_16": [],
+      "hours_17_24": []
+    },
+    "missing_fields": ["feeling", "hours_0_8", "hours_9_16", "hours_17_24"]
+  }
+}
+
+Rules:
+- Ask one concise follow-up question at a time when information is missing.
+- Vary wording naturally, but stay focused.
+- Required fields are: how the user feels, foods eaten in the last 0-8 hours, 9-16 hours ago, and 17-24 hours ago.
+- Severity is 0 to 1. 0 means no digestive symptoms. 1 means very bad symptoms.
+- Whenever you ask for severity, explicitly say "0 means no symptoms/good, 1 means very severe/bad".
+- Mention symptoms only if the user reports them.
+- Split foods into plain food strings. Do not invent ingredients or foods.
+- If the user says they do not remember a window, keep it empty and list it in missing_fields.
+- Set complete true only when feeling and all three food windows have usable answers.
+- Never diagnose. Use "track", "possible", and "pattern" language.
+- Do not call the user Tamar. Tamar is the assistant name.
+- If result.complete is true, do not ask whether to save. The app will save automatically. Say the check-in has enough information and is ready.
+- assistant_message should either ask for missing information or briefly say the check-in has enough information.
+
+Conversation:
+${messages.map((message) => `${message.role}: ${message.text}`).join("\n")}
+`;
+
+const localIbsCheckInPlugin = (env: Record<string, string>) => ({
+  name: "local-ibs-check-in",
+  configureServer(server: any) {
+    server.middlewares.use("/api/ibs-check-in", async (req: any, res: any) => {
+      if (req.method !== "POST") {
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: "Method Not Allowed" }));
+        return;
+      }
+
+      const apiKey = process.env.GEMINI_TAMAR_API_KEY || env.GEMINI_TAMAR_API_KEY;
+      if (!apiKey) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: "GEMINI API is not defined." }));
+        return;
+      }
+
+      try {
+        const body = await parseJsonBody(req);
+        const safeMessages: IbsCheckInMessage[] = (Array.isArray(body.messages) ? body.messages : [])
+          .filter((message: any) => message && (message.role === "user" || message.role === "assistant") && typeof message.text === "string")
+          .map((message: any) => ({ role: message.role, text: message.text.slice(0, 1200) }))
+          .slice(-12);
+
+        if (safeMessages.length === 0) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: "messages are required." }));
+          return;
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: "gemini-3.1-flash-lite",
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.4,
+          },
+        });
+
+        const result = await model.generateContent(buildIbsCheckInPrompt(safeMessages));
+        const parsed = parseGeminiJsonObject(result.response.text());
+
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(parsed));
+      } catch (error: any) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: error.message || "Failed to run IBS check-in." }));
+      }
+    });
+  },
+});
 
 const localRecommendationRefreshPlugin = (env: Record<string, string>) => ({
   name: "local-recommendation-refresh",
@@ -259,7 +380,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), localRecommendationRefreshPlugin(env), localRecipeImageFillPlugin(env), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), localRecommendationRefreshPlugin(env), localRecipeImageFillPlugin(env), localIbsCheckInPlugin(env), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

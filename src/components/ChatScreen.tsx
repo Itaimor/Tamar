@@ -3,6 +3,12 @@ import tamarLogo from "@/assets/tamar-logo.png";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
+import {
+  applyIbsCheckInToProfile,
+  summarizeIbsCheckIn,
+} from "@/lib/ibsProfile";
+import { validateIbsCheckInResult } from "@/lib/ibsRisk";
 
 const initialMessages = [
   {
@@ -11,12 +17,24 @@ const initialMessages = [
   },
 ];
 
-const chips = ["Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
+const chips = ["How I Feel", "Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
+
+type ChatMessage = {
+  role: "ai" | "user";
+  text: string;
+};
+
+type IbsTranscriptMessage = {
+  role: "assistant" | "user";
+  text: string;
+};
 
 const ChatScreen = () => {
-  const [messages, setMessages] = useState(initialMessages);
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [ibsTranscript, setIbsTranscript] = useState<IbsTranscriptMessage[] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,9 +45,111 @@ const ChatScreen = () => {
     scrollToBottom();
   }, [messages]);
 
+  const runIbsCheckIn = async (nextTranscript: IbsTranscriptMessage[]) => {
+    const response = await fetch("/api/ibs-check-in", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ messages: nextTranscript }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to run IBS check-in");
+    }
+
+    return response.json();
+  };
+
+  const startIbsCheckIn = async () => {
+    if (!user) {
+      toast.info("Please sign in so Tamar can save your IBS profile.");
+      return;
+    }
+
+    if (isLoading) return;
+
+    const startMessage = "How I Feel";
+    const nextTranscript: IbsTranscriptMessage[] = [
+      { role: "user", text: "Start a structured IBS How I Feel check-in." },
+    ];
+
+    setMessages((prev) => [...prev, { role: "user", text: startMessage }]);
+    setIbsTranscript(nextTranscript);
+    setIsLoading(true);
+
+    try {
+      const data = await runIbsCheckIn(nextTranscript);
+      const assistantText =
+        typeof data.assistant_message === "string" && data.assistant_message.trim()
+          ? data.assistant_message.trim()
+          : "How has your digestion felt today?";
+
+      setIbsTranscript([...nextTranscript, { role: "assistant", text: assistantText }]);
+      setMessages((prev) => [...prev, { role: "ai", text: assistantText }]);
+    } catch (error) {
+      console.error("IBS check-in start error:", error);
+      setIbsTranscript(null);
+      toast.error("Could not start the IBS check-in. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleIbsCheckInMessage = async (text: string) => {
+    if (!user || !ibsTranscript) return;
+
+    const nextTranscript: IbsTranscriptMessage[] = [...ibsTranscript, { role: "user", text }];
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+    setIbsTranscript(nextTranscript);
+    setIsLoading(true);
+
+    try {
+      const data = await runIbsCheckIn(nextTranscript);
+      const assistantText =
+        typeof data.assistant_message === "string" && data.assistant_message.trim()
+          ? data.assistant_message.trim()
+          : "Thanks. I need one more detail to complete this check-in.";
+
+      const validatedResult = validateIbsCheckInResult(data.result);
+
+      setMessages((prev) => [...prev, { role: "ai", text: assistantText }]);
+
+      if (validatedResult?.complete) {
+        const updateSummary = await applyIbsCheckInToProfile(user.id, validatedResult);
+        const savedText =
+          updateSummary.updatedCount > 0
+            ? summarizeIbsCheckIn(validatedResult, updateSummary.topIngredients)
+            : "I collected the check-in, but I did not find IBS-table ingredients to update this time. Your existing IBS ingredient table was left unchanged.";
+
+        setMessages((prev) => [...prev, { role: "ai", text: savedText }]);
+        setIbsTranscript(null);
+      } else {
+        setIbsTranscript([...nextTranscript, { role: "assistant", text: assistantText }]);
+      }
+    } catch (error) {
+      console.error("IBS check-in error:", error);
+      toast.error("This IBS check-in was not saved. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent | string) => {
     const text = typeof e === "string" ? e : inputValue;
     if (!text.trim() || isLoading) return;
+
+    if (text === "How I Feel") {
+      await startIbsCheckIn();
+      return;
+    }
+
+    if (ibsTranscript) {
+      await handleIbsCheckInMessage(text);
+      return;
+    }
 
     const userMessage = { role: "user" as const, text };
     setMessages((prev) => [...prev, userMessage]);
