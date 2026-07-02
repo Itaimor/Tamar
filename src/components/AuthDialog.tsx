@@ -19,6 +19,17 @@ type AuthDialogProps = {
   initialMode?: "signup" | "signin";
 };
 
+const getFriendlyAuthError = (error: unknown) => {
+  if (!(error instanceof Error)) return "Authentication failed.";
+
+  const message = error.message || "";
+  if (message.toLowerCase().includes("failed to fetch")) {
+    return "Tamar could not reach Supabase. Check VITE_SUPABASE_URL in .env.local, then restart the dev server.";
+  }
+
+  return message;
+};
+
 const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogProps) => {
   const { configured, signIn, signOut, signUp, signInWithProvider, user } = useAuth();
   const [mode, setMode] = useState<"signup" | "signin">(initialMode);
@@ -53,7 +64,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
         onOpenChange(false);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Authentication failed.");
+      toast.error(getFriendlyAuthError(error));
     } finally {
       setBusy(false);
     }
@@ -65,7 +76,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
     try {
       await signInWithProvider("google");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start Google login.");
+      toast.error(getFriendlyAuthError(error));
       setBusy(false);
     }
   };

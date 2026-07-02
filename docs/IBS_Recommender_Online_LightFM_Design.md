@@ -25,9 +25,9 @@ Allergies and strict restrictions are handled before scoring as hard filters.
 
 ---
 
-## 1.1 Implemented IBS Profile Phase
+## 1.1 Implemented IBS And Recommender Phase
 
-The current app includes an implemented IBS profile layer whose scope is narrower than the full recommender architecture in this document.
+The current app includes an IBS profile layer plus the first non-NHANES recommender backend implementation.
 
 Implemented scope:
 
@@ -36,15 +36,105 @@ Implemented scope:
 - Persist personal IBS ingredient grades in `public.user_ibs_ingredient_risks`.
 - Persist IBS onboarding/check-in state in `public.user_ibs_profiles`.
 - Persist completed `How I Feel` check-ins in `public.user_ibs_checkins`.
+- Mirror foods collected by completed `How I Feel` chat check-ins into the Diary/`meal_logs` flow.
 - Add the `How I Feel` chat flow before `Analyze my Lunch`.
+- Add non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
+- Store offline preference candidates in `public.user_candidate_recipes`.
+- Apply strict allergies/restrictions as online hard filters before scoring.
+- Rerank online recommendations with `final_score = preference_score - lambda * combined_risk_score`.
+- Compute `combined_risk_score` from personalized/population ingredient risk plus XGBoost-compatible symptom risk.
+- Support immediate meal-log and health-report updates through the Python recommender service.
+- Support optional offline symptom-risk model training in `RecommenderSys/train_symptom_model.py`.
+- Show a user-facing Diary page for logging meals and how the user feels.
+- Show a user-facing Analysis page that summarizes possible trigger foods, easier foods, recent meal/symptom patterns, and next-step suggestions from the same risk and logging tables.
 
-Out of scope for the implemented phase:
+Out of scope for this implemented phase:
 
-- Do not rerank recipes using IBS risk yet.
-- Do not change LightFM candidate generation.
-- Do not change `final_score`.
+- Do not implement NHANES-based risk propagation yet.
+- Do not redesign chatbot/check-in interview logic.
+- Do not alter recipe image behavior.
 
-The recommender layer may later consume `public.user_ibs_ingredient_risks` as the direct personal ingredient-risk signal described in later sections.
+The recommender layer consumes `public.user_ibs_ingredient_risks` as one direct personal ingredient-risk signal and also writes the longer-term `public.user_ingredient_risks` table from meal/health attribution.
+
+## 1.2 Diary Page MVP
+
+The Diary page is the user-facing entry point for food and symptom history.
+
+It lets signed-in users:
+
+1. Save a meal with time, optional portion, and notes.
+2. Save a how-you-feel check-in with time, symptom type, severity, no-symptom state, and notes.
+3. See foods captured through the chat-based IBS check-in.
+4. See started/completed recipe activity as food-history entries.
+5. Review a combined meal/check-in timeline grouped by day.
+6. See simple counts for today's meals, today's check-ins, and rougher notes saved.
+
+Writes go through frontend API bridges:
+
+```text
+POST /api/meal-log
+POST /api/health-report
+```
+
+When the Python recommender service is configured, those bridges call:
+
+```text
+POST /meal-log
+POST /health-report
+```
+
+That service creates meal logs, ingredient exposures, health reports, and personal ingredient-risk updates. If the service is not available in local development, the API/client fallback stores the visible `meal_logs` or `health_reports` row so the Diary and Analysis MVP still work from Supabase.
+
+The Diary timeline reads from:
+
+```text
+meal_logs
+health_reports
+user_ibs_checkins
+recipe_interactions
+```
+
+Existing chat check-ins are shown by expanding `user_ibs_checkins.food_windows` into chat-sourced food entries. Future completed chat check-ins also write `meal_logs` rows for the collected foods so backend learning can use them.
+
+Diary language should stay friendly and plain. Avoid model-heavy wording and present the page as tracking, not diagnosis.
+
+## 1.3 Analysis Page MVP
+
+The Analysis page is a read-only user-facing explanation layer for the recommender health data.
+
+It should help the user understand:
+
+1. Which ingredients Tamar is currently watching.
+2. Which foods seem to go more smoothly lately.
+3. How recent meal logs and symptom notes are trending.
+4. What small experiment or logging habit would make the next recommendation refresh smarter.
+
+The page reads from:
+
+```text
+user_ingredient_risks
+user_ibs_ingredient_risks
+user_ingredient_exposures
+meal_logs
+health_reports
+user_ibs_checkins
+```
+
+It does not write new health conclusions and does not change recommendation scores directly. Recommendation scoring remains owned by the backend risk/reranking flow.
+
+Current Analysis sections:
+
+- **Foods to watch**: ingredients with higher current risk scores, labeled with friendly language such as `Strong signal`, `Worth watching`, or `Early clue`.
+- **Foods that seem easier**: ingredients with lower current risk scores and some supporting exposure/check-in history.
+- **Recent pattern**: weekly view of meals logged and average symptom level.
+- **What to test next**: lightweight suggestions such as logging a good-day check-in, testing one ingredient with/without a similar meal, or using an easier food as a meal anchor.
+
+Language rules:
+
+- Do not say the user is definitely sensitive, allergic, or intolerant unless the user explicitly stored a strict restriction/allergy.
+- Prefer pattern language: `may be worth watching`, `early clue`, `seems easier`, `Tamar is still learning`.
+- Avoid model-heavy terms in the UI such as `confidence`, `positive evidence`, `negative evidence`, or `risk model`.
+- Clearly frame the page as pattern tracking, not diagnosis.
 
 Current concrete tables:
 
@@ -139,9 +229,13 @@ This creates initial suspected risk scores before the system has enough personal
 
 ---
 
-## 2.3 NHANES Sensitivity Co-Occurrence Data
+## 2.3 Deferred NHANES Sensitivity Co-Occurrence Data
 
-NHANES is used as an additional population dataset to infer related sensitivities.
+NHANES is not implemented in the current recommender backend.
+
+It remains a deferred research path because the dataset may not contain the ingredient/sensitivity relationships needed for reliable risk propagation.
+
+If later validation shows that NHANES has useful co-occurrence signal, it can be added as an additional population dataset to infer related sensitivities.
 
 If a user is known to be sensitive to one food, ingredient, or food group, NHANES-style collaborative filtering can help estimate what other sensitivities may be likely based on patterns across similar people.
 
@@ -158,9 +252,9 @@ If users with sensitivity A often also report sensitivity B,
 then sensitivity B can receive a higher starting suspected risk.
 ```
 
-This does not replace IBS-specific population risk evidence.
+If implemented later, this must not replace IBS-specific population risk evidence.
 
-It adds a second population signal based on sensitivity co-occurrence.
+It would add a second population signal based on sensitivity co-occurrence.
 
 ---
 
@@ -187,6 +281,7 @@ Used by:
 
 ```text
 Preference model
+Diary food-history timeline for started/completed recipes
 ```
 
 Example table:
@@ -215,6 +310,8 @@ dismissed = 0.0
 
 These weights can be tuned.
 
+Diary only treats `started` and `completed` interactions as food-history entries. `viewed`, `saved`, `liked`, and `dismissed` remain preference signals, not evidence that the user ate the food.
+
 ---
 
 ## 3.2 Meal Logs
@@ -230,12 +327,20 @@ Chicken and rice
 Greek yogurt
 ```
 
+Meal logs can be created from:
+
+1. The Diary page manual meal form.
+2. Completed chat-based `How I Feel` check-ins, where each collected food-window item is converted into a meal log.
+3. The recommender service when a recipe-backed meal is logged.
+
 Used by:
 
 ```text
 Exposure tracking
 Ingredient risk learning
 Health risk model
+Diary food-history timeline
+Analysis meal-pattern summaries
 ```
 
 Example table:
@@ -250,6 +355,7 @@ food_name
 logged_at
 portion_size
 portion_unit
+notes
 created_at
 ```
 
@@ -294,19 +400,49 @@ Used by:
 Symptom attribution
 Ingredient risk updates
 XGBoost training data
+Diary check-in timeline
+Analysis symptom-pattern summaries
 ```
+
+The Diary page creates `health_reports` through `/api/health-report`. The chat-based `How I Feel` flow stores its structured result in `user_ibs_checkins`; the Diary also reads that table so chat check-ins appear next to manual check-ins.
+
+---
+
+## 3.4 Chat IBS Check-Ins As Diary Input
+
+The chat `How I Feel` flow asks for symptoms plus foods eaten in three windows:
+
+```text
+0-8 hours
+9-16 hours
+17-24 hours
+```
+
+Completed chat check-ins are stored in:
+
+```text
+user_ibs_checkins
+```
+
+The Diary uses those saved `food_windows` in two ways:
+
+1. Existing check-ins are expanded into chat-sourced food entries for the timeline.
+2. Future completed check-ins also write the collected foods into `meal_logs` so exposure tracking and backend learning can use them.
+
+If a chat-sourced food already has a matching `meal_logs` row near the same time, the Diary shows the meal log and suppresses the duplicate chat-derived food entry.
 
 ---
 
 # 4. Core Architecture
 
-The system contains five major models/components:
+The implemented non-NHANES system contains four active models/components:
 
 1. **LightFM Preference Model**
 2. **IBS-Based Population Risk Priors**
-3. **NHANES-Based Risk Propagation Layer**
-4. **Personalized Ingredient Risk Model**
-5. **XGBoost Symptom Risk Model**
+3. **Personalized Ingredient Risk Model**
+4. **XGBoost Symptom Risk Model**
+
+The NHANES-based risk propagation layer is intentionally deferred and should not be assumed available in scoring.
 
 ---
 
@@ -331,6 +467,10 @@ Output:
 ```text
 preference_score(user, recipe)
 ```
+
+Implementation note:
+
+`RecommenderSys/recommend_batch.py` now attempts LightFM training first and stores the resulting preference candidates in `public.user_candidate_recipes`. If LightFM is unavailable or fails to train in the current environment, the batch job falls back to the existing matrix-factorization CF artifact so the rest of the recommender pipeline remains usable.
 
 ---
 
@@ -450,7 +590,7 @@ IBS-specific evidence is used to estimate population-level relationships between
 
 The goal is to initialize suspected risks for users before they have enough personal data.
 
-NHANES sensitivity co-occurrence inference is handled as a separate population signal. Its output can raise or lower the starting `population_risk_score`, but it is documented separately because it answers a different question: what other sensitivities may be likely given a known sensitivity?
+NHANES sensitivity co-occurrence inference is deferred. Current implementation uses IBS-specific priors plus direct personal evidence only.
 
 ---
 
@@ -504,207 +644,33 @@ personal evidence becomes more important than IBS-based population priors
 
 ---
 
-# 7. NHANES-Based Risk Propagation Layer
+# 7. Deferred NHANES-Based Risk Propagation Layer
 
-## 7.1 Purpose
+NHANES propagation is not part of the current implementation.
 
-The NHANES-based risk propagation layer helps infer **suspected** risks for foods or ingredients the user has not personally tested yet.
-
-It does not replace:
-
-- LightFM preference scoring
-- XGBoost symptom risk prediction
-- The personalized ingredient-risk table
-
-It is not the final symptom predictor.
-
-Its job is to propagate risk from known or high-confidence user reactions to related foods, ingredients, allergen groups, food categories, or FODMAP-like groups.
-
----
-
-## 7.2 How It Works
-
-Use NHANES Questionnaire Data to build population-level relationships between:
-
-- Food categories
-- Ingredients
-- Sensitivities
-- Symptom profiles
-- Allergen groups
-- FODMAP-like groups
-
-Convert these relationships into an item-item similarity matrix.
-
-The items can be:
-
-- Ingredients
-- Food categories
-- Allergen groups
-- FODMAP-like groups
-
-When a user reacts badly to ingredient `A`, use the NHANES similarity matrix to increase suspected risk for related ingredient `B`.
-
-This creates propagated risk only.
-
-It should be marked as suspected risk, not confirmed personal sensitivity.
-
----
-
-## 7.3 Propagation Scope
-
-Risk should not be propagated to every ingredient in the database.
-
-For each ingredient or item with direct user evidence, propagate only to a small set of related neighbors:
+Reason:
 
 ```text
-top 10-20 most similar items
+NHANES may not contain the ingredient-level sensitivity/co-occurrence signal
+needed for reliable IBS risk propagation.
 ```
 
-The propagation should also require minimum thresholds, for example:
+Current scoring therefore excludes NHANES entirely:
 
 ```text
-similarity_score >= 0.30
-support_count >= minimum support threshold
-source item confidence >= 0.50
-```
-
-Use one-hop propagation only:
-
-```text
-direct personal evidence -> related suspected item
-```
-
-Do not recursively propagate from already-propagated risk:
-
-```text
-allowed:
-garlic personal risk -> onion suspected risk
-
-not allowed:
-garlic personal risk -> onion suspected risk -> wheat suspected risk
-```
-
-This prevents suspected risk from spreading too broadly across unrelated foods.
-
----
-
-## 7.4 Example
-
-User reaction:
-
-```text
-garlic risk = 0.90
-garlic confidence = 0.85
-```
-
-NHANES similarity:
-
-```text
-garlic -> onion = 0.80
-garlic -> wheat = 0.30
-```
-
-Then:
-
-```text
-onion becomes strongly suspected
-wheat becomes weakly suspected
-```
-
-But neither onion nor wheat becomes:
-
-```text
-known_bad
-```
-
-until the user has direct personal evidence.
-
----
-
-## 7.5 Similarity Table
-
-```text
-nhanes_item_similarity
-----------------------
-item_a
-item_b
-similarity_score
-support_count
-relationship_type
-source
-created_at
-```
-
-`relationship_type` can describe the type of population relationship, for example:
-
-```text
-co_sensitivity
-shared_symptom_profile
-food_category_similarity
-fodmap_group_similarity
-```
-
----
-
-## 7.6 Propagated Risk Formula
-
-For a candidate ingredient or item `j`:
-
-```text
-propagated_risk(j) =
-sum_i risk(i) * similarity(i,j) * confidence(i)
-/
-sum_i similarity(i,j) * confidence(i)
+final_ingredient_risk =
+personal/population blend only
 ```
 
 Where:
 
-- `i` = ingredients/items the user has evidence for
-- `j` = candidate ingredient/item
-- `risk(i)` = user's current risk score for item `i`
-- `confidence(i)` = confidence in the user's risk score for item `i`
-- `similarity(i,j)` = NHANES-derived item-item similarity
+- direct personal evidence comes from `user_ingredient_risks` and `user_ibs_ingredient_risks`
+- IBS population priors come from `ibs_population_ingredient_priors` and fallback catalog heuristics
+- allergies and strict restrictions remain hard filters before risk scoring
 
-Low `support_count` should reduce confidence in the propagated score.
+No `nhanes_item_similarity` table is created by the current migration.
 
----
-
-## 7.7 Combining Ingredient Risk Signals
-
-For each ingredient:
-
-```text
-final_ingredient_risk =
-alpha * personal_risk
-+ beta * nhanes_propagated_risk
-+ gamma * population_prior
-```
-
-For ingredients the user has personally tested:
-
-```text
-personal_risk should dominate
-```
-
-For ingredients the user has never tested:
-
-```text
-nhanes_propagated_risk and population_prior should dominate
-```
-
-This combined ingredient risk can then be averaged across a recipe's ingredients and used as the ingredient-risk component of `combined_risk_score`.
-
----
-
-## 7.8 Safety Rules
-
-- NHANES propagation must never override allergy hard filters.
-- NHANES propagation must never mark an ingredient as `known_bad`.
-- It may only mark ingredients as `suspected_bad` or `suspected_good`.
-- Propagation should be limited to top-N similar items, not the full ingredient catalog.
-- Propagation should use one-hop neighbors only.
-- Low `support_count` should reduce confidence.
-- Propagated risk should be lower confidence than direct user evidence.
+If NHANES is validated later, the old propagation ideas can be revisited as a separate design change. Until then, code should not call or depend on NHANES-derived relationships.
 
 ---
 
@@ -982,7 +948,6 @@ For each candidate recipe, combine:
 `final_ingredient_risk` already combines:
 
 - Direct personal ingredient evidence
-- NHANES-propagated suspected risk
 - IBS-based population prior
 
 Example:
@@ -1019,7 +984,7 @@ They are treated as:
 exclude recipe before ranking
 ```
 
-Non-allergy sensitivities can contribute to the risk score through XGBoost features, personalized ingredient risks, NHANES-propagated suspected risks, and IBS-based population priors.
+Non-allergy sensitivities can contribute to the risk score through XGBoost features, personalized ingredient risks, and IBS-based population priors.
 
 ---
 
@@ -1046,10 +1011,9 @@ Offline jobs:
 
 1. Train or update LightFM preference model.
 2. Train or update XGBoost risk model.
-3. Build or update the NHANES item-item similarity matrix.
-4. Generate top candidate recipes per user.
-5. Store candidate recipes in Supabase.
-6. Store model artifacts.
+3. Generate top candidate recipes per user.
+4. Store candidate recipes in Supabase.
+5. Store model artifacts.
 
 Example table:
 
@@ -1132,20 +1096,11 @@ Direct personal evidence comes from meal logs, symptom reports, and no-symptom r
 
 ---
 
-### Step 4 - Apply NHANES Risk Propagation
+### Step 4 - Skip Deferred NHANES Propagation
 
-For unseen or weak-evidence ingredients, use `nhanes_item_similarity` to propagate suspected risk from ingredients the user has stronger evidence for.
+The current implementation does not use NHANES propagation.
 
-Only use top-N one-hop neighbors that pass similarity, support, and source-confidence thresholds.
-
-```text
-nhanes_propagated_risk =
-risk propagated from similar known-risk ingredients
-```
-
-This updates suspected ingredient risk only.
-
-It does not mark ingredients as `known_bad`.
+For unseen or weak-evidence ingredients, the online scorer currently falls back to IBS population priors and conservative ingredient-keyword heuristics.
 
 ---
 
@@ -1204,9 +1159,8 @@ It only:
 
 1. Fetches precomputed candidates.
 2. Applies hard filters.
-3. Applies NHANES risk propagation for a few hundred candidates.
-4. Scores a few hundred candidates.
-5. Reranks them.
+3. Scores ingredient and symptom risk for a few hundred candidates.
+4. Reranks them.
 
 This is realistic and scalable.
 
@@ -1272,12 +1226,13 @@ recipe_ingredients
 recipe_interactions
 meal_logs
 health_reports
+user_ibs_checkins
 user_ingredient_exposures
 user_ingredient_risks
 user_restrictions
-nhanes_item_similarity
 user_candidate_recipes
 model_predictions
+ibs_population_ingredient_priors
 ```
 
 ---
@@ -1361,25 +1316,25 @@ ingredient_id
 
 ---
 
-## 14.5 nhanes_item_similarity
+## 14.5 ibs_population_ingredient_priors
 
-Stores NHANES-derived item-item relationships for risk propagation.
+Stores IBS population-level ingredient priors used when direct personal evidence is absent or low confidence.
 
 ```text
-item_a
-item_b
-similarity_score
-support_count
-relationship_type
-source
+ingredient_name
+normalized_name
+trigger_group
+population_risk_score
+confidence
+source_notes
 created_at
+updated_at
 ```
 
 Indexes:
 
 ```text
-item_a
-item_b
+normalized_name
 ```
 
 ---
@@ -1423,8 +1378,8 @@ Flow:
 1. Fetch precomputed LightFM candidates.
 2. Apply hard filters.
 3. Compute personalized ingredient risk.
-4. Apply NHANES risk propagation for unseen or weak-evidence ingredients.
-5. Compute XGBoost symptom risk.
+4. Blend direct personal risk with IBS population priors for unseen or weak-evidence ingredients.
+5. Compute XGBoost-compatible symptom risk.
 6. Combine risk scores.
 7. Rerank by final_score = preference_score - lambda * combined_risk_score.
 8. Return top K recipes.
@@ -1440,12 +1395,21 @@ Example:
 POST /meal-log
 ```
 
+Frontend bridge:
+
+```text
+POST /api/meal-log
+```
+
 Flow:
 
 ```text
-1. Store meal log.
-2. Extract recipe ingredients.
-3. Create user ingredient exposure records.
+1. Authenticate the user in the frontend API bridge.
+2. If the Python recommender service is configured, call POST /meal-log.
+3. Store the meal log.
+4. Extract recipe ingredients when recipe_id is present, otherwise use the food name as the exposure label.
+5. Create user ingredient exposure records.
+6. If the service is unavailable during local development, store the visible meal_logs row as a fallback.
 ```
 
 ---
@@ -1458,19 +1422,51 @@ Example:
 POST /health-report
 ```
 
+Frontend bridge:
+
+```text
+POST /api/health-report
+```
+
 Flow:
 
 ```text
-1. Store health report.
-2. Look back at recent meal logs.
-3. Apply temporal attribution.
-4. Update user ingredient risk table.
-5. Store training example for future XGBoost training.
+1. Authenticate the user in the frontend API bridge.
+2. If the Python recommender service is configured, call POST /health-report.
+3. Store health report.
+4. Look back at recent meal logs.
+5. Apply temporal attribution.
+6. Update user ingredient risk table.
+7. Store training example for future XGBoost training.
+8. If the service is unavailable during local development, store the visible health_reports row as a fallback.
 ```
 
 ---
 
-## 15.4 Interaction Endpoint
+## 15.4 Chat Check-In To Diary Flow
+
+Example:
+
+```text
+Chat chip: How I Feel
+```
+
+Flow:
+
+```text
+1. The chat interviewer collects symptom state and three food windows.
+2. Save the structured check-in in user_ibs_checkins.
+3. Update user_ibs_ingredient_risks when collected foods match the IBS ingredient catalog.
+4. Save each collected food-window item into meal_logs with an approximate time for that window.
+5. The Diary reads both user_ibs_checkins and meal_logs.
+6. The Diary avoids showing duplicate chat-food entries when the corresponding meal log is present.
+```
+
+This flow preserves the existing chatbot interview behavior while making chat-logged foods visible in the same Diary page as manual logs.
+
+---
+
+## 15.5 Interaction Endpoint
 
 Example:
 
@@ -1483,6 +1479,7 @@ Flow:
 ```text
 1. Store viewed/started/saved/completed/liked/dismissed interactions.
 2. Use it in the next LightFM training run.
+3. Show started/completed recipes in the Diary timeline as food-history context.
 ```
 
 ---
@@ -1632,14 +1629,6 @@ IBS-Specific Population Risk Evidence
     ->
 IBS-Based Population Risk Priors
 
-NHANES Questionnaire Data
-    ->
-Item-Item Similarity / Co-Sensitivity Matrix
-    ->
-Risk Propagation Layer
-    ->
-Suspected Ingredient Risks
-
 User Meal Logs
     ->
 Ingredient Exposure Records
@@ -1658,6 +1647,8 @@ Preference Score - lambda * Risk Score
     ->
 Final Ranked Recommendations
 ```
+
+NHANES propagation is deferred and not part of the active scoring path.
 
 This architecture is fast online because expensive model training and candidate generation happen offline, while the live system only performs filtering, risk scoring, and reranking on a small candidate set.
 

@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 # Ensure RecommenderSys is in python search path
 sys.path.append(str(Path(__file__).resolve().parent))
@@ -24,6 +25,13 @@ try:
 except ImportError:
     print("Error: 'supabase' package is not installed. Please run: pip install supabase python-dotenv")
     sys.exit(1)
+
+try:
+    from lightfm import LightFM
+    from lightfm.data import Dataset as LightFMDataset
+except ImportError:
+    LightFM = None
+    LightFMDataset = None
 
 from src.matrix_factorization import MatrixFactorizationCF
 from recommender_common import (
@@ -35,6 +43,13 @@ from recommender_common import (
     normalize_match_scores,
     process_interactions_to_ratings,
 )
+
+
+PREFERENCE_MODEL_NAME_OVERRIDE = os.getenv("RECOMMENDER_PREFERENCE_MODEL_NAME")
+CANDIDATE_STORE_LIMIT = int(os.getenv("RECOMMENDER_CANDIDATE_STORE_LIMIT", "500"))
+LIGHTFM_FACTORS = int(os.getenv("RECOMMENDER_LIGHTFM_FACTORS", "32"))
+LIGHTFM_EPOCHS = int(os.getenv("RECOMMENDER_LIGHTFM_EPOCHS", "20"))
+LIGHTFM_THREADS = int(os.getenv("RECOMMENDER_LIGHTFM_THREADS", "2"))
 
 
 def fetch_all_rows(
@@ -145,6 +160,137 @@ def upload_artifact_to_storage(supabase: Client, artifact_path: Path = ARTIFACT_
             print(f"[Warning] Failed to create/upload CF artifact bucket: {retry_error}")
 
 
+def upload_candidate_rows(supabase: Client, candidate_rows: list[dict], chunk_size: int = 500) -> None:
+    if not candidate_rows:
+        return
+
+    print(f"Uploading {len(candidate_rows):,} precomputed candidate rows to Supabase...")
+    for start in range(0, len(candidate_rows), chunk_size):
+        chunk = candidate_rows[start : start + chunk_size]
+        try:
+            supabase.table("user_candidate_recipes").upsert(
+                chunk,
+                on_conflict="user_id,recipe_id,model_name",
+            ).execute()
+        except Exception as exc:
+            print(f"[Warning] Failed to upload candidate rows {start}-{start + len(chunk)}: {exc}")
+            return
+
+
+def save_lightfm_item_artifact(
+    model,
+    recipe_catalog: list[str],
+    item_id_map: dict,
+    artifact_path: Path = ARTIFACT_PATH,
+) -> None:
+    recipe_ids = []
+    item_indices = []
+    for recipe_id in recipe_catalog:
+        item_idx = item_id_map.get(str(recipe_id))
+        if item_idx is None:
+            continue
+        recipe_ids.append(str(recipe_id))
+        item_indices.append(item_idx)
+
+    if not item_indices:
+        raise RuntimeError("LightFM trained without any recipe items in the catalog.")
+
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        artifact_path,
+        recipe_ids=np.array(recipe_ids, dtype=object),
+        item_factors=model.item_embeddings[np.array(item_indices)].astype(float),
+        item_biases=model.item_biases[np.array(item_indices)].astype(float),
+        global_mean=np.array([0.0], dtype=np.float64),
+        n_factors=np.array([model.no_components], dtype=np.int64),
+        backend=np.array(["lightfm"], dtype=object),
+    )
+
+
+def train_lightfm_preference_model(
+    ratings: pd.DataFrame,
+    recipe_catalog: list[str],
+    active_users: list[str],
+) -> tuple[object, dict, dict, str] | None:
+    if LightFM is None or LightFMDataset is None:
+        return None
+
+    print("Training LightFM preference model...")
+    ratings = ratings.copy()
+    ratings["user_id"] = ratings["user_id"].astype(str)
+    ratings["recipe_id"] = ratings["recipe_id"].astype(str)
+
+    all_users = sorted(set(ratings["user_id"].astype(str)).union(str(uid) for uid in active_users))
+    all_items = [str(recipe_id) for recipe_id in recipe_catalog]
+    all_item_set = set(all_items)
+
+    dataset = LightFMDataset()
+    dataset.fit(users=all_users, items=all_items)
+    interactions, weights = dataset.build_interactions(
+        (
+            (str(row["user_id"]), str(row["recipe_id"]), float(row["rating"]))
+            for _, row in ratings.iterrows()
+            if str(row["recipe_id"]) in all_item_set
+        )
+    )
+
+    if interactions.nnz == 0:
+        return None
+
+    model = LightFM(
+        no_components=LIGHTFM_FACTORS,
+        loss=os.getenv("RECOMMENDER_LIGHTFM_LOSS", "warp"),
+        random_state=42,
+    )
+    try:
+        model.fit(
+            interactions,
+            sample_weight=weights,
+            epochs=LIGHTFM_EPOCHS,
+            num_threads=LIGHTFM_THREADS,
+        )
+    except Exception as exc:
+        print(f"[Warning] LightFM training failed: {exc}")
+        return None
+
+    user_id_map, _user_feature_map, item_id_map, _item_feature_map = dataset.mapping()
+    return model, user_id_map, item_id_map, "lightfm_preference"
+
+
+def lightfm_predictions_for_user(
+    model,
+    user_id: str,
+    recipe_catalog: list[str],
+    user_id_map: dict,
+    item_id_map: dict,
+) -> list[tuple[str, float]]:
+    user_idx = user_id_map.get(str(user_id))
+    item_pairs = [
+        (str(recipe_id), item_id_map[str(recipe_id)])
+        for recipe_id in recipe_catalog
+        if str(recipe_id) in item_id_map
+    ]
+    if not item_pairs:
+        return []
+
+    item_indices = np.array([idx for _, idx in item_pairs], dtype=np.int32)
+    if user_idx is None:
+        scores = model.item_biases[item_indices]
+    else:
+        scores = model.predict(
+            int(user_idx),
+            item_indices,
+            num_threads=LIGHTFM_THREADS,
+        )
+
+    predictions = [
+        (recipe_id, float(score))
+        for (recipe_id, _idx), score in zip(item_pairs, scores)
+    ]
+    predictions.sort(key=lambda item: item[1], reverse=True)
+    return predictions
+
+
 def compute_recommendations():
     supabase = load_supabase_client()
     
@@ -197,6 +343,7 @@ def compute_recommendations():
     if combined_ratings.empty:
         print("[Warning] No user ratings or historical interactions found. Seeding default popular recipes as recommendations...")
         default_recs = recipe_catalog[:6]
+        generated_at = datetime.utcnow().isoformat()
         
         print(f"Upserting default recommendations for {len(active_users)} profiles...")
         for uid in active_users:
@@ -209,51 +356,108 @@ def compute_recommendations():
                 supabase.table("user_recommendations").upsert(payload).execute()
             except Exception as e:
                 print(f"[Error] Failed to upload fallback recommendations for user {uid}: {e}")
+        fallback_candidates = []
+        for uid in active_users:
+            for rank, recipe_id in enumerate(recipe_catalog[:CANDIDATE_STORE_LIMIT]):
+                try:
+                    recipe_id_int = int(recipe_id)
+                except (TypeError, ValueError):
+                    continue
+                fallback_candidates.append({
+                    "user_id": uid,
+                    "recipe_id": recipe_id_int,
+                    "preference_score": float(CANDIDATE_STORE_LIMIT - rank),
+                    "model_name": PREFERENCE_MODEL_NAME_OVERRIDE or "popularity_fallback",
+                    "generated_at": generated_at,
+                })
+        upload_candidate_rows(supabase, fallback_candidates)
         print("[Success] Completed fallback recommendations upsert.")
         return
 
     print(f"Processed {len(combined_ratings)} total ratings (active + historical).")
-    
-    # 4. Train SVD Collaborative Filtering Model
-    print("Training SVD Matrix Factorization model...")
     combined_ratings["recipe_id"] = combined_ratings["recipe_id"].astype(str)
-    
-    # Pad ratings so SVD is aware of all active recipes in the catalog
-    catalog_padding = pd.DataFrame({
-        "user_id": ["__catalog_pad__"] * len(recipe_catalog),
-        "recipe_id": recipe_catalog,
-        "rating": [3.0] * len(recipe_catalog)
-    })
-    padded_ratings = pd.concat([combined_ratings, catalog_padding], ignore_index=True)
-    
-    model = MatrixFactorizationCF(n_factors=10, n_epochs=30, rating_scale=(0, 5))
-    model.fit(padded_ratings)
-    model.save_item_factor_artifact(ARTIFACT_PATH)
-    print(f"Saved trained CF item factors to {ARTIFACT_PATH}")
+    combined_ratings["user_id"] = combined_ratings["user_id"].astype(str)
+    if not active_ratings.empty:
+        active_ratings["recipe_id"] = active_ratings["recipe_id"].astype(str)
+        active_ratings["user_id"] = active_ratings["user_id"].astype(str)
+
+    # 4. Train LightFM preference model when available, with the existing
+    # matrix-factorization model as a fallback for environments where LightFM
+    # is not installed or cannot compile.
+    lightfm_result = train_lightfm_preference_model(combined_ratings, recipe_catalog, active_users)
+    use_lightfm = lightfm_result is not None
+    if use_lightfm:
+        preference_model, lightfm_user_map, lightfm_item_map, default_model_name = lightfm_result
+        candidate_model_name = PREFERENCE_MODEL_NAME_OVERRIDE or default_model_name
+        save_lightfm_item_artifact(preference_model, recipe_catalog, lightfm_item_map, ARTIFACT_PATH)
+        print(f"Saved trained LightFM item factors to {ARTIFACT_PATH}")
+    else:
+        if LightFM is None:
+            print("[Warning] LightFM is not installed. Falling back to SVD Matrix Factorization.")
+        else:
+            print("[Warning] LightFM training produced no interactions. Falling back to SVD Matrix Factorization.")
+        candidate_model_name = PREFERENCE_MODEL_NAME_OVERRIDE or "cf_item_factors"
+        catalog_padding = pd.DataFrame({
+            "user_id": ["__catalog_pad__"] * len(recipe_catalog),
+            "recipe_id": recipe_catalog,
+            "rating": [3.0] * len(recipe_catalog)
+        })
+        padded_ratings = pd.concat([combined_ratings, catalog_padding], ignore_index=True)
+        preference_model = MatrixFactorizationCF(n_factors=10, n_epochs=30, rating_scale=(0, 5))
+        preference_model.fit(padded_ratings)
+        preference_model.save_item_factor_artifact(ARTIFACT_PATH)
+        print(f"Saved trained CF item factors to {ARTIFACT_PATH}")
+
     upload_artifact_to_storage(supabase, ARTIFACT_PATH)
     
     print(f"Generating recommendations for {len(active_users)} active users...")
     
     recommendation_payloads = []
+    candidate_payloads = []
+    generated_at = datetime.utcnow().isoformat()
     for user_id in active_users:
         # Get recipes already interacted with by this user (from active ratings)
         interacted_recipes = set()
         if not active_ratings.empty:
             interacted_recipes = set(active_ratings[active_ratings["user_id"] == user_id]["recipe_id"].unique())
         
-        # Calculate predicted scores for all recipe IDs in our dynamic catalog
-        predictions = []
-        for recipe_id in recipe_catalog:
-            # Recommend items they haven't completed or saved yet
-            if recipe_id not in interacted_recipes:
-                score = model.predict(user_id, recipe_id)
-                predictions.append((recipe_id, score))
-                
-        # Sort by predicted rating in descending order
-        predictions.sort(key=lambda x: x[1], reverse=True)
+        if use_lightfm:
+            predictions = [
+                (recipe_id, score)
+                for recipe_id, score in lightfm_predictions_for_user(
+                    preference_model,
+                    user_id,
+                    recipe_catalog,
+                    lightfm_user_map,
+                    lightfm_item_map,
+                )
+                if recipe_id not in interacted_recipes
+            ]
+        else:
+            predictions = []
+            for recipe_id in recipe_catalog:
+                if recipe_id not in interacted_recipes:
+                    score = preference_model.predict(user_id, recipe_id)
+                    predictions.append((recipe_id, score))
+            predictions.sort(key=lambda x: x[1], reverse=True)
         
-        # Take top 6 recipe IDs
-        top_predictions = predictions[:6]
+        top_candidates = predictions[:CANDIDATE_STORE_LIMIT]
+        for recipe_id, score in top_candidates:
+            try:
+                recipe_id_int = int(recipe_id)
+            except (TypeError, ValueError):
+                continue
+            candidate_payloads.append({
+                "user_id": user_id,
+                "recipe_id": recipe_id_int,
+                "preference_score": float(score),
+                "model_name": candidate_model_name,
+                "generated_at": generated_at,
+            })
+
+        # Take top 6 recipe IDs for the legacy homepage row. The online service
+        # performs the full health-risk rerank from user_candidate_recipes.
+        top_predictions = top_candidates[:6]
         top_k = [p[0] for p in top_predictions]
         top_scores = [p[1] for p in top_predictions]
         
@@ -282,6 +486,8 @@ def compute_recommendations():
             supabase.table("user_recommendations").upsert(payload).execute()
         except Exception as e:
             print(f"[Error] Error uploading for user {payload['user_id']}: {e}")
+
+    upload_candidate_rows(supabase, candidate_payloads)
             
     print("[Success] Recommendation sync completed successfully.")
 

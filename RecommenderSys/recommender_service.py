@@ -14,7 +14,15 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from health_events import (
+    add_user_restriction,
+    log_meal,
+    report_health,
+    sync_ibs_population_priors,
+    sync_recipe_ingredients_from_recipes,
+)
 from recommend_fast import recommend_for_user
+from recommender_common import load_supabase_client
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT_DIR / ".env")
@@ -26,7 +34,46 @@ class RecommendationRequest(BaseModel):
     k: int = 6
 
 
+class MealLogRequest(BaseModel):
+    user_id: str
+    food_name: str
+    recipe_id: str | int | None = None
+    logged_at: str | None = None
+    portion_size: float | None = None
+    portion_unit: str | None = None
+    notes: str | None = None
+
+
+class HealthReportRequest(BaseModel):
+    user_id: str
+    symptom_type: str = "digestive_discomfort"
+    severity: float
+    reported_at: str | None = None
+    notes: str | None = None
+    no_symptoms: bool = False
+
+
+class RestrictionRequest(BaseModel):
+    user_id: str
+    ingredient_name: str
+    restriction_type: str
+    severity: str = "strict"
+    is_strict: bool = True
+    notes: str | None = None
+
+
+class SyncCatalogRequest(BaseModel):
+    recipe_limit: int | None = None
+    sync_population_priors: bool = True
+
+
 app = FastAPI(title="Tamar Recommender Service")
+
+
+def require_service_secret(x_recommender_secret: str | None) -> None:
+    expected_secret = os.getenv("RECOMMENDER_SERVICE_SECRET")
+    if expected_secret and x_recommender_secret != expected_secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @app.get("/health")
@@ -39,12 +86,84 @@ def recommend_user(
     payload: RecommendationRequest,
     x_recommender_secret: str | None = Header(default=None),
 ) -> dict:
-    expected_secret = os.getenv("RECOMMENDER_SERVICE_SECRET")
-    if expected_secret and x_recommender_secret != expected_secret:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    require_service_secret(x_recommender_secret)
 
     recommendations = recommend_for_user(payload.user_id, k=payload.k, upload=True)
     return {
         "ok": True,
         "recommended_recipe_ids": [recipe_id for recipe_id, _ in recommendations],
     }
+
+
+@app.post("/meal-log")
+def create_meal_log(
+    payload: MealLogRequest,
+    x_recommender_secret: str | None = Header(default=None),
+) -> dict:
+    require_service_secret(x_recommender_secret)
+    supabase = load_supabase_client()
+    result = log_meal(
+        supabase=supabase,
+        user_id=payload.user_id,
+        food_name=payload.food_name,
+        recipe_id=payload.recipe_id,
+        logged_at=payload.logged_at,
+        portion_size=payload.portion_size,
+        portion_unit=payload.portion_unit,
+        notes=payload.notes,
+    )
+    return {"ok": True, **result}
+
+
+@app.post("/health-report")
+def create_health_report(
+    payload: HealthReportRequest,
+    x_recommender_secret: str | None = Header(default=None),
+) -> dict:
+    require_service_secret(x_recommender_secret)
+    supabase = load_supabase_client()
+    result = report_health(
+        supabase=supabase,
+        user_id=payload.user_id,
+        symptom_type=payload.symptom_type,
+        severity=payload.severity,
+        reported_at=payload.reported_at,
+        notes=payload.notes,
+        no_symptoms=payload.no_symptoms,
+    )
+    return {"ok": True, **result}
+
+
+@app.post("/restriction")
+def create_restriction(
+    payload: RestrictionRequest,
+    x_recommender_secret: str | None = Header(default=None),
+) -> dict:
+    require_service_secret(x_recommender_secret)
+    supabase = load_supabase_client()
+    result = add_user_restriction(
+        supabase=supabase,
+        user_id=payload.user_id,
+        ingredient_name=payload.ingredient_name,
+        restriction_type=payload.restriction_type,
+        severity=payload.severity,
+        is_strict=payload.is_strict,
+        notes=payload.notes,
+    )
+    return {"ok": True, "restriction": result}
+
+
+@app.post("/sync-catalog")
+def sync_catalog(
+    payload: SyncCatalogRequest,
+    x_recommender_secret: str | None = Header(default=None),
+) -> dict:
+    require_service_secret(x_recommender_secret)
+    supabase = load_supabase_client()
+    recipe_result = sync_recipe_ingredients_from_recipes(supabase, limit=payload.recipe_limit)
+    prior_result = (
+        sync_ibs_population_priors(supabase)
+        if payload.sync_population_priors
+        else {"prior_count": 0}
+    )
+    return {"ok": True, **recipe_result, **prior_result}
