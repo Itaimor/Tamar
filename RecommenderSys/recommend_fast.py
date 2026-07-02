@@ -38,8 +38,20 @@ from recommender_common import (
     normalize_match_scores,
     process_interactions_to_ratings,
 )
+from risk_scoring import (
+    RerankedCandidate,
+    fetch_population_priors,
+    fetch_recent_user_context,
+    fetch_user_ingredient_risks,
+    fetch_user_restrictions,
+    prediction_feature_payload,
+    rerank_candidates,
+)
 
 ARTIFACT_PATH = Path(__file__).resolve().parent / "artifacts" / "cf_item_factors.npz"
+PREFERENCE_MODEL_NAME = os.getenv("RECOMMENDER_PREFERENCE_MODEL_NAME")
+CANDIDATE_FETCH_LIMIT = int(os.getenv("RECOMMENDER_CANDIDATE_FETCH_LIMIT", "500"))
+MODEL_PREDICTION_WRITE_LIMIT = int(os.getenv("RECOMMENDER_MODEL_PREDICTION_WRITE_LIMIT", "120"))
 
 
 def artifact_cache_ttl_seconds() -> int:
@@ -106,6 +118,74 @@ def fetch_user_interactions(supabase: Client, user_id: str) -> pd.DataFrame:
         return pd.DataFrame(columns=["user_id", "recipe_id", "interaction_type"])
 
     return pd.DataFrame(response.data)
+
+
+def fetch_precomputed_candidates(
+    supabase: Client,
+    user_id: str,
+    limit: int = CANDIDATE_FETCH_LIMIT,
+) -> list[tuple[str, float]]:
+    """Fetch offline preference candidates if the candidate table is populated."""
+    try:
+        query = (
+            supabase.table("user_candidate_recipes")
+            .select("recipe_id, preference_score")
+            .eq("user_id", user_id)
+        )
+        if PREFERENCE_MODEL_NAME:
+            query = query.eq("model_name", PREFERENCE_MODEL_NAME)
+        query = query.order("preference_score", desc=True).limit(limit)
+        response = query.execute()
+    except Exception as exc:
+        print(f"[Warning] Failed to fetch precomputed candidates, falling back to artifact scores: {exc}")
+        return []
+
+    return [
+        (str(row["recipe_id"]), float(row["preference_score"]))
+        for row in response.data or []
+        if row.get("recipe_id") is not None and row.get("preference_score") is not None
+    ]
+
+
+def upsert_model_predictions(
+    supabase: Client,
+    user_id: str,
+    candidates: list[RerankedCandidate],
+    model_name: str = "online_risk_rerank",
+) -> None:
+    """Persist the latest online risk components for debugging/evaluation."""
+    if not candidates:
+        return
+
+    now = datetime.utcnow().isoformat()
+    rows = []
+    for candidate in candidates[:MODEL_PREDICTION_WRITE_LIMIT]:
+        try:
+            recipe_id = int(candidate.recipe_id)
+        except (TypeError, ValueError):
+            continue
+        rows.append(
+            {
+                "user_id": user_id,
+                "recipe_id": recipe_id,
+                "model_name": model_name,
+                "prediction_type": "online_rerank",
+                "score": candidate.final_score,
+                "features": prediction_feature_payload(candidate),
+                "generated_at": now,
+            }
+        )
+
+    if not rows:
+        return
+
+    try:
+        supabase.table("model_predictions").upsert(
+            rows,
+            on_conflict="user_id,recipe_id,model_name,prediction_type",
+        ).execute()
+    except Exception as exc:
+        print(f"[Warning] Failed to upsert model predictions: {exc}")
 
 
 def get_excluded_recipe_ids(raw_interactions: pd.DataFrame) -> set[str]:
@@ -393,16 +473,13 @@ def get_flavor_artifact(
 
 
 def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tuple[str, float]]:
-    """Compute Curated + Trending + Healthy + Quick recommendations and upsert all of them.
+    """Compute risk-aware Curated + category recommendations and upsert all of them.
 
     Returns the Curated list (for backwards compatibility with the FastAPI
     `recommender_service` response shape). The other category lists are
     written into the same `user_recommendations` row and read directly by
-    the homepage.
-
-    Note: the "Bursting with Flavor" column is intentionally left as NULL
-    until the team picks an approach (keyword predicate vs CF-factor
-    embedding centroid vs sentence-transformer embeddings).
+    the homepage. Offline candidate rows are preferred when present; otherwise
+    this falls back to the saved CF item-factor artifact for preference scores.
     """
     supabase = load_supabase_client()
     download_artifact_from_storage(supabase)
@@ -418,7 +495,8 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     item_biases = artifact["item_biases"]
     global_mean = artifact["global_mean"]
 
-    # CF score for every recipe in the artifact, then descending order.
+    # CF score for every recipe in the artifact, used both as the fallback
+    # preference source and as a category-row backstop.
     if user_vector is None:
         scores = global_mean + item_biases
     else:
@@ -427,6 +505,15 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     ranked_indices = np.argsort(scores)[::-1]
     cf_ranked_ids = [str(recipe_ids[idx]) for idx in ranked_indices]
     score_by_id = {str(recipe_ids[i]): float(scores[i]) for i in range(len(recipe_ids))}
+
+    precomputed_candidates = fetch_precomputed_candidates(supabase, user_id)
+    if precomputed_candidates:
+        candidate_pairs = precomputed_candidates[:CANDIDATE_FETCH_LIMIT]
+    else:
+        candidate_pairs = [
+            (recipe_id, score_by_id[recipe_id])
+            for recipe_id in cf_ranked_ids[:CANDIDATE_FETCH_LIMIT]
+        ]
 
     # Auxiliary signals for the category rows.
     # Both fetches tolerate empty results — categories simply come up short
@@ -452,6 +539,30 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         print(f"[Warning] Failed to build flavor centroid: {exc}")
         flavor_scores_by_id = {}
 
+    # Health-risk layer: hard restrictions, direct personalized ingredient
+    # risk, IBS population priors, optional symptom model, final rerank.
+    restrictions = fetch_user_restrictions(supabase, user_id)
+    personal_signals = fetch_user_ingredient_risks(supabase, user_id)
+    population_signals = fetch_population_priors(supabase)
+    recent_context = fetch_recent_user_context(supabase, user_id)
+    risk_ranked_candidates = rerank_candidates(
+        candidates=candidate_pairs,
+        recipes_meta=recipes_meta,
+        restrictions=restrictions,
+        personal_signals=personal_signals,
+        population_signals=population_signals,
+        recent_context=recent_context,
+    )
+    candidate_by_id = {candidate.recipe_id: candidate for candidate in risk_ranked_candidates}
+    risk_ranked_ids = [candidate.recipe_id for candidate in risk_ranked_candidates]
+    final_score_by_id = {
+        candidate.recipe_id: candidate.final_score
+        for candidate in risk_ranked_candidates
+    }
+
+    if upload:
+        upsert_model_predictions(supabase, user_id, risk_ranked_candidates)
+
     # Greedy cross-category dedup. `assigned` starts populated with recipes
     # the user has already saved/liked (the existing exclusion rule) so they
     # are not surfaced in any row.
@@ -471,6 +582,8 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         for rid in source_ids:
             if rid in assigned:
                 continue
+            if rid not in candidate_by_id:
+                continue
             if predicate is not None:
                 meta = recipes_meta.get(rid)
                 if meta is None or not predicate(meta):
@@ -488,14 +601,18 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     # *not* the CF ranking (it uses cosine-to-centroid) and we want it to
     # claim its best matches before the predicate-filtered rows narrow the
     # remaining pool.
-    curated = take(cf_ranked_ids, predicate=None, count=k)
+    curated = take(risk_ranked_ids, predicate=None, count=k, score_lookup=final_score_by_id)
 
     # Trending walks the global-popularity ranking first and falls back to
     # CF-ranked recipes if popularity is sparse (new install with few
     # interactions). dict.fromkeys preserves order while deduping the two
     # lists, so the fallback never re-iterates a recipe trending already saw.
-    trending_source = list(dict.fromkeys(trending_ranked_ids + cf_ranked_ids))
-    trending = take(trending_source, predicate=None, count=k)
+    trending_source = [
+        rid
+        for rid in dict.fromkeys(trending_ranked_ids + risk_ranked_ids)
+        if rid in candidate_by_id
+    ]
+    trending = take(trending_source, predicate=None, count=k, score_lookup=final_score_by_id)
 
     # Flavor: hybrid approach combining two signals.
     #
@@ -510,25 +627,30 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     # The displayed match score still comes from the cosine map so the row's
     # internal ordering reflects centroid similarity, not CF taste match.
     flavor_ranked_ids = sorted(
-        flavor_scores_by_id.keys(),
-        key=lambda rid: flavor_scores_by_id[rid],
+        [rid for rid in flavor_scores_by_id.keys() if rid in candidate_by_id],
+        key=lambda rid: (flavor_scores_by_id[rid], final_score_by_id.get(rid, -999.0)),
         reverse=True,
     )
     flavor = take(
         flavor_ranked_ids,
         predicate=is_flavorful,
         count=k,
-        score_lookup=flavor_scores_by_id,
+        score_lookup=final_score_by_id,
     )
 
-    healthy = take(cf_ranked_ids, predicate=is_healthy, count=k)
-    quick = take(cf_ranked_ids, predicate=is_quick, count=k)
+    healthy = take(risk_ranked_ids, predicate=is_healthy, count=k, score_lookup=final_score_by_id)
+    quick = take(risk_ranked_ids, predicate=is_quick, count=k, score_lookup=final_score_by_id)
 
     if upload:
+        curated_candidates = [candidate_by_id[rid] for rid, _ in curated if rid in candidate_by_id]
         payload = {
             "user_id": user_id,
             "recommended_recipe_ids": [rid for rid, _ in curated],
             "match_scores": normalize_match_scores([s for _, s in curated]),
+            "ingredient_risk_scores": [candidate.ingredient_risk_score for candidate in curated_candidates],
+            "symptom_risk_scores": [candidate.symptom_risk_score for candidate in curated_candidates],
+            "combined_risk_scores": [candidate.combined_risk_score for candidate in curated_candidates],
+            "final_scores": [candidate.final_score for candidate in curated_candidates],
             "trending_recipe_ids": [rid for rid, _ in trending],
             "trending_match_scores": normalize_match_scores([s for _, s in trending]),
             "flavor_recipe_ids": [rid for rid, _ in flavor],

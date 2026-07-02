@@ -187,6 +187,131 @@ const localRecommendationRefreshPlugin = (env: Record<string, string>) => ({
   },
 });
 
+const localDiaryPlugin = (env: Record<string, string>) => ({
+  name: "local-diary-api",
+  configureServer(server: any) {
+    const handleDiaryRequest = async (req: any, res: any, kind: "meal-log" | "health-report") => {
+      if (req.method !== "POST") {
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: "Method Not Allowed" }));
+        return;
+      }
+
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: "Supabase server credentials are not configured." }));
+        return;
+      }
+
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+      if (!token) {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: "Missing authorization token." }));
+        return;
+      }
+
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const { data, error } = await supabase.auth.getUser(token);
+      if (error || !data.user) {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: "Invalid authorization token." }));
+        return;
+      }
+
+      const body = await parseJsonBody(req);
+      const recommenderUrl = process.env.RECOMMENDER_SERVICE_URL || env.RECOMMENDER_SERVICE_URL || "http://127.0.0.1:8000";
+      const recommenderSecret = process.env.RECOMMENDER_SERVICE_SECRET || env.RECOMMENDER_SERVICE_SECRET || "dev-secret";
+      const basePayload = { ...body, user_id: data.user.id };
+      const payload = kind === "meal-log"
+        ? {
+            ...basePayload,
+            food_name: String(body.food_name || "").trim(),
+            logged_at: body.logged_at || new Date().toISOString(),
+          }
+        : {
+            ...basePayload,
+            symptom_type: body.no_symptoms ? "none" : body.symptom_type || "digestive_discomfort",
+            severity: body.no_symptoms ? 0 : Math.max(0, Math.min(1, Number(body.severity) || 0)),
+            reported_at: body.reported_at || new Date().toISOString(),
+            no_symptoms: Boolean(body.no_symptoms),
+          };
+
+      if (kind === "meal-log" && !payload.food_name) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "Food name is required." }));
+        return;
+      }
+
+      try {
+        const response = await fetch(`${recommenderUrl.replace(/\/$/, "")}/${kind}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-recommender-secret": recommenderSecret,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const responseBody = await response.text();
+        res.statusCode = response.status;
+        res.setHeader("Content-Type", "application/json");
+        res.end(responseBody);
+        return;
+      } catch {
+        const table = kind === "meal-log" ? "meal_logs" : "health_reports";
+        const fallbackPayload = kind === "meal-log"
+          ? {
+              user_id: data.user.id,
+              food_name: payload.food_name,
+              recipe_id: payload.recipe_id || null,
+              logged_at: payload.logged_at,
+              portion_size: payload.portion_size || null,
+              portion_unit: payload.portion_unit || null,
+              notes: payload.notes || null,
+            }
+          : {
+              user_id: data.user.id,
+              symptom_type: payload.symptom_type,
+              severity: payload.severity,
+              reported_at: payload.reported_at,
+              no_symptoms: payload.no_symptoms,
+              notes: payload.notes || null,
+            };
+
+        const { data: inserted, error: insertError } = await supabase
+          .from(table)
+          .insert(fallbackPayload)
+          .select()
+          .single();
+
+        if (insertError) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: insertError.message }));
+          return;
+        }
+
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(
+          kind === "meal-log"
+            ? { ok: true, meal_log: inserted, exposure_count: 0, fallback: true }
+            : { ok: true, health_report: inserted, attributed_exposure_count: 0, updated_risk_count: 0, fallback: true },
+        ));
+      }
+    };
+
+    server.middlewares.use("/api/meal-log", (req: any, res: any) => {
+      handleDiaryRequest(req, res, "meal-log");
+    });
+    server.middlewares.use("/api/health-report", (req: any, res: any) => {
+      handleDiaryRequest(req, res, "health-report");
+    });
+  },
+});
+
 const PEXELS_CANDIDATES_PER_RECIPE = 8;
 
 const searchPexelsImages = async (query: string, apiKey: string) => {
@@ -380,7 +505,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), localRecommendationRefreshPlugin(env), localRecipeImageFillPlugin(env), localIbsCheckInPlugin(env), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), localRecommendationRefreshPlugin(env), localDiaryPlugin(env), localRecipeImageFillPlugin(env), localIbsCheckInPlugin(env), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

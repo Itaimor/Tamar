@@ -44,7 +44,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/pages/Home.tsx` | Main recipe homepage with hero, recommendation rows, onboarding/taste feedback, saved-state actions, and image-fill queueing. |
 | `src/pages/RecipeDetail.tsx` | Recipe detail view with ingredients, steps, and interaction logging. |
 | `src/pages/CookBook.tsx` | Saved recipe cookbook view. |
-| `src/pages/Index.tsx` | Shell for secondary tools/screens such as chat, history, analysis, and insights. |
+| `src/pages/Index.tsx` | Shell for secondary tools/screens such as chat, diary, and analysis. |
 | `src/components/AuthProvider.tsx` | Supabase auth session provider and profile synchronization. |
 | `src/components/AuthDialog.tsx` | Sign-in/sign-up UI. |
 | `src/components/Navbar.tsx` | Main navigation and authenticated user controls. |
@@ -60,6 +60,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/lib/supabase.ts` | Browser Supabase client setup from `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. |
 | `src/lib/recipes.ts` | Recipe fetching, mapping, deterministic match display, image fallback/category logic, and recipe image selection. See [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md). |
 | `src/lib/recipeInteractions.ts` | Reads/writes recipe interactions, saved recipes, onboarding feedback counts, and cookbook save toggles. |
+| `src/lib/diary.ts` | Reads and writes Diary meals/check-ins, expands chat check-in foods, and includes started/completed recipe activity. |
 | `src/lib/coldStart.ts` | Legacy/static cold-start recipe vector definitions and helper behavior. |
 | `src/lib/utils.ts` | Shared frontend utility helpers. |
 
@@ -68,6 +69,8 @@ Use this section as the starting map for the repository. For deeper module behav
 | Path | Purpose |
 | --- | --- |
 | `api/refresh-recommendations.ts` | Authenticated bridge from the frontend to the Python recommender service. |
+| `api/meal-log.ts` | Authenticated bridge for Diary meal logging; calls the recommender service when configured and otherwise stores the meal row. |
+| `api/health-report.ts` | Authenticated bridge for Diary symptom/check-in logging; calls the recommender service when configured and otherwise stores the check-in row. |
 | `api/fill-recipe-images.ts` | Authenticated image-cache filler. Searches Pexels, writes `recipe_images`, and avoids repeated cached images where possible. See [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md). |
 | `api/generate.ts` | AI generation endpoint. See [docs/create_api_key.md](docs/create_api_key.md) for key setup. |
 | `vite.config.ts` | Vite config plus local dev middleware that mirrors key API routes for local testing. |
@@ -76,9 +79,12 @@ Use this section as the starting map for the repository. For deeper module behav
 
 | Path | Purpose |
 | --- | --- |
-| `RecommenderSys/recommend_batch.py` | Batch training flow that reads Supabase data, trains/saves the collaborative-filtering artifact, and uploads it. |
-| `RecommenderSys/recommend_fast.py` | Fast per-user recommendation refresh using the saved artifact. |
-| `RecommenderSys/recommender_service.py` | FastAPI service used by the frontend/API bridge for online refreshes. |
+| `RecommenderSys/recommend_batch.py` | Batch training flow that reads Supabase data, trains LightFM preference candidates when available, falls back to matrix-factorization CF, saves the item-factor artifact, and uploads candidates. |
+| `RecommenderSys/recommend_fast.py` | Fast per-user recommendation refresh using saved/precomputed preference candidates, hard filters, ingredient risk, symptom risk, and final reranking. |
+| `RecommenderSys/risk_scoring.py` | Shared health-risk scoring, strict restriction filtering, IBS priors, optional symptom-model scoring, and final reranking helpers. |
+| `RecommenderSys/health_events.py` | Meal-log, health-report, exposure, restriction, recipe-ingredient sync, and personalized ingredient-risk update helpers. |
+| `RecommenderSys/train_symptom_model.py` | Offline symptom-risk model training from meal logs and health reports. Uses XGBoost when available. |
+| `RecommenderSys/recommender_service.py` | FastAPI service used by the frontend/API bridge for online refreshes plus meal, health, and restriction endpoints. |
 | `RecommenderSys/recommender_common.py` | Shared recommender constants, category logic, and utilities. |
 | `RecommenderSys/seed_database.py` | Seeds Supabase with Food.com data or fallback mock recipe/interactions. |
 | `RecommenderSys/cold_start_active_learning.py` | Experimental/legacy cold-start active-learning module. |
@@ -101,6 +107,7 @@ The recommender architecture source of truth is [docs/IBS_Recommender_Online_Lig
 | `supabase/migrations/20260524000005_allow_liked_recipe_interactions.sql` | Extends allowed recipe interaction types. |
 | `supabase/migrations/20260601000000_add_category_recommendation_columns.sql` | Adds category-specific recommendation columns. |
 | `supabase/migrations/20260602000000_add_recommendation_category_rows.sql` | Adds category recommendation row support. |
+| `supabase/migrations/20260702000000_create_non_nhanes_recommender_tables.sql` | Adds non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, risks, candidates, and model predictions. |
 
 Use the project Supabase skill and the design document before changing schema, RLS, recommendation storage, or API-facing tables.
 

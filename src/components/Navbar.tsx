@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Bell, User, Menu, X, LogOut, LogIn, Home, BookOpen, MessageSquare, BarChart3, Clock, Sparkles } from "lucide-react";
+import { Search, Bell, User, Menu, LogOut, LogIn, Home, BookOpen, MessageSquare, BarChart3, CalendarDays } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AuthDialog from "@/components/AuthDialog";
 import { useAuth } from "@/components/AuthProvider";
@@ -42,8 +42,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
     { name: "CookBook", path: "/cookbook", icon: BookOpen },
     { name: "Chat", path: getTabParam("chat"), icon: MessageSquare },
     { name: "Analysis", path: getTabParam("analysis"), icon: BarChart3 },
-    { name: "History", path: getTabParam("history"), icon: Clock },
-    { name: "Insights", path: getTabParam("insights"), icon: Sparkles },
+    { name: "Diary", path: getTabParam("diary"), icon: CalendarDays },
   ];
 
   const handleNavClick = (path: string) => {
@@ -67,7 +66,8 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
     if (path.includes("tab=")) {
       const tab = path.split("tab=")[1];
       const params = new URLSearchParams(location.search);
-      return params.get("tab") === tab;
+      const activeTab = params.get("tab") === "history" ? "diary" : params.get("tab");
+      return activeTab === tab;
     }
     return false;
   };
@@ -117,19 +117,12 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
             >
               Analysis
             </a>
-            <a 
-              href="#" 
-              onClick={(e) => { e.preventDefault(); navigate(getTabParam("history")); }}
-              className={linkClass(getTabParam("history"))}
+            <a
+              href="#"
+              onClick={(e) => { e.preventDefault(); navigate(getTabParam("diary")); }}
+              className={linkClass(getTabParam("diary"))}
             >
-              History
-            </a>
-            <a 
-              href="#" 
-              onClick={(e) => { e.preventDefault(); navigate(getTabParam("insights")); }}
-              className={linkClass(getTabParam("insights"))}
-            >
-              Insights
+              Diary
             </a>
           </div>
         </div>

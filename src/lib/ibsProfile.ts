@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { createMealLog, getChatMealTime } from "@/lib/diary";
 import {
   IbsCheckInResult,
   buildColdStartRiskRows,
@@ -6,6 +7,32 @@ import {
   computeUpdatedIbsRiskRows,
   validateIbsCheckInResult,
 } from "@/lib/ibsRisk";
+
+const chatFoodWindows = [
+  { key: "hours_0_8" as const, notes: "Logged from Tamar chat check-in: eaten in the last 0-8 hours." },
+  { key: "hours_9_16" as const, notes: "Logged from Tamar chat check-in: eaten 9-16 hours before the check-in." },
+  { key: "hours_17_24" as const, notes: "Logged from Tamar chat check-in: eaten 17-24 hours before the check-in." },
+];
+
+const saveChatFoodsToDiary = async (userId: string, result: IbsCheckInResult, checkinCreatedAt: string) => {
+  const mealInputs = chatFoodWindows.flatMap((window) =>
+    result.food_windows[window.key].map((foodName) => ({
+      userId,
+      foodName,
+      loggedAt: getChatMealTime(checkinCreatedAt, window.key),
+      notes: window.notes,
+    })),
+  );
+
+  if (mealInputs.length === 0) return 0;
+
+  const results = await Promise.allSettled(mealInputs.map((input) => createMealLog(input)));
+  const failedCount = results.filter((item) => item.status === "rejected").length;
+  if (failedCount > 0) {
+    console.warn(`Could not save ${failedCount} chat food item(s) to meal_logs.`);
+  }
+  return results.length - failedCount;
+};
 
 export const fetchIbsOnboardingCompleted = async (userId: string) => {
   if (!supabase) return true;
@@ -68,35 +95,35 @@ export const applyIbsCheckInToProfile = async (userId: string, rawResult: unknow
   }
 
   const evidenceRows = buildIbsEvidenceTable(result);
-  if (evidenceRows.length === 0) {
-    return { updatedCount: 0, topIngredients: [] as string[] };
-  }
+  let updatedRows: Array<{ ingredient_name: string }> = [];
 
-  const ingredientNames = evidenceRows.map((row) => row.ingredientName);
-  const { data: existingRows, error: fetchError } = await supabase
-    .from("user_ibs_ingredient_risks")
-    .select("ingredient_name,grade,confidence,evidence_count")
-    .eq("user_id", userId)
-    .in("ingredient_name", ingredientNames);
+  if (evidenceRows.length > 0) {
+    const ingredientNames = evidenceRows.map((row) => row.ingredientName);
+    const { data: existingRows, error: fetchError } = await supabase
+      .from("user_ibs_ingredient_risks")
+      .select("ingredient_name,grade,confidence,evidence_count")
+      .eq("user_id", userId)
+      .in("ingredient_name", ingredientNames);
 
-  if (fetchError) {
-    console.error("Error fetching IBS risk rows:", fetchError);
-    throw fetchError;
-  }
+    if (fetchError) {
+      console.error("Error fetching IBS risk rows:", fetchError);
+      throw fetchError;
+    }
 
-  const updatedRows = computeUpdatedIbsRiskRows(
-    evidenceRows,
-    existingRows || [],
-    result.feeling.severity,
-  ).map((row) => ({ user_id: userId, ...row }));
+    updatedRows = computeUpdatedIbsRiskRows(
+      evidenceRows,
+      existingRows || [],
+      result.feeling.severity,
+    ).map((row) => ({ user_id: userId, ...row }));
 
-  const { error: upsertError } = await supabase
-    .from("user_ibs_ingredient_risks")
-    .upsert(updatedRows, { onConflict: "user_id,ingredient_name" });
+    const { error: upsertError } = await supabase
+      .from("user_ibs_ingredient_risks")
+      .upsert(updatedRows, { onConflict: "user_id,ingredient_name" });
 
-  if (upsertError) {
-    console.error("Error updating IBS risk rows:", upsertError);
-    throw upsertError;
+    if (upsertError) {
+      console.error("Error updating IBS risk rows:", upsertError);
+      throw upsertError;
+    }
   }
 
   const now = new Date().toISOString();
@@ -127,9 +154,12 @@ export const applyIbsCheckInToProfile = async (userId: string, rawResult: unknow
     throw checkinError;
   }
 
+  const diaryMealCount = await saveChatFoodsToDiary(userId, result, now);
+
   return {
     updatedCount: updatedRows.length,
     topIngredients: evidenceRows.slice(0, 4).map((row) => row.ingredientName),
+    diaryMealCount,
   };
 };
 
