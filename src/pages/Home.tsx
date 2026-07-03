@@ -14,6 +14,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
+type SavedRecipeRow = {
+  recipe_id: string | number;
+};
+
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
 
 const getFirstNSentences = (text: string, n: number): string => {
@@ -47,6 +51,7 @@ const Home = () => {
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
+  const [expandedRecipeCardId, setExpandedRecipeCardId] = useState<number | null>(null);
   const [cachedHeroRecipe, setCachedHeroRecipe] = useState<RecipeItem | null>(() => {
     try {
       const saved = window.localStorage.getItem(HERO_RECIPE_STORAGE_KEY);
@@ -96,7 +101,7 @@ const Home = () => {
       if (user) {
         try {
           const saved = await fetchSavedRecipes(user.id);
-          setSavedRecipeIds(saved.map((r: any) => r.recipe_id));
+          setSavedRecipeIds((saved as SavedRecipeRow[]).map((r) => String(r.recipe_id)));
         } catch (error) {
           console.error("Failed to load saved recipes:", error);
         }
@@ -460,6 +465,17 @@ const Home = () => {
     navigate(`/recipes/${item.id}`);
   };
 
+  const handleRecipeFeedbackChat = (item: { id: number; title: string }) => {
+    if (!user) {
+      toast.info("Please sign in so Tamar can save your meal feedback.");
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent("tamar:open-recipe-feedback-chat", {
+      detail: { id: item.id, title: item.title },
+    }));
+  };
+
   const heroRecipe = curatedRecipes[0] || cachedHeroRecipe;
   const heroTitle = heroRecipe?.title || "Mediterranean Harvest Bowl";
   const heroDescription =
@@ -687,7 +703,14 @@ const Home = () => {
                 className="flex gap-2 overflow-x-auto no-scrollbar pb-6 pr-12 scroll-smooth"
               >
                 {section.items.length > 0 ? (
-                  section.items.map((item) => (
+                  section.items.map((item) => {
+                    const isExpanded = expandedRecipeCardId === item.id;
+                    const visibleIngredients = (item.ingredients || [])
+                      .map((ingredient) => ingredient.trim())
+                      .filter(Boolean)
+                      .slice(0, 5);
+
+                    return (
                     <div
                       key={item.id}
                       className="flex-none w-[220px] md:w-[320px] aspect-video relative group cursor-pointer rounded-sm overflow-hidden transition-all duration-300 hover:scale-110 hover:z-30 shadow-2xl"
@@ -709,11 +732,11 @@ const Home = () => {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <button
-                            type="button; start cooking"
-                            aria-label={`Start ${item.title}`}
+                            type="button"
+                            aria-label={`Open meal feedback chat for ${item.title}`}
                             onClick={(event) => {
                               event.stopPropagation();
-                              handleRecipeUse(item);
+                              handleRecipeFeedbackChat(item);
                             }}
                             className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
                           >
@@ -737,10 +760,32 @@ const Home = () => {
                               <Plus className="text-white w-4 h-4" />
                             )}
                           </button>
-                          <div className="ml-auto w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors">
-                            <ChevronRight className="text-white w-4 h-4 rotate-90" />
-                          </div>
+                          <button
+                            type="button"
+                            aria-label={isExpanded ? `Hide details for ${item.title}` : `Show ingredients and prep time for ${item.title}`}
+                            aria-expanded={isExpanded}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setExpandedRecipeCardId((current) => current === item.id ? null : item.id);
+                            }}
+                            className="ml-auto w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors"
+                          >
+                            <ChevronRight className={`text-white w-4 h-4 transition-transform ${isExpanded ? "-rotate-90" : "rotate-90"}`} />
+                          </button>
                         </div>
+                        {isExpanded && (
+                          <div className="mb-2 rounded bg-black/60 border border-white/10 p-2 text-[10px] md:text-xs text-gray-200">
+                            <div className="flex items-center justify-between gap-2 font-bold text-white">
+                              <span>Prep time</span>
+                              <span>{item.time || "15m"}</span>
+                            </div>
+                            <p className="mt-1 text-gray-300 line-clamp-2">
+                              {visibleIngredients.length > 0
+                                ? visibleIngredients.join(", ")
+                                : "Ingredients available on the recipe page"}
+                            </p>
+                          </div>
+                        )}
                         <p className="font-bold text-sm md:text-base mb-1">{item.title}</p>
                         <div className="flex items-center gap-2 text-[10px] font-bold">
                           <span className="text-green-500">{item.match || "95%"} Match</span>
@@ -749,7 +794,8 @@ const Home = () => {
                         </div>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 ) : (
                   Array.from({ length: 5 }).map((_, sIdx) => (
                     <div
