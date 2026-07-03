@@ -1,15 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { ChatSessionProvider } from "@/components/ChatSessionProvider";
+import { useEffect, useState } from "react";
 import Index from "./pages/Index.tsx";
 import Home from "./pages/Home.tsx";
 import CookBook from "./pages/CookBook.tsx";
 import RecipeDetail from "./pages/RecipeDetail.tsx";
 import Landing from "./pages/Landing.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import FloatingChatButton from "@/components/FloatingChatButton";
+import ChatScreen from "@/components/ChatScreen";
+import type { RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -35,6 +40,83 @@ const AuthGate = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const AppShell = () => {
+  const [isChatDockOpen, setIsChatDockOpen] = useState(false);
+  const [foodLogRequestKey, setFoodLogRequestKey] = useState(0);
+  const [recipeFeedbackRequest, setRecipeFeedbackRequest] = useState<{
+    key: number;
+    recipe: RecipeFeedbackRecipe;
+  } | null>(null);
+  const location = useLocation();
+
+  const params = new URLSearchParams(location.search);
+  const isFullChatPage = location.pathname === "/app" && (params.get("tab") || "chat") === "chat";
+
+  useEffect(() => {
+    if (isFullChatPage) {
+      setIsChatDockOpen(false);
+    }
+  }, [isFullChatPage]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("tamar-chat-dock-open", isChatDockOpen);
+    return () => document.documentElement.classList.remove("tamar-chat-dock-open");
+  }, [isChatDockOpen]);
+
+  const openFoodLogDock = () => {
+    setIsChatDockOpen(true);
+    setFoodLogRequestKey((key) => key + 1);
+  };
+
+  useEffect(() => {
+    const openRecipeFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<RecipeFeedbackRecipe>).detail;
+      if (!detail?.id || !detail?.title) return;
+
+      setIsChatDockOpen(true);
+      setRecipeFeedbackRequest({
+        key: Date.now(),
+        recipe: detail,
+      });
+    };
+
+    window.addEventListener("tamar:open-recipe-feedback-chat", openRecipeFeedback);
+    return () => window.removeEventListener("tamar:open-recipe-feedback-chat", openRecipeFeedback);
+  }, []);
+
+  return (
+    <>
+      <div
+        className={`min-w-0 transition-[padding] duration-300 ease-out ${
+          isChatDockOpen ? "lg:pr-[420px]" : ""
+        }`}
+      >
+        <Routes>
+          <Route path="/" element={<AuthGate><Home /></AuthGate>} />
+          <Route path="/cookbook" element={<AuthGate><CookBook /></AuthGate>} />
+          <Route path="/recipes/:recipeId" element={<AuthGate><RecipeDetail /></AuthGate>} />
+          <Route path="/app" element={<AuthGate><Index /></AuthGate>} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<AuthGate><NotFound /></AuthGate>} />
+        </Routes>
+      </div>
+
+      {isChatDockOpen && (
+        <aside className="fixed inset-x-3 bottom-3 top-20 z-50 rounded-2xl border border-white/10 bg-[#141414] shadow-2xl shadow-black/60 lg:inset-y-4 lg:left-auto lg:right-4 lg:w-[388px] lg:rounded-3xl">
+          <ChatScreen
+            foodLogRequestKey={foodLogRequestKey}
+            recipeFeedbackRequest={recipeFeedbackRequest}
+            docked
+            onClose={() => setIsChatDockOpen(false)}
+          />
+        </aside>
+      )}
+
+      <FloatingChatButton onOpen={openFoodLogDock} />
+    </>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -42,14 +124,9 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<AuthGate><Home /></AuthGate>} />
-            <Route path="/cookbook" element={<AuthGate><CookBook /></AuthGate>} />
-            <Route path="/recipes/:recipeId" element={<AuthGate><RecipeDetail /></AuthGate>} />
-            <Route path="/app" element={<AuthGate><Index /></AuthGate>} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<AuthGate><NotFound /></AuthGate>} />
-          </Routes>
+          <ChatSessionProvider>
+            <AppShell />
+          </ChatSessionProvider>
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>

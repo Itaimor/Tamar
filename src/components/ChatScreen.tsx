@@ -1,40 +1,61 @@
-import { Camera, Mic, Send, BarChart3, Loader2 } from "lucide-react";
+import { Camera, Mic, Send, Loader2, X } from "lucide-react";
 import tamarLogo from "@/assets/tamar-logo.png";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { useChatSession } from "@/components/ChatSessionProvider";
+import type { IbsTranscriptMessage, RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
+import { createHealthReport, createMealLog } from "@/lib/diary";
+import { recordRecipeInteraction } from "@/lib/recipeInteractions";
 import {
   applyIbsCheckInToProfile,
   summarizeIbsCheckIn,
 } from "@/lib/ibsProfile";
 import { validateIbsCheckInResult } from "@/lib/ibsRisk";
 
-const initialMessages = [
-  {
-    role: "ai" as const,
-    text: "Hello! I'm Tamar, your digestive health companion. How can I help you today? You can log a meal, ask about symptoms, or request an analysis of your recent history.",
-  },
-];
+const chips = ["Log Food", "How I Feel", "Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
+const MAX_MODEL_HISTORY_MESSAGES = 24;
 
-const chips = ["How I Feel", "Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
-
-type ChatMessage = {
-  role: "ai" | "user";
-  text: string;
+type RecipeFeedbackRequest = {
+  key: number;
+  recipe: RecipeFeedbackRecipe;
 };
 
-type IbsTranscriptMessage = {
-  role: "assistant" | "user";
-  text: string;
+type ChatScreenProps = {
+  docked?: boolean;
+  foodLogRequestKey?: number;
+  recipeFeedbackRequest?: RecipeFeedbackRequest | null;
+  onClose?: () => void;
 };
 
-const ChatScreen = () => {
+const isYes = (text: string) => /\b(yes|yeah|yep|sure|ok|okay|log it|i did|ate it)\b/i.test(text);
+const isNo = (text: string) => /\b(no|nope|not yet|didn'?t|do not|don't)\b/i.test(text);
+const isPositive = (text: string) => /\b(liked|like|love|loved|good|great|tasty|delicious|yes)\b/i.test(text);
+const isNegative = (text: string) => /\b(disliked|didn'?t like|bad|not good|no|meh|bland|awful)\b/i.test(text);
+const soundsOkay = (text: string) => /\b(good|fine|okay|ok|great|normal|no symptoms|no pain|all good|well)\b/i.test(text);
+const soundsRough = (text: string) => /\b(pain|bloat|bloated|diarrhea|constipation|nausea|cramp|cramps|bad|rough|uncomfortable|sick)\b/i.test(text);
+
+const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackRequest = null, onClose }: ChatScreenProps) => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const {
+    messages,
+    setMessages,
+    isLoading,
+    setIsLoading,
+    ibsTranscript,
+    setIbsTranscript,
+    isAwaitingFoodLog,
+    setIsAwaitingFoodLog,
+    recipeFeedback,
+    setRecipeFeedback,
+  } = useChatSession();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [ibsTranscript, setIbsTranscript] = useState<IbsTranscriptMessage[] | null>(null);
+  const handledIntentRef = useRef<string | null>(null);
+  const handledFoodLogRequestRef = useRef(0);
+  const handledRecipeFeedbackRequestRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -44,6 +65,68 @@ const ChatScreen = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const startFoodLogFlow = useCallback(() => {
+    if (!user) {
+      toast.info("Please sign in so Tamar can save your meal.");
+      return;
+    }
+
+    if (isLoading) return;
+
+    setIbsTranscript(null);
+    setIsAwaitingFoodLog(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: "Log Food" },
+      {
+        role: "ai",
+        text: "Tell me what you ate. You can keep it simple, like \"rice bowl with chicken\" or add a portion and a note.",
+      },
+    ]);
+  }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, user]);
+
+  const startRecipeFeedbackFlow = useCallback((recipe: RecipeFeedbackRecipe) => {
+    if (!user) {
+      toast.info("Please sign in so Tamar can save your meal feedback.");
+      return;
+    }
+
+    if (isLoading) return;
+
+    setIbsTranscript(null);
+    setIsAwaitingFoodLog(false);
+    setRecipeFeedback({ recipe, step: "confirm" });
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: `I want to start ${recipe.title}` },
+      {
+        role: "ai",
+        text: `Did you eat "${recipe.title}" and want me to log it as a meal?`,
+      },
+    ]);
+  }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, setRecipeFeedback, user]);
+
+  useEffect(() => {
+    const intent = searchParams.get("intent");
+    if (intent !== "log-food" || handledIntentRef.current === intent) return;
+
+    handledIntentRef.current = intent;
+    startFoodLogFlow();
+    setSearchParams({ tab: "chat" }, { replace: true });
+  }, [searchParams, setSearchParams, startFoodLogFlow]);
+
+  useEffect(() => {
+    if (foodLogRequestKey <= 0 || handledFoodLogRequestRef.current === foodLogRequestKey) return;
+    handledFoodLogRequestRef.current = foodLogRequestKey;
+    startFoodLogFlow();
+  }, [foodLogRequestKey, startFoodLogFlow]);
+
+  useEffect(() => {
+    if (!recipeFeedbackRequest || handledRecipeFeedbackRequestRef.current === recipeFeedbackRequest.key) return;
+    handledRecipeFeedbackRequestRef.current = recipeFeedbackRequest.key;
+    startRecipeFeedbackFlow(recipeFeedbackRequest.recipe);
+  }, [recipeFeedbackRequest, startRecipeFeedbackFlow]);
 
   const runIbsCheckIn = async (nextTranscript: IbsTranscriptMessage[]) => {
     const response = await fetch("/api/ibs-check-in", {
@@ -100,7 +183,7 @@ const ChatScreen = () => {
   const handleIbsCheckInMessage = async (text: string) => {
     if (!user || !ibsTranscript) return;
 
-    const nextTranscript: IbsTranscriptMessage[] = [...ibsTranscript, { role: "user", text }];
+    const nextTranscript = [...ibsTranscript, { role: "user" as const, text }];
     setMessages((prev) => [...prev, { role: "user", text }]);
     setInputValue("");
     setIbsTranscript(nextTranscript);
@@ -137,12 +220,169 @@ const ChatScreen = () => {
     }
   };
 
+  const handleFoodLogMessage = async (text: string) => {
+    if (!user) return;
+
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+    setIsLoading(true);
+
+    try {
+      await createMealLog({
+        userId: user.id,
+        foodName: text,
+        loggedAt: new Date().toISOString(),
+        notes: "Logged through Tamar chat.",
+      });
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: "Saved that to your Diary. Tamar will use it as part of your meal history when looking for patterns.",
+        },
+      ]);
+      setIsAwaitingFoodLog(false);
+      toast.success("Food logged to your Diary.");
+    } catch (error) {
+      console.error("Chat food log error:", error);
+      toast.error("That meal was not saved. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRecipeFeedbackMessage = async (text: string) => {
+    if (!user || !recipeFeedback) return;
+
+    const { recipe, step } = recipeFeedback;
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+
+    if (step === "confirm") {
+      if (isNo(text)) {
+        setRecipeFeedback(null);
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "No problem. I will not log it as eaten." },
+        ]);
+        return;
+      }
+
+      if (!isYes(text)) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "Just to be clear, should I log this recipe as eaten? You can answer yes or no." },
+        ]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        await createMealLog({
+          userId: user.id,
+          recipeId: recipe.id,
+          foodName: recipe.title,
+          loggedAt: new Date().toISOString(),
+          notes: "Logged through recipe feedback chat.",
+        });
+
+        await recordRecipeInteraction({
+          userId: user.id,
+          recipeId: recipe.id,
+          recipeTitle: recipe.title,
+          interactionType: "completed",
+        });
+
+        setRecipeFeedback({ recipe, step: "liked" });
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "Logged it. Did you like the recipe?" },
+        ]);
+      } catch (error) {
+        console.error("Recipe feedback meal log error:", error);
+        toast.error("That meal was not saved. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    if (step === "liked") {
+      setIsLoading(true);
+      try {
+        if (isPositive(text) || isNegative(text)) {
+          await recordRecipeInteraction({
+            userId: user.id,
+            recipeId: recipe.id,
+            recipeTitle: recipe.title,
+            interactionType: isPositive(text) ? "liked" : "dismissed",
+          });
+        }
+
+        setRecipeFeedback({ recipe, step: "feeling" });
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "Thanks. How are you feeling in general now? Feeling good, a little off, or any digestive symptoms?" },
+        ]);
+      } catch (error) {
+        console.error("Recipe preference feedback error:", error);
+        toast.error("I could not save that preference feedback.");
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const noSymptoms = soundsOkay(text) && !soundsRough(text);
+      const severity = noSymptoms ? 0 : soundsRough(text) ? 0.65 : 0.25;
+
+      await createHealthReport({
+        userId: user.id,
+        symptomType: noSymptoms ? "none" : "digestive_discomfort",
+        severity,
+        reportedAt: new Date().toISOString(),
+        noSymptoms,
+        notes: `Recipe feedback for "${recipe.title}": ${text}`,
+      });
+
+      setRecipeFeedback(null);
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: "Saved. I added the meal and your general feeling to your Diary so Tamar can learn from the pattern." },
+      ]);
+      toast.success("Recipe meal feedback saved.");
+    } catch (error) {
+      console.error("Recipe feeling feedback error:", error);
+      toast.error("I could not save how you are feeling.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent | string) => {
     const text = typeof e === "string" ? e : inputValue;
     if (!text.trim() || isLoading) return;
 
+    if (text === "Log Food") {
+      startFoodLogFlow();
+      return;
+    }
+
     if (text === "How I Feel") {
       await startIbsCheckIn();
+      return;
+    }
+
+    if (isAwaitingFoodLog) {
+      await handleFoodLogMessage(text);
+      return;
+    }
+
+    if (recipeFeedback) {
+      await handleRecipeFeedbackMessage(text);
       return;
     }
 
@@ -160,6 +400,7 @@ const ChatScreen = () => {
       // The Gemini API requires history to start with a 'user' message.
       // We find the first user message and take everything from there.
       const history = messages
+        .slice(-MAX_MODEL_HISTORY_MESSAGES)
         .map(m => ({
           role: m.role === "user" ? "user" as const : "model" as const,
           parts: [{ text: m.text }],
@@ -197,7 +438,11 @@ const ChatScreen = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background md:bg-card md:border md:rounded-3xl md:shadow-lg md:overflow-hidden md:mb-4">
+    <div
+      className={`flex flex-col h-full bg-background md:bg-card md:border md:rounded-3xl md:shadow-lg md:overflow-hidden ${
+        docked ? "rounded-2xl md:mb-0" : "md:mb-4"
+      }`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-3">
@@ -214,9 +459,16 @@ const ChatScreen = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="p-2 hover:bg-muted rounded-full transition-colors hidden md:block">
-            <BarChart3 size={18} className="text-muted-foreground" />
-          </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 hover:bg-muted rounded-full transition-colors"
+              aria-label="Close Tamar chat"
+            >
+              <X size={18} className="text-muted-foreground" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -231,7 +483,7 @@ const ChatScreen = () => {
               transition={{ duration: 0.2 }}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div className={`${msg.role === "user" ? "chat-bubble-user" : "chat-bubble-ai"} shadow-sm md:max-w-[70%] lg:max-w-[65%]`}>
+              <div className={`${msg.role === "user" ? "chat-bubble-user" : "chat-bubble-ai"} shadow-sm ${docked ? "max-w-[88%]" : "md:max-w-[70%] lg:max-w-[65%]"}`}>
                 <p className="text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
                   {msg.text.split(/(\*\*.*?\*\*)/g).map((part, j) =>
                     part.startsWith("**") && part.endsWith("**") ? (

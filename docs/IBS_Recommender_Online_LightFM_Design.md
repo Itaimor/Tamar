@@ -37,6 +37,7 @@ Implemented scope:
 - Persist IBS onboarding/check-in state in `public.user_ibs_profiles`.
 - Persist completed `How I Feel` check-ins in `public.user_ibs_checkins`.
 - Mirror foods collected by completed `How I Feel` chat check-ins into the Diary/`meal_logs` flow.
+- Route recommended-recipe eating evidence through a chat-guided recipe feedback flow before writing recipe-backed `meal_logs`.
 - Add the `How I Feel` chat flow before `Analyze my Lunch`.
 - Add non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
 - Store offline preference candidates in `public.user_candidate_recipes`.
@@ -65,7 +66,7 @@ It lets signed-in users:
 1. Save a meal with time, optional portion, and notes.
 2. Save a how-you-feel check-in with time, symptom type, severity, no-symptom state, and notes.
 3. See foods captured through the chat-based IBS check-in.
-4. See started/completed recipe activity as food-history entries.
+4. See started/completed recipe activity as food-history context.
 5. Review a combined meal/check-in timeline grouped by day.
 6. See simple counts for today's meals, today's check-ins, and rougher notes saved.
 
@@ -95,6 +96,8 @@ recipe_interactions
 ```
 
 Existing chat check-ins are shown by expanding `user_ibs_checkins.food_windows` into chat-sourced food entries. Future completed chat check-ins also write `meal_logs` rows for the collected foods so backend learning can use them.
+
+Recommended recipes should become eating evidence only after the user explicitly confirms through chat that they ate the recipe. That flow writes a recipe-backed `meal_logs` row and then asks for preference and general feeling feedback. Recipe `viewed`, `saved`, or unconfirmed `started` interactions are not enough to create a meal log.
 
 Diary language should stay friendly and plain. Avoid model-heavy wording and present the page as tracking, not diagnosis.
 
@@ -310,7 +313,9 @@ dismissed = 0.0
 
 These weights can be tuned.
 
-Diary only treats `started` and `completed` interactions as food-history entries. `viewed`, `saved`, `liked`, and `dismissed` remain preference signals, not evidence that the user ate the food.
+Diary treats `started` and `completed` interactions as food-history context. `viewed`, `saved`, `liked`, and `dismissed` remain preference signals, not evidence that the user ate the food.
+
+For recommended recipes, the play/start action should open a chat-guided feedback flow instead of silently logging a meal. The flow asks whether the user wants to log the recipe as eaten. If the user confirms, the app writes a recipe-backed `meal_logs` row and records a `completed` interaction. The chat then asks whether the user liked the recipe and records a `liked` or `dismissed` interaction when the answer is clear. Finally, it asks how the user is feeling in general and writes a `health_reports` row. This keeps actual eating evidence explicit while still collecting preference and symptom context from the same moment.
 
 ---
 
@@ -332,6 +337,7 @@ Meal logs can be created from:
 1. The Diary page manual meal form.
 2. Completed chat-based `How I Feel` check-ins, where each collected food-window item is converted into a meal log.
 3. The recommender service when a recipe-backed meal is logged.
+4. The chat-guided recommended-recipe feedback flow after the user confirms they ate the recipe.
 
 Used by:
 
@@ -1481,6 +1487,31 @@ Flow:
 2. Use it in the next LightFM training run.
 3. Show started/completed recipes in the Diary timeline as food-history context.
 ```
+
+---
+
+## 15.6 Chat-Guided Recommended Recipe Feedback Flow
+
+Example:
+
+```text
+Recipe card play button
+```
+
+Flow:
+
+```text
+1. Open the Tamar chat panel for the selected recipe.
+2. Ask whether the user ate the recipe and wants to log it.
+3. If the user says no, stop without writing meal or health evidence.
+4. If the user says yes, call POST /api/meal-log with recipe_id, food_name, and logged_at.
+5. Record a completed recipe interaction for preference/history context.
+6. Ask whether the user liked the recipe and record liked or dismissed when clear.
+7. Ask how the user is feeling in general.
+8. Save the response through POST /api/health-report as either no-symptom feedback or digestive-discomfort feedback with notes.
+```
+
+The arrow/details control on a recipe card should only reveal recipe metadata such as ingredients and prep time. It should not log a meal. Logging a recommended recipe as eaten requires explicit chat confirmation.
 
 ---
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clock, HeartPulse, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, HeartPulse, Loader2, MessageCircle } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,19 @@ const RecipeDetail = () => {
   const ingredients = useMemo(() => normalizeList(recipe?.ingredients), [recipe]);
   const steps = useMemo(() => normalizeList(recipe?.steps), [recipe]);
 
+  const handleRecipeFeedbackChat = () => {
+    if (!recipe) return;
+
+    if (!user) {
+      toast.info("Please sign in so Tamar can save your meal feedback.");
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent("tamar:open-recipe-feedback-chat", {
+      detail: { id: recipe.id, title: recipe.title },
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-[#141414] text-white font-sans">
       <Navbar forceSolid />
@@ -117,6 +130,14 @@ const RecipeDetail = () => {
                   </span>
                 )}
               </div>
+              <Button
+                type="button"
+                onClick={handleRecipeFeedbackChat}
+                className="bg-primary hover:bg-primary/90 text-white font-bold gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Log through chat
+              </Button>
             </div>
           </section>
 

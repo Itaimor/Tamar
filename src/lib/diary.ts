@@ -74,6 +74,7 @@ export type MealLogInput = {
   userId: string;
   foodName: string;
   loggedAt: string;
+  recipeId?: number | null;
   portionSize?: number | null;
   portionUnit?: string | null;
   notes?: string | null;
@@ -265,6 +266,7 @@ export const createMealLog = async (input: MealLogInput): Promise<MealLogRow> =>
   const payload = {
     user_id: input.userId,
     food_name: input.foodName.trim(),
+    recipe_id: input.recipeId || null,
     logged_at: normalizeDate(input.loggedAt),
     portion_size: input.portionSize || null,
     portion_unit: input.portionUnit || null,
