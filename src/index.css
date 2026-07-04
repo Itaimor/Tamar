@@ -6,43 +6,43 @@
 
 @layer base {
   :root {
-    --background: 240 10% 8%;
-    --foreground: 0 0% 100%;
+    --background: 52 48% 95%;
+    --foreground: 141 25% 17%;
 
-    --card: 240 10% 10%;
-    --card-foreground: 0 0% 100%;
+    --card: 48 52% 98%;
+    --card-foreground: 141 25% 17%;
 
-    --popover: 240 10% 10%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 48 52% 98%;
+    --popover-foreground: 141 25% 17%;
 
-    --primary: 122 39% 49%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 139 38% 35%;
+    --primary-foreground: 48 52% 98%;
 
-    --secondary: 240 10% 15%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 35 36% 82%;
+    --secondary-foreground: 145 28% 18%;
 
-    --muted: 240 10% 15%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 42 38% 88%;
+    --muted-foreground: 133 15% 40%;
 
-    --accent: 122 39% 49%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 31 35% 46%;
+    --accent-foreground: 48 52% 98%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --warning: 45 93% 47%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 38 77% 51%;
+    --warning-foreground: 145 28% 18%;
 
-    --safe: 122 39% 49%;
-    --safe-foreground: 0 0% 100%;
+    --safe: 139 38% 35%;
+    --safe-foreground: 48 52% 98%;
 
     --risk-high: 0 72% 51%;
-    --risk-medium: 45 93% 47%;
-    --risk-low: 122 39% 49%;
+    --risk-medium: 38 77% 51%;
+    --risk-low: 139 38% 35%;
 
-    --border: 240 10% 15%;
-    --input: 240 10% 15%;
-    --ring: 122 39% 49%;
+    --border: 38 26% 78%;
+    --input: 40 34% 90%;
+    --ring: 139 38% 35%;
 
     --radius: 1rem;
 
@@ -68,13 +68,13 @@
 
 @layer utilities {
   .tamar-gradient {
-    background: linear-gradient(135deg, hsl(122, 39%, 49%), hsl(142, 50%, 40%));
+    background: linear-gradient(135deg, hsl(139, 38%, 35%), hsl(31, 35%, 46%));
   }
   .tamar-chip {
     @apply inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-primary text-primary-foreground cursor-pointer transition-all hover:opacity-90 active:scale-95;
   }
   .tamar-card {
-    @apply bg-card rounded-2xl border border-border p-4 shadow-sm;
+    @apply bg-card rounded-lg border border-border p-4 shadow-sm;
   }
   .chat-bubble-user {
     @apply bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3 max-w-[80%] ml-auto;
@@ -84,8 +84,96 @@
   }
 }
 
+@layer components {
+  .wellness-canvas {
+    background:
+      radial-gradient(circle at 12% 8%, hsl(88 36% 84% / 0.8), transparent 28%),
+      radial-gradient(circle at 86% 4%, hsl(36 42% 82% / 0.55), transparent 26%),
+      linear-gradient(180deg, hsl(50 57% 96%), hsl(44 42% 91%));
+  }
+
+  .digestive-line {
+    display: none !important;
+  }
+
+}
+
 @media (min-width: 1024px) {
   .tamar-chat-dock-open nav.fixed.top-0 {
     width: calc(100% - 420px);
   }
+}
+
+.wellness-tool-surface {
+  color: #1f3d2b;
+}
+
+.wellness-tool-surface .text-white {
+  color: #1f3d2b;
+}
+
+.wellness-tool-surface [class*="text-white/"] {
+  color: #667864;
+}
+
+.wellness-tool-surface .text-cyan-200,
+.wellness-tool-surface .text-cyan-100,
+.wellness-tool-surface .text-emerald-100,
+.wellness-tool-surface .text-emerald-200 {
+  color: #2f7a4b;
+}
+
+.wellness-tool-surface .text-rose-100,
+.wellness-tool-surface .text-rose-200 {
+  color: #9f4f4f;
+}
+
+.wellness-tool-surface .text-amber-100,
+.wellness-tool-surface .text-violet-100,
+.wellness-tool-surface .text-violet-200 {
+  color: #8a6b3f;
+}
+
+.wellness-tool-surface .border-white\/10,
+.wellness-tool-surface .border-white\/15 {
+  border-color: rgba(47, 122, 75, 0.16);
+}
+
+.wellness-tool-surface .bg-white\/\[0\.035\],
+.wellness-tool-surface .bg-white\/\[0\.025\],
+.wellness-tool-surface .bg-white\/\[0\.04\],
+.wellness-tool-surface .bg-white\/\[0\.045\] {
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+.wellness-tool-surface .bg-black\/20,
+.wellness-tool-surface .bg-black\/15 {
+  background-color: rgba(255, 255, 255, 0.75);
+}
+
+.wellness-tool-surface input,
+.wellness-tool-surface textarea,
+.wellness-tool-surface select {
+  color: #1f3d2b;
+}
+
+.wellness-tool-surface input::placeholder,
+.wellness-tool-surface textarea::placeholder {
+  color: rgba(83, 100, 81, 0.55);
+}
+
+.wellness-tool-surface .bg-cyan-200 {
+  background-color: #3f8d58;
+  color: #fffaf0;
+}
+
+.wellness-tool-surface .bg-rose-200 {
+  background-color: #9f6d53;
+  color: #fffaf0;
+}
+
+.wellness-tool-surface .hover\:bg-cyan-100:hover,
+.wellness-tool-surface .hover\:bg-rose-100:hover {
+  background-color: #2f7a4b;
+  color: #fffaf0;
 }
