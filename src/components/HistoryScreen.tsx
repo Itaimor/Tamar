@@ -458,7 +458,7 @@ const HistoryScreen = () => {
                   className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-rose-200/60 disabled:opacity-50"
                 >
                   {symptomOptions.map((option) => (
-                    <option key={option.value} value={option.value} className="bg-[#181818]">
+                    <option key={option.value} value={option.value} className="bg-[#203629]">
                       {option.label}
                     </option>
                   ))}

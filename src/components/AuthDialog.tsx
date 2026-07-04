@@ -97,12 +97,12 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/10 bg-[#181818] text-white sm:max-w-md">
+      <DialogContent className="border-primary/15 bg-[#fbf7ec] text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl">
             {user ? "Your Tamar Account" : mode === "signup" ? "Create your account" : "Sign in"}
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-[#667864]">
             {user
               ? "Your recipe activity will be saved for future recommendations."
               : "Save your preferences and recipe history for personalized IBS-friendly recommendations."}
@@ -117,14 +117,14 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
 
         {user ? (
           <div className="space-y-4">
-            <div className="rounded-md border border-white/10 bg-white/5 p-4">
-              <p className="text-sm text-gray-400">Signed in as</p>
+            <div className="rounded-md border border-primary/10 bg-white/65 p-4">
+              <p className="text-sm text-[#667864]">Signed in as</p>
               <p className="font-semibold">{user.email}</p>
             </div>
             <Button
               type="button"
               variant="secondary"
-              className="w-full bg-white/10 text-white hover:bg-white/15"
+              className="w-full bg-secondary text-foreground hover:bg-secondary/80"
               onClick={handleSignOut}
               disabled={busy}
             >
@@ -138,7 +138,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
             <Button
               type="button"
               variant="secondary"
-              className="w-full bg-white text-black hover:bg-white/90"
+              className="w-full bg-white text-foreground hover:bg-secondary"
               onClick={handleProvider}
               disabled={busy || !configured}
             >
@@ -147,10 +147,10 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
             </Button>
           </div>
 
-          <div className="flex items-center gap-3 text-xs uppercase text-gray-500">
-            <div className="h-px flex-1 bg-white/10" />
+          <div className="flex items-center gap-3 text-xs uppercase text-[#667864]">
+            <div className="h-px flex-1 bg-primary/10" />
             <span>Email</span>
-            <div className="h-px flex-1 bg-white/10" />
+            <div className="h-px flex-1 bg-primary/10" />
           </div>
 
             <form className="space-y-4" onSubmit={handlePasswordAuth}>
@@ -163,7 +163,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
                     onChange={(event) => setFullName(event.target.value)}
                     placeholder="Your name"
                     required
-                    className="border-white/10 bg-black/20"
+                    className="border-primary/15 bg-white/70"
                   />
                 </div>
               )}
@@ -176,7 +176,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="border-white/10 bg-black/20"
+                  className="border-primary/15 bg-white/70"
                 />
               </div>
               <div className="space-y-2">
@@ -189,7 +189,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
                   placeholder="At least 6 characters"
                   minLength={6}
                   required
-                  className="border-white/10 bg-black/20"
+                  className="border-primary/15 bg-white/70"
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy || !configured}>
@@ -201,7 +201,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
             <Button
               type="button"
               variant="ghost"
-              className="w-full text-gray-300 hover:bg-white/5 hover:text-white"
+              className="w-full text-[#536451] hover:bg-primary/10 hover:text-primary"
               onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
             >
               {mode === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}

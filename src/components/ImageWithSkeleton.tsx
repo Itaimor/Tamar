@@ -53,7 +53,7 @@ export const ImageWithSkeleton = ({
       {!loaded && !error && (
         <Skeleton
           className={cn(
-            "absolute inset-0 w-full h-full bg-zinc-800/80 animate-pulse rounded-none",
+            "absolute inset-0 w-full h-full bg-secondary/80 animate-pulse rounded-none",
             skeletonClassName
           )}
         />
@@ -72,7 +72,7 @@ export const ImageWithSkeleton = ({
         {...props}
       />
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#181818] border border-white/5 text-gray-500 font-medium text-xs text-center p-2">
+        <div className="absolute inset-0 flex items-center justify-center bg-secondary border border-primary/10 text-[#667864] font-medium text-xs text-center p-2">
           Image not available
         </div>
       )}

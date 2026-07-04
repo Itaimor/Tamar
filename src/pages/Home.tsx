@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { Play, Plus, Info, ChevronRight, ChevronLeft, Check, Heart, X, Sparkles } from "lucide-react";
+import { Play, Plus, Info, ChevronRight, ChevronLeft, Check, Heart, X, Sparkles, HeartPulse, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -483,32 +483,35 @@ const Home = () => {
     "Experience the vibrant flavors of the Mediterranean with our signature Harvest Bowl. A perfect harmony of nutty quinoa, roasted spiced chickpeas, and a zesty tahini-lemon drizzle.";
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white font-sans selection:bg-primary selection:text-white overflow-x-hidden">
+    <div className="wellness-canvas min-h-screen text-foreground font-sans selection:bg-primary selection:text-white overflow-x-hidden">
       <Navbar />
 
       {/* Hero Section */}
-      <div className="relative h-[85vh] min-h-[600px] md:min-h-[750px] w-full">
+      <div className="relative h-auto min-h-[560px] md:min-h-[620px] w-full overflow-hidden pt-24 md:pt-28">
         {heroRecipe ? (
           <>
-            <ImageWithSkeleton
-              src={heroRecipe.image}
-              alt={heroTitle}
-              className="w-full h-full object-cover"
-              skeletonClassName="bg-zinc-900 rounded-none animate-pulse"
-            />
-            {/* Gradients to blend image */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
-
-            <div className="absolute bottom-32 md:bottom-48 left-4 md:left-12 max-w-2xl animate-in fade-in slide-in-from-left-8 duration-1000">
+            <div className="absolute right-8 top-28 z-10 hidden h-[440px] max-h-[68%] w-[38%] rounded-[2rem] bg-white/45 p-3 shadow-2xl shadow-primary/10 md:block xl:w-[36%]">
+              <ImageWithSkeleton
+                src={heroRecipe.image}
+                alt={heroTitle}
+                className="h-full w-full rounded-[1.5rem] object-contain opacity-100"
+                skeletonClassName="bg-secondary rounded-[1.5rem] animate-pulse"
+              />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#fbf7ec] via-[#fbf7ec] md:via-[#fbf7ec] md:to-[#fbf7ec]/62" />
+            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#f1eadb] to-transparent" />
+            <div className="relative z-10 ml-4 max-w-[calc(100%-2rem)] pb-20 pt-28 md:ml-12 md:max-w-[46%] md:pb-28 md:pt-28 xl:max-w-[50%] animate-in fade-in slide-in-from-left-8 duration-1000">
               <div className="flex items-center gap-2 mb-4">
-                <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Featured</span>
-                <span className="text-gray-300 text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
+                <span className="inline-flex items-center gap-1.5 bg-white/75 text-primary border border-primary/25 text-[10px] uppercase font-bold px-2 py-1 rounded-full shadow-sm">
+                  <HeartPulse className="h-3 w-3" />
+                  Gut-aware pick
+                </span>
+                <span className="text-[#667864] text-xs font-semibold tracking-widest uppercase">Recipe of the Day</span>
               </div>
-              <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight">
+              <h2 className="[overflow-wrap:anywhere] text-4xl sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-black mb-4 md:mb-6 tracking-tight leading-tight text-[#1f3d2b]">
                 {heroTitle}
               </h2>
-              <p className="text-sm sm:text-base md:text-lg text-gray-200 mb-6 md:mb-8 font-medium max-w-lg leading-relaxed">
+              <p className="text-sm sm:text-base md:text-lg text-[#536451] mb-6 md:mb-8 font-medium max-w-xl leading-relaxed">
                 {getFirstNSentences(heroDescription, 4)}
               </p>
               <div className="flex flex-wrap gap-4">
@@ -519,14 +522,14 @@ const Home = () => {
                       title: heroTitle,
                     })
                   }
-                  className="bg-white text-black hover:bg-white/90 gap-3 px-5 py-4 text-sm md:px-8 md:py-6 md:text-lg font-bold transition-all hover:scale-105 active:scale-95"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gap-3 px-5 py-4 text-sm md:px-8 md:py-6 md:text-lg font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
                 >
                   <Play className="fill-current w-4 h-4 md:w-5 md:h-5" /> Start Cooking
                 </Button>
                 <Button
                   onClick={() => navigate(`/recipes/${heroRecipe.id}`)}
                   variant="secondary"
-                  className="bg-gray-500/40 text-white hover:bg-gray-500/60 gap-3 px-5 py-4 text-sm md:px-8 md:py-6 md:text-lg font-bold backdrop-blur-xl border border-white/10 transition-all hover:scale-105 active:scale-95"
+                  className="bg-white/80 text-primary hover:bg-white gap-3 px-5 py-4 text-sm md:px-8 md:py-6 md:text-lg font-bold backdrop-blur-xl border border-primary/15 transition-all hover:scale-105 active:scale-95"
                 >
                   <Info className="w-4 h-4 md:w-5 md:h-5" /> More Info
                 </Button>
@@ -534,24 +537,24 @@ const Home = () => {
             </div>
           </>
         ) : (
-          <div className="absolute inset-0 bg-[#181818] animate-pulse">
-            <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
+          <div className="absolute inset-0 bg-secondary animate-pulse">
+            <div className="absolute inset-0 bg-gradient-to-t from-[#f1eadb] via-[#fbf7ec]/20 to-transparent" />
             <div className="absolute bottom-32 md:bottom-48 left-4 md:left-12 w-full max-w-2xl pr-8 space-y-6">
               <div className="flex items-center gap-2">
-                <div className="h-5 w-20 bg-zinc-800 rounded-sm" />
-                <div className="h-4 w-32 bg-zinc-800 rounded-sm" />
+                <div className="h-5 w-20 bg-primary/10 rounded-sm" />
+                <div className="h-4 w-32 bg-primary/10 rounded-sm" />
               </div>
               <div className="space-y-3">
-                <div className="h-14 w-3/4 bg-zinc-800 rounded-md" />
-                <div className="h-14 w-1/2 bg-zinc-800 rounded-md" />
+                <div className="h-14 w-3/4 bg-primary/10 rounded-md" />
+                <div className="h-14 w-1/2 bg-primary/10 rounded-md" />
               </div>
               <div className="space-y-2">
-                <div className="h-5 w-5/6 bg-zinc-800 rounded-sm" />
-                <div className="h-5 w-2/3 bg-zinc-800 rounded-sm" />
+                <div className="h-5 w-5/6 bg-primary/10 rounded-sm" />
+                <div className="h-5 w-2/3 bg-primary/10 rounded-sm" />
               </div>
               <div className="flex gap-4 pt-4">
-                <div className="h-12 w-36 bg-zinc-800 rounded-lg" />
-                <div className="h-12 w-36 bg-zinc-800 rounded-lg" />
+                <div className="h-12 w-36 bg-primary/10 rounded-lg" />
+                <div className="h-12 w-36 bg-primary/10 rounded-lg" />
               </div>
             </div>
           </div>
@@ -559,7 +562,7 @@ const Home = () => {
       </div>
 
       {/* Content Rows */}
-      <div className="pb-24 -mt-20 md:-mt-32 relative z-10 space-y-12">
+      <div className="pb-24 -mt-16 md:-mt-24 relative z-10 space-y-12">
         
         {/* Active Learning Cold Start Onboarding */}
         {user && !isIbsOnboardingCompleted && (
@@ -571,15 +574,15 @@ const Home = () => {
 
         {!isOnboardingCompleted && onboardingRecipes.length > 0 && (
           <div className="max-w-xl mx-auto px-4 md:px-0 mb-12">
-            <div className="bg-[#181818] border border-white/10 rounded-2xl overflow-hidden p-6 shadow-2xl relative">
+            <div className="bg-white/82 border border-primary/15 rounded-xl overflow-hidden p-6 shadow-xl shadow-primary/10 relative backdrop-blur-md">
               <div className="flex items-center gap-2 mb-4 text-primary text-xs uppercase tracking-widest font-extrabold">
-                <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
-                <span>Personalize Your Taste</span>
+                <Leaf className="w-4 h-4 text-primary animate-pulse" />
+                <span>Personalize Your Wellness</span>
               </div>
-              <h4 className="text-xl font-bold mb-1 text-white">Help us find your preferences</h4>
-              <p className="text-gray-400 text-xs mb-6">Swipe or tap Like/Dislike to immediately generate personalized recipe recommendations.</p>
+              <h4 className="text-xl font-bold mb-1 text-[#1f3d2b]">Help Tamar learn what feels good</h4>
+              <p className="text-[#667864] text-xs mb-6">Swipe or tap Like/Dislike to shape recipes around taste, comfort, and digestion.</p>
 
-              <div className="relative aspect-video rounded-xl overflow-hidden mb-6 group border border-white/5 bg-[#141414]">
+              <div className="relative aspect-video rounded-xl overflow-hidden mb-6 group border border-primary/10 bg-secondary">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={currentMedoidIdx}
@@ -593,18 +596,18 @@ const Home = () => {
                       src={onboardingRecipes[currentMedoidIdx].image}
                       alt={onboardingRecipes[currentMedoidIdx].title}
                       className="w-full h-full object-cover"
-                      skeletonClassName="bg-zinc-800"
+                      skeletonClassName="bg-secondary"
                     />
                     {onboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
-                      <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+                      <div className="absolute inset-0 bg-primary/15 pointer-events-none" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#1f3d2b]/85 via-[#1f3d2b]/12 to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
                         Taste match {currentMedoidIdx + 1} of {onboardingRecipes.length}
                       </span>
                       <h5 className="text-lg font-bold text-white leading-tight">{onboardingRecipes[currentMedoidIdx].title}</h5>
-                      <p className="text-gray-400 text-xs mt-0.5">Cook Time: {onboardingRecipes[currentMedoidIdx].time}</p>
+                      <p className="text-white/75 text-xs mt-0.5">Cook Time: {onboardingRecipes[currentMedoidIdx].time}</p>
                     </div>
                   </motion.div>
                 </AnimatePresence>
@@ -615,7 +618,7 @@ const Home = () => {
                   type="button"
                   onClick={() => handleSwipe(false)}
                   disabled={onboardingBusy}
-                  className="flex-1 py-3 px-4 rounded-xl border border-red-500/30 hover:border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  className="flex-1 py-3 px-4 rounded-xl border border-[#c98f7b]/35 hover:border-[#b87361] bg-[#f7e9df] text-[#9f5f4f] hover:bg-[#f1dccf] font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <X className="w-4 h-4" /> Dislike
                 </button>
@@ -623,7 +626,7 @@ const Home = () => {
                   type="button"
                   onClick={handleSkipOnboarding}
                   disabled={onboardingBusy}
-                  className="py-3 px-4 rounded-xl border border-white/10 hover:border-white/20 text-gray-400 hover:text-white text-xs font-semibold transition-all cursor-pointer"
+                  className="py-3 px-4 rounded-xl border border-primary/15 hover:border-primary/30 text-[#667864] hover:text-primary text-xs font-semibold transition-all cursor-pointer"
                 >
                   Skip
                 </button>
@@ -631,7 +634,7 @@ const Home = () => {
                   type="button"
                   onClick={() => handleSwipe(true)}
                   disabled={onboardingBusy}
-                  className="flex-1 py-3 px-4 rounded-xl border border-green-500/30 hover:border-green-500 bg-green-500/10 text-green-400 hover:bg-green-500/20 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  className="flex-1 py-3 px-4 rounded-xl border border-primary/25 hover:border-primary/45 bg-primary/10 text-primary hover:bg-primary/15 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <Heart className="w-4 h-4 fill-current" /> Like
                 </button>
@@ -642,7 +645,7 @@ const Home = () => {
                   <div 
                     key={idx} 
                     className={`h-1.5 rounded-full transition-all duration-300 ${
-                      idx === currentMedoidIdx ? "w-6 bg-primary" : "w-1.5 bg-gray-600"
+                      idx === currentMedoidIdx ? "w-6 bg-primary" : "w-1.5 bg-primary/20"
                     }`} 
                   />
                 ))}
@@ -654,15 +657,15 @@ const Home = () => {
         {sections.map((section, idx) => (
           <div key={idx} className="pl-4 md:pl-12 group/row">
             <div className="flex items-center justify-between pr-4 md:pr-12 mb-3">
-              <h3 className="text-xl md:text-2xl font-bold text-white/90 group-hover/row:text-white transition-colors flex items-center gap-2">
+              <h3 className="text-xl md:text-2xl font-bold text-[#1f3d2b] transition-colors flex items-center gap-2">
                 {section.title}
-                <ChevronRight className="w-5 h-5 opacity-0 group-hover/row:opacity-100 transition-all -ml-2 group-hover/row:ml-0" />
+                <ChevronRight className="w-5 h-5 text-primary/60 opacity-0 group-hover/row:opacity-100 transition-all -ml-2 group-hover/row:ml-0" />
               </h3>
               {section.title === "Curated for You" && isOnboardingCompleted && (
                 <button
                   type="button"
                   onClick={handleResetOnboarding}
-                  className="text-xs text-primary/70 hover:text-primary transition-all flex items-center gap-1 font-semibold border border-primary/20 hover:border-primary/50 px-2.5 py-1 rounded bg-[#141414] cursor-pointer"
+                  className="text-xs text-primary/80 hover:text-primary transition-all flex items-center gap-1 font-semibold border border-primary/20 hover:border-primary/50 px-2.5 py-1 rounded bg-white/70 cursor-pointer"
                 >
                   <Sparkles className="w-3 h-3 text-yellow-400 fill-yellow-400" />
                   Retrain Taste
@@ -674,7 +677,7 @@ const Home = () => {
               {/* Left Scroll Button */}
               <button
                 onClick={() => handleScroll(idx, "left")}
-                className={`absolute left-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-r-md ${
+                className={`absolute left-0 top-0 bottom-6 z-40 bg-white/85 hover:bg-white text-primary w-12 items-center justify-center transition-all duration-300 hidden md:flex cursor-pointer border border-primary/10 backdrop-blur-sm rounded-r-md shadow-sm ${
                   scrollStates[idx]?.canScrollLeft
                     ? "opacity-0 group-hover/carousel:opacity-100 pointer-events-auto"
                     : "opacity-0 pointer-events-none"
@@ -687,7 +690,7 @@ const Home = () => {
               {/* Right Scroll Button */}
               <button
                 onClick={() => handleScroll(idx, "right")}
-                className={`absolute right-0 top-0 bottom-6 z-40 bg-black/45 hover:bg-black/70 text-white w-12 items-center justify-center transition-all duration-300 hidden md:flex cursor-pointer border-none backdrop-blur-sm rounded-l-md ${
+                className={`absolute right-0 top-0 bottom-6 z-40 bg-white/85 hover:bg-white text-primary w-12 items-center justify-center transition-all duration-300 hidden md:flex cursor-pointer border border-primary/10 backdrop-blur-sm rounded-l-md shadow-sm ${
                   scrollStates[idx]?.canScrollRight !== false
                     ? "opacity-0 group-hover/carousel:opacity-100 pointer-events-auto"
                     : "opacity-0 pointer-events-none"
@@ -713,84 +716,91 @@ const Home = () => {
                     return (
                     <div
                       key={item.id}
-                      className="flex-none w-[220px] md:w-[320px] aspect-video relative group cursor-pointer rounded-sm overflow-hidden transition-all duration-300 hover:scale-110 hover:z-30 shadow-2xl"
+                      className="flex-none w-[220px] md:w-[320px] aspect-[4/3] relative group cursor-pointer rounded-lg overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:z-30 bg-white border border-primary/10 shadow-md shadow-primary/10"
                       onClick={() => handleRecipeDetails(item)}
                     >
                       <ImageWithSkeleton
                         src={item.image}
                         alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        skeletonClassName="bg-zinc-800"
+                        className="absolute inset-x-0 top-0 h-[68%] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        skeletonClassName="bg-secondary"
                       />
                       {(item.image === "/images/empty_plate.png" || !item.image) && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                          <span className="text-4xl font-extrabold text-white bg-black/70 px-4 py-2 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+                        <div className="absolute inset-x-0 top-0 flex h-[68%] items-center justify-center bg-primary/10 pointer-events-none">
+                          <span className="text-4xl font-extrabold text-primary bg-white/80 px-4 py-2 rounded-xl border border-primary/20 shadow-lg tracking-wider">
                             #{item.id}
                           </span>
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <button
-                            type="button"
-                            aria-label={`Open meal feedback chat for ${item.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleRecipeFeedbackChat(item);
-                            }}
-                            className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
-                          >
-                            <Play className="fill-black text-black w-4 h-4 ml-0.5" />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={savedRecipeIds.includes(String(item.id)) ? `Remove ${item.title} from cookbook` : `Save ${item.title} to cookbook`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleToggleSave(item);
-                            }}
-                            className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer ${savedRecipeIds.includes(String(item.id))
-                                ? "bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600"
-                                : "border-gray-400 hover:border-white"
-                              }`}
-                          >
-                            {savedRecipeIds.includes(String(item.id)) ? (
-                              <Check className="text-white w-4 h-4" />
-                            ) : (
-                              <Plus className="text-white w-4 h-4" />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={isExpanded ? `Hide details for ${item.title}` : `Show ingredients and prep time for ${item.title}`}
-                            aria-expanded={isExpanded}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setExpandedRecipeCardId((current) => current === item.id ? null : item.id);
-                            }}
-                            className="ml-auto w-8 h-8 border-2 border-gray-400 rounded-full flex items-center justify-center hover:border-white transition-colors"
-                          >
-                            <ChevronRight className={`text-white w-4 h-4 transition-transform ${isExpanded ? "-rotate-90" : "rotate-90"}`} />
-                          </button>
-                        </div>
-                        {isExpanded && (
-                          <div className="mb-2 rounded bg-black/60 border border-white/10 p-2 text-[10px] md:text-xs text-gray-200">
-                            <div className="flex items-center justify-between gap-2 font-bold text-white">
-                              <span>Prep time</span>
-                              <span>{item.time || "15m"}</span>
-                            </div>
-                            <p className="mt-1 text-gray-300 line-clamp-2">
-                              {visibleIngredients.length > 0
-                                ? visibleIngredients.join(", ")
-                                : "Ingredients available on the recipe page"}
-                            </p>
+                      <div className="absolute left-3 right-3 top-[calc(68%-2.75rem)] z-10 flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label={`Open meal feedback chat for ${item.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleRecipeFeedbackChat(item);
+                          }}
+                          className="w-8 h-8 rounded-full border-2 border-primary/70 bg-white/95 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors shadow-md shadow-primary/15 backdrop-blur"
+                        >
+                          <Play className="fill-current w-4 h-4 ml-0.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={savedRecipeIds.includes(String(item.id)) ? `Remove ${item.title} from cookbook` : `Save ${item.title} to cookbook`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleSave(item);
+                          }}
+                          className={`w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors cursor-pointer shadow-md shadow-primary/15 backdrop-blur ${savedRecipeIds.includes(String(item.id))
+                              ? "border-primary bg-primary text-white hover:bg-primary/90"
+                              : "border-primary/70 bg-white/95 text-primary hover:bg-primary/10"
+                            }`}
+                        >
+                          {savedRecipeIds.includes(String(item.id)) ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Plus className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={isExpanded ? `Hide details for ${item.title}` : `Show ingredients and prep time for ${item.title}`}
+                          aria-expanded={isExpanded}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedRecipeCardId((current) => current === item.id ? null : item.id);
+                          }}
+                          className={`ml-auto w-8 h-8 border-2 rounded-full flex items-center justify-center transition-colors shadow-md shadow-primary/15 backdrop-blur ${
+                            isExpanded
+                              ? "border-primary bg-primary text-white"
+                              : "border-primary/70 bg-white/95 text-primary hover:bg-primary/10"
+                          }`}
+                        >
+                          <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? "-rotate-90" : "rotate-90"}`} />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="absolute left-3 right-3 top-[calc(68%-5.75rem)] z-10 rounded-lg border border-primary/15 bg-white/90 p-2 text-[10px] text-[#536451] shadow-lg shadow-primary/15 backdrop-blur md:text-xs">
+                          <div className="flex items-center justify-between gap-2 font-bold text-[#1f3d2b]">
+                            <span>Prep time</span>
+                            <span>{item.time || "15m"}</span>
                           </div>
-                        )}
-                        <p className="font-bold text-sm md:text-base mb-1">{item.title}</p>
-                        <div className="flex items-center gap-2 text-[10px] font-bold">
-                          <span className="text-green-500">{item.match || "95%"} Match</span>
-                          <span className="border border-gray-500 px-1 rounded-sm text-gray-400">HD</span>
-                          <span className="text-gray-400">{item.time || "15m"}</span>
+                          <p className="mt-1 text-[#667864] line-clamp-2">
+                            {visibleIngredients.length > 0
+                              ? visibleIngredients.join(", ")
+                              : "Ingredients available on the recipe page"}
+                          </p>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 top-[68%] bg-white/96 px-3 pb-3 pt-4 text-[#1f3d2b] transition-all duration-300">
+                        <p className="line-clamp-2 [overflow-wrap:anywhere] font-bold text-xs md:text-sm leading-snug mb-1">{item.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold">
+                          <span className="shrink-0 text-primary">{item.match || "95%"} Match</span>
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-1.5 md:px-2 py-0.5 text-[#536451]">
+                            <Leaf className="h-3 w-3 text-primary" />
+                            gentle
+                          </span>
+                          <span className="shrink-0 text-[#667864]">{item.time || "15m"}</span>
                         </div>
                       </div>
                     </div>
@@ -800,7 +810,7 @@ const Home = () => {
                   Array.from({ length: 5 }).map((_, sIdx) => (
                     <div
                       key={sIdx}
-                      className="flex-none w-[220px] md:w-[320px] aspect-video relative rounded-sm overflow-hidden bg-zinc-900 animate-pulse border border-white/5"
+                      className="flex-none w-[220px] md:w-[320px] aspect-[4/3] relative rounded-lg overflow-hidden bg-white/70 animate-pulse border border-primary/10"
                     />
                   ))
                 )}
@@ -811,9 +821,9 @@ const Home = () => {
       </div>
 
       {/* Footer */}
-      <footer className="px-4 md:px-12 py-20 bg-[#141414] border-t border-white/5 text-gray-500 text-sm">
+      <footer className="px-4 md:px-12 py-20 bg-[#efe5d3] border-t border-primary/10 text-[#667864] text-sm">
         <div className="max-w-4xl mx-auto text-center space-y-4">
-          <p className="text-lg md:text-xl font-light italic text-gray-400 leading-relaxed">
+          <p className="text-lg md:text-xl font-light italic text-[#536451] leading-relaxed">
             "If you are what you eat, then I only want to eat the good stuff" (Remy, Ratatouille)
           </p>
           <p className="mt-8 text-xs">© 2026-2027 Tamar Food, Inc.</p>

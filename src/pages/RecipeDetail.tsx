@@ -74,13 +74,13 @@ const RecipeDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white font-sans">
+    <div className="wellness-canvas min-h-screen text-foreground font-sans">
       <Navbar forceSolid />
 
       {loading ? (
         <main className="min-h-screen flex flex-col items-center justify-center px-4">
           <Loader2 className="w-12 h-12 text-primary animate-spin" />
-          <p className="mt-4 text-gray-400">Preparing the recipe...</p>
+          <p className="mt-4 text-[#667864]">Preparing the recipe...</p>
         </main>
       ) : !recipe ? (
         <main className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
@@ -96,35 +96,35 @@ const RecipeDetail = () => {
               src={recipe.image}
               alt={recipe.title}
               className="absolute inset-0 w-full h-full object-cover"
-              skeletonClassName="bg-zinc-900 rounded-none animate-pulse"
+              skeletonClassName="bg-secondary rounded-none animate-pulse"
             />
             {(recipe.image === "/images/empty_plate.png" || !recipe.image) && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <span className="text-6xl font-extrabold text-white bg-black/75 px-6 py-3 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+              <div className="absolute inset-0 flex items-center justify-center bg-primary/10">
+                <span className="text-6xl font-extrabold text-primary bg-white/80 px-6 py-3 rounded-xl border border-primary/20 shadow-2xl tracking-wider">
                   #{recipe.id}
                 </span>
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/55 to-black/20" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#fbf7ec] via-[#fbf7ec]/78 to-[#fbf7ec]/18" />
             <div className="relative z-10 w-full px-4 md:px-12 pb-10 max-w-5xl">
               <button
                 type="button"
                 onClick={() => navigate(-1)}
-                className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors"
+                className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-[#536451] hover:text-primary transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back
               </button>
-              <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight mb-4">
+              <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight mb-4 text-[#1f3d2b]">
                 {recipe.title}
               </h2>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300 mb-7">
-                <span className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-[#536451] mb-7">
+                <span className="inline-flex items-center gap-2 rounded-md border border-primary/15 bg-white/70 px-3 py-2">
                   <Clock className="w-4 h-4 text-primary" />
                   {recipe.time || "15m"}
                 </span>
                 {recipe.is_ibs_friendly && (
-                  <span className="inline-flex items-center gap-2 rounded-md border border-green-500/20 bg-green-500/10 px-3 py-2 text-green-300">
+                  <span className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-primary">
                     <HeartPulse className="w-4 h-4" />
                     IBS-friendly
                   </span>
@@ -142,10 +142,10 @@ const RecipeDetail = () => {
           </section>
 
           <section className="px-4 md:px-12 max-w-6xl mt-8 grid grid-cols-1 lg:grid-cols-[minmax(240px,360px)_1fr] gap-8">
-            <aside className="lg:sticky lg:top-28 self-start rounded-lg border border-white/10 bg-[#181818] p-6">
+            <aside className="lg:sticky lg:top-28 self-start rounded-lg border border-primary/15 bg-white/82 p-6 shadow-sm">
               <h3 className="text-xl font-extrabold mb-4">Ingredients</h3>
               {ingredients.length > 0 ? (
-                <ul className="space-y-3 text-gray-200">
+                <ul className="space-y-3 text-[#536451]">
                   {ingredients.map((ingredient, index) => (
                     <li key={`${ingredient}-${index}`} className="flex gap-3 leading-relaxed">
                       <span className="mt-2 h-2 w-2 flex-none rounded-full bg-primary" />
@@ -154,13 +154,13 @@ const RecipeDetail = () => {
                   ))}
                 </ul>
               ) : (
-                <p className="text-gray-400 leading-relaxed">
+                <p className="text-[#667864] leading-relaxed">
                   Ingredients are not available for this recipe yet.
                 </p>
               )}
             </aside>
 
-            <article className="rounded-lg border border-white/10 bg-[#181818] p-6 md:p-8">
+            <article className="rounded-lg border border-primary/15 bg-white/82 p-6 md:p-8 shadow-sm">
               <h3 className="text-2xl font-extrabold mb-6">Directions</h3>
               {steps.length > 0 ? (
                 <ol className="space-y-6">
@@ -169,12 +169,12 @@ const RecipeDetail = () => {
                       <span className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-extrabold">
                         {index + 1}
                       </span>
-                      <p className="text-gray-100 leading-relaxed pt-1.5">{capitalizeFirstWord(step)}</p>
+                      <p className="text-[#3e4f3d] leading-relaxed pt-1.5">{capitalizeFirstWord(step)}</p>
                     </li>
                   ))}
                 </ol>
               ) : (
-                <p className="text-gray-400 leading-relaxed">
+                <p className="text-[#667864] leading-relaxed">
                   Directions are not available for this recipe yet.
                 </p>
               )}

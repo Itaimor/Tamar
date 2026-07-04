@@ -153,7 +153,7 @@ const PatternChart = ({ dashboard }: { dashboard: AnalysisDashboard }) => {
           <YAxis tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 11 }} axisLine={false} tickLine={false} />
           <Tooltip
             contentStyle={{
-              background: "#181818",
+              background: "#203629",
               border: "1px solid rgba(255,255,255,0.12)",
               borderRadius: 8,
               color: "white",
@@ -267,7 +267,7 @@ const AnalysisScreen = () => {
               background: `conic-gradient(#fb7185 ${Math.round(topScore * 360)}deg, rgba(255,255,255,0.08) 0deg)`,
             }}
           >
-            <div className="grid h-12 w-12 place-items-center rounded-full bg-[#181818]">
+            <div className="grid h-12 w-12 place-items-center rounded-full bg-[#203629]">
               <span className="text-sm font-semibold text-white">{topScoreLabel}</span>
             </div>
           </div>

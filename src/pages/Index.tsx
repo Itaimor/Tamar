@@ -33,7 +33,7 @@ const Index = () => {
   const copy = tabCopy[activeTab];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#141414] text-white">
+    <div className="wellness-canvas min-h-screen flex flex-col text-foreground">
       <Navbar forceSolid />
       
       <main className="flex-1 pt-24 pb-12 overflow-hidden flex flex-col">
@@ -41,14 +41,18 @@ const Index = () => {
           {/* Header area for the specific tool */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold tracking-tight">{copy.title}</h2>
-            <p className="text-gray-400 mt-2">
+            <p className="text-[#667864] mt-2">
               {copy.description}
             </p>
           </div>
 
-          <div className="flex-1 min-h-0 bg-[#181818] rounded-xl border border-white/5 shadow-2xl overflow-hidden flex flex-col">
+          <div className={`flex-1 min-h-0 rounded-xl border shadow-xl overflow-hidden flex flex-col ${
+            activeTab === "chat"
+              ? "border-primary/20 bg-[#203629] shadow-primary/15"
+              : "wellness-tool-surface border-primary/15 bg-white/82 shadow-primary/10"
+          }`}>
             {activeTab === "chat" && <ChatScreen />}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 overflow-y-auto custom-scrollbar" data-digestive-scroll-container>
               {activeTab === "analysis" && <div className="p-6"><AnalysisScreen /></div>}
               {activeTab === "diary" && <div className="p-6"><HistoryScreen /></div>}
             </div>
@@ -61,14 +65,14 @@ const Index = () => {
           width: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #181818;
+          background: #efe5d3;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #333;
+          background: #9baa8d;
           border-radius: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #444;
+          background: #6f8269;
         }
       `}</style>
     </div>

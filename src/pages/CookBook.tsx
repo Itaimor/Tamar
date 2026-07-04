@@ -10,6 +10,14 @@ import { getRecipeById, fetchRecipesByIds, RecipeItem } from "@/lib/recipes";
 import AuthDialog from "@/components/AuthDialog";
 import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
+const formatSavedDate = (value: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+
 const CookBook = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -92,7 +100,7 @@ const CookBook = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white font-sans overflow-x-hidden flex flex-col">
+    <div className="wellness-canvas min-h-screen text-foreground font-sans overflow-x-hidden flex flex-col">
       <Navbar forceSolid />
 
       <main className="flex-1 pt-28 pb-20 px-4 md:px-12 max-w-7xl mx-auto w-full flex flex-col">
@@ -103,8 +111,8 @@ const CookBook = () => {
               <BookOpen className="w-9 h-9 text-primary" />
               My CookBook
             </h2>
-            <p className="text-gray-400 mt-2 text-base">
-              A curated collection of your saved recipes and culinary adventures.
+            <p className="text-[#667864] mt-2 text-base">
+              A calmer collection of meals you want to cook, revisit, and understand.
             </p>
           </div>
         </div>
@@ -113,16 +121,16 @@ const CookBook = () => {
         {authLoading || loading ? (
           <div className="flex-1 flex flex-col items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
-            <p className="text-gray-400 mt-4 animate-pulse">Gathering your recipes...</p>
+            <p className="text-[#667864] mt-4 animate-pulse">Gathering your recipes...</p>
           </div>
         ) : !user ? (
           /* Unauthenticated State */
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-[#181818]/60 border border-white/5 rounded-2xl p-8 backdrop-blur-md shadow-2xl max-w-xl mx-auto my-12">
-            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10 text-primary">
+          <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-white/80 border border-primary/15 rounded-xl p-8 backdrop-blur-md shadow-xl shadow-primary/10 max-w-xl mx-auto my-12">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6 border border-primary/15 text-primary">
               <BookOpen className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold mb-3">Save Your Cooking Inspiration</h3>
-            <p className="text-gray-400 max-w-md mb-8 leading-relaxed">
+            <p className="text-[#667864] max-w-md mb-8 leading-relaxed">
               Create a free account to start saving recipes, tracking your cooking history, and receiving personalized recommendations.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
@@ -135,7 +143,7 @@ const CookBook = () => {
               <Button
                 variant="outline"
                 onClick={() => navigate("/")}
-                className="border-white/20 text-white hover:bg-white/5 font-semibold px-8 py-6 text-base rounded-lg"
+                className="border-primary/20 text-primary hover:bg-primary/10 font-semibold px-8 py-6 text-base rounded-lg"
               >
                 Explore Recipes
               </Button>
@@ -143,12 +151,12 @@ const CookBook = () => {
           </div>
         ) : savedRecipes.length === 0 ? (
           /* Empty State */
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-[#181818]/40 border border-white/5 rounded-2xl p-8 backdrop-blur-md shadow-2xl max-w-xl mx-auto my-12">
+          <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-white/80 border border-primary/15 rounded-xl p-8 backdrop-blur-md shadow-xl shadow-primary/10 max-w-xl mx-auto my-12">
             <div className="w-16 h-16 bg-primary/10 border border-primary/20 rounded-full flex items-center justify-center mb-6 text-primary">
               <BookOpen className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold mb-3">Your CookBook is Empty</h3>
-            <p className="text-gray-400 max-w-md mb-8 leading-relaxed">
+            <p className="text-[#667864] max-w-md mb-8 leading-relaxed">
               You haven't saved any recipes yet. Browse our selection and click the "+" icon to start building your personal cookbook!
             </p>
             <Button
@@ -166,7 +174,7 @@ const CookBook = () => {
               return (
                 <div
                   key={item.id}
-                  className="bg-[#181818] rounded-xl border border-white/5 overflow-hidden relative group cursor-pointer transition-all duration-300 hover:scale-105 hover:z-20 hover:shadow-[0_0_30px_rgba(229,9,20,0.15)] flex flex-col"
+                  className="bg-white rounded-lg border border-primary/10 overflow-hidden relative group cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:z-20 hover:shadow-xl hover:shadow-primary/15 flex flex-col"
                   onClick={() => handleRecipeDetails(item.recipe_id)}
                 >
                   <div className="aspect-video w-full relative overflow-hidden">
@@ -174,17 +182,17 @@ const CookBook = () => {
                       src={recipeDetails.image}
                       alt={item.recipe_title}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      skeletonClassName="bg-zinc-800"
+                      skeletonClassName="bg-secondary"
                     />
                     {(recipeDetails.image === "/images/empty_plate.png" || !recipeDetails.image) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                        <span className="text-3xl font-extrabold text-white bg-black/75 px-4 py-2 rounded-xl border border-white/20 shadow-2xl tracking-wider">
+                      <div className="absolute inset-0 flex items-center justify-center bg-primary/10 pointer-events-none">
+                        <span className="text-3xl font-extrabold text-primary bg-white/80 px-4 py-2 rounded-xl border border-primary/20 shadow-lg tracking-wider">
                           #{recipeDetails.id}
                         </span>
                       </div>
                     )}
                     {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#1f3d2b]/90 via-[#1f3d2b]/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
                       <div className="flex items-center gap-2 mb-2">
                         <button
                           type="button"
@@ -193,7 +201,7 @@ const CookBook = () => {
                             event.stopPropagation();
                             handleRecipeUse(recipeDetails);
                           }}
-                          className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
+                          className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
                         >
                           <Play className="fill-black text-black w-4 h-4 ml-0.5" />
                         </button>
@@ -207,9 +215,9 @@ const CookBook = () => {
                         </button>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] font-bold">
-                        <span className="text-green-500">{recipeDetails.match || "95% Match"}</span>
-                        <span className="border border-gray-500 px-1 rounded-sm text-gray-400">HD</span>
-                        <span className="text-gray-400">{recipeDetails.time || "15m"}</span>
+                        <span className="text-emerald-200">{recipeDetails.match || "95% Match"}</span>
+                        <span className="rounded-full border border-white/25 px-2 py-0.5 text-white/80">gentle</span>
+                        <span className="text-white/75">{recipeDetails.time || "15m"}</span>
                       </div>
                     </div>
                   </div>
@@ -218,13 +226,8 @@ const CookBook = () => {
                       <h4 className="font-bold text-base line-clamp-1 mb-1 group-hover:text-primary transition-colors">
                         {item.recipe_title}
                       </h4>
-                      <p className="text-xs text-gray-500">
-                        Saved {new Date(item.created_at).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                      <p className="text-xs text-[#667864]">
+                        Saved {formatSavedDate(item.created_at)}
                       </p>
                     </div>
                   </div>
@@ -236,7 +239,7 @@ const CookBook = () => {
       </main>
 
       {/* Footer */}
-      <footer className="px-4 md:px-12 py-10 bg-[#141414] border-t border-white/5 text-gray-500 text-sm mt-auto">
+      <footer className="px-4 md:px-12 py-10 bg-[#efe5d3] border-t border-primary/10 text-[#667864] text-sm mt-auto">
         <p className="text-center text-xs">© 2026-2027 Tamar Food, Inc. All rights reserved.</p>
       </footer>
 

@@ -62,37 +62,37 @@ const IbsOnboardingCard = ({ userId, onCompleted }: IbsOnboardingCardProps) => {
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-0 mb-12">
-      <div className="bg-[#181818] border border-emerald-400/20 rounded-xl overflow-hidden p-5 md:p-6 shadow-2xl">
+      <div className="bg-white/82 border border-primary/15 rounded-xl overflow-hidden p-5 md:p-6 shadow-xl shadow-primary/10 backdrop-blur-md">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-emerald-300 text-xs uppercase tracking-widest font-extrabold mb-3">
+            <div className="flex items-center gap-2 text-primary text-xs uppercase tracking-widest font-extrabold mb-3">
               <Activity className="w-4 h-4" />
               <span>IBS Personalization</span>
             </div>
-            <h4 className="text-xl md:text-2xl font-bold text-white leading-tight">
+            <h4 className="text-xl md:text-2xl font-bold text-[#1f3d2b] leading-tight">
               Build your personal IBS ingredient table
             </h4>
-            <p className="text-gray-400 text-xs md:text-sm mt-2 max-w-2xl">
+            <p className="text-[#667864] text-xs md:text-sm mt-2 max-w-2xl">
               Tamar learns possible trigger patterns from your answers. This is not medical advice and does not diagnose IBS.
             </p>
           </div>
-          <div className="h-11 w-11 rounded-full bg-emerald-500/10 border border-emerald-400/20 flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-5 h-5 text-emerald-300" />
+          <div className="h-11 w-11 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5 text-primary" />
           </div>
         </div>
 
         <div className="mb-5">
-          <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2">
+          <div className="flex items-center justify-between text-[11px] text-[#667864] mb-2">
             <span>Question {currentIndex + 1} of {IBS_COLD_START_QUESTIONS.length}</span>
             <span>{progressPercent}%</span>
           </div>
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full bg-emerald-400 transition-all" style={{ width: `${progressPercent}%` }} />
+          <div className="h-1.5 rounded-full bg-primary/10 overflow-hidden">
+            <div className="h-full bg-primary transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
 
-        <div className="bg-[#141414] border border-white/10 rounded-lg p-4 md:p-5">
-          <p className="text-base md:text-lg font-semibold text-white leading-snug min-h-[56px]">
+        <div className="bg-secondary/55 border border-primary/10 rounded-lg p-4 md:p-5">
+          <p className="text-base md:text-lg font-semibold text-[#1f3d2b] leading-snug min-h-[56px]">
             {currentQuestion.prompt}
           </p>
 
@@ -103,10 +103,10 @@ const IbsOnboardingCard = ({ userId, onCompleted }: IbsOnboardingCardProps) => {
                 type="button"
                 disabled={isSaving}
                 onClick={() => saveAnswer(option.value)}
-                className="min-h-[72px] rounded-lg border border-white/10 hover:border-emerald-300/70 bg-white/[0.03] hover:bg-emerald-400/10 text-left px-3 py-3 transition-all disabled:opacity-50"
+                className="min-h-[72px] rounded-lg border border-primary/10 hover:border-primary/40 bg-white/65 hover:bg-primary/10 text-left px-3 py-3 transition-all disabled:opacity-50"
               >
-                <span className="block text-sm font-bold text-white">{option.label}</span>
-                <span className="block text-[11px] text-gray-400 mt-1">{option.helper}</span>
+                <span className="block text-sm font-bold text-[#1f3d2b]">{option.label}</span>
+                <span className="block text-[11px] text-[#667864] mt-1">{option.helper}</span>
               </button>
             ))}
           </div>
@@ -117,13 +117,13 @@ const IbsOnboardingCard = ({ userId, onCompleted }: IbsOnboardingCardProps) => {
             type="button"
             onClick={goBack}
             disabled={currentIndex === 0 || isSaving}
-            className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-[#667864] hover:text-primary disabled:opacity-30 transition-colors"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             Back
           </button>
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="inline-flex items-center gap-1.5 text-[11px] text-[#667864]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
             Saved only after all questions are answered
           </div>
         </div>

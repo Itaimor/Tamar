@@ -14,6 +14,7 @@ import Landing from "./pages/Landing.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ChatScreen from "@/components/ChatScreen";
+import DigestiveScrollIndicator from "@/components/DigestiveScrollIndicator";
 import type { RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { Loader2 } from "lucide-react";
 
@@ -24,10 +25,10 @@ const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#141414] text-white">
+      <div className="wellness-canvas flex min-h-screen items-center justify-center text-foreground">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-sm font-semibold text-gray-400">Loading Tamar...</p>
+          <p className="text-sm font-semibold text-[#667864]">Loading Tamar...</p>
         </div>
       </div>
     );
@@ -102,7 +103,7 @@ const AppShell = () => {
       </div>
 
       {isChatDockOpen && (
-        <aside className="fixed inset-x-3 bottom-3 top-20 z-50 rounded-2xl border border-white/10 bg-[#141414] shadow-2xl shadow-black/60 lg:inset-y-4 lg:left-auto lg:right-4 lg:w-[388px] lg:rounded-3xl">
+        <aside className="fixed inset-x-3 bottom-3 top-20 z-50 rounded-2xl border border-primary/15 bg-[#fbf7ec] shadow-2xl shadow-primary/20 lg:inset-y-4 lg:left-auto lg:right-4 lg:w-[388px] lg:rounded-3xl">
           <ChatScreen
             foodLogRequestKey={foodLogRequestKey}
             recipeFeedbackRequest={recipeFeedbackRequest}
@@ -113,6 +114,7 @@ const AppShell = () => {
       )}
 
       <FloatingChatButton onOpen={openFoodLogDock} />
+      <DigestiveScrollIndicator />
     </>
   );
 };
