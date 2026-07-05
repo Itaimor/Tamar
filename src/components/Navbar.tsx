@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Bell, User, Menu, LogOut, LogIn, Home, BookOpen, MessageSquare, BarChart3, CalendarDays, Clock3, HeartPulse, Leaf } from "lucide-react";
+import { Search, Lightbulb, User, Menu, LogOut, LogIn, Home, BookOpen, MessageSquare, BarChart3, CalendarDays, Clock3, HeartPulse, Leaf } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AuthDialog from "@/components/AuthDialog";
 import { useAuth } from "@/components/AuthProvider";
@@ -204,9 +204,9 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               <button
                 type="button"
                 className="relative rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
-                aria-label="Open notifications"
+                aria-label="Open insights"
               >
-                <Bell className="w-5 h-5" />
+                <Lightbulb className="w-5 h-5" />
                 {user && (
                   <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-[#fbf7ec]" />
                 )}
@@ -214,9 +214,9 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 rounded-lg border-primary/15 bg-[#fbf7ec] p-0 text-foreground shadow-xl shadow-primary/10">
               <div className="border-b border-primary/10 px-4 py-3">
-                <p className="text-sm font-bold text-[#1f3d2b]">Notifications</p>
+                <p className="text-sm font-bold text-[#1f3d2b]">Insights</p>
                 <p className="mt-1 text-xs text-[#667864]">
-                  {user ? "A few gentle nudges for your Tamar routine." : "Sign in to get personalized reminders."}
+                  {user ? "A few gentle ideas for your Tamar routine." : "Sign in to get personalized guidance."}
                 </p>
               </div>
               <div className="p-2">
