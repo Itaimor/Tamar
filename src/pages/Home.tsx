@@ -19,6 +19,7 @@ import {
   setRecipeCooklists,
 } from "@/lib/recipeInteractions";
 import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
+import { fetchAnalysisDashboard } from "@/lib/analysis";
 import { supabase } from "@/lib/supabase";
 import IbsOnboardingCard from "@/components/IbsOnboardingCard";
 import { fetchIbsOnboardingCompleted } from "@/lib/ibsProfile";
@@ -327,6 +328,37 @@ const Home = () => {
       queueRecipeImages(defaultRecs);
     };
     loadRecommendations();
+    const loadGentleIngredients = async () => {
+      if (!user) return;
+      const normalize = (s: string) =>
+        String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      try {
+        const dashboard = await fetchAnalysisDashboard(user.id);
+        const gentleNames = new Set(dashboard.easierFoods.map((f) => normalize(f.name)));
+        // annotate currently loaded rows with fuzzy normalization matching
+        const annotate = (list: RecipeItem[]) =>
+          list.map((r) => {
+            const ingTexts = (r.ingredients || []).map((ing) => normalize(ing));
+            const isGentle = ingTexts.some((ing) =>
+              Array.from(gentleNames).some((g) => ing.includes(g) || g.includes(ing))
+            );
+            return {
+              ...r,
+              isGentle,
+            };
+          });
+
+        setCuratedRecipes((prev) => annotate(prev));
+        setTrendingRecipes((prev) => annotate(prev));
+        setFlavorRecipes((prev) => annotate(prev));
+        setHealthyRecipes((prev) => annotate(prev));
+        setQuickRecipes((prev) => annotate(prev));
+        setOnboardingRecipes((prev) => annotate(prev));
+      } catch (error) {
+        console.error("Failed to load analysis for gentle annotations:", error);
+      }
+    };
+    loadGentleIngredients();
   }, [isColdStartSetupSkipped, user, session?.access_token, recommendationRefreshKey]);
 
   useEffect(() => {
@@ -602,13 +634,14 @@ const Home = () => {
       <div className="relative h-auto min-h-[560px] md:min-h-[620px] w-full overflow-hidden pt-24 md:pt-28">
         {heroRecipe ? (
           <>
-            <div className="absolute right-8 top-28 z-10 hidden h-[440px] max-h-[68%] w-[38%] rounded-[2rem] bg-white/45 p-3 shadow-2xl shadow-primary/10 md:block xl:w-[36%]">
+            <div className="absolute right-8 top-20 z-0 hidden h-[520px] max-h-[68%] w-[44%] rounded-[2rem] overflow-hidden border border-white/10 bg-white/10 backdrop-blur-sm md:block xl:w-[42%]">
               <ImageWithSkeleton
                 src={heroRecipe.image}
                 alt={heroTitle}
-                className="h-full w-full rounded-[1.5rem] object-contain opacity-100"
-                skeletonClassName="bg-secondary rounded-[1.5rem] animate-pulse"
+                className="h-full w-full object-cover opacity-70 saturate-[0.8]"
+                skeletonClassName="bg-secondary animate-pulse"
               />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#f8f5ec]/80 via-transparent to-[#f8f5ec]/30" />
             </div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#fbf7ec] via-[#fbf7ec] md:via-[#fbf7ec] md:to-[#fbf7ec]/62" />
             <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#f1eadb] to-transparent" />
@@ -891,27 +924,51 @@ const Home = () => {
                           <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? "-rotate-90" : "rotate-90"}`} />
                         </button>
                       </div>
-                      {isExpanded && (
-                        <div className="absolute left-3 right-3 top-[calc(68%-5.75rem)] z-10 rounded-lg border border-primary/15 bg-white/90 p-2 text-[10px] text-[#536451] shadow-lg shadow-primary/15 backdrop-blur md:text-xs">
-                          <div className="flex items-center justify-between gap-2 font-bold text-[#1f3d2b]">
-                            <span>Prep time</span>
-                            <span>{item.time || "15m"}</span>
-                          </div>
-                          <p className="mt-1 text-[#667864] line-clamp-2">
-                            {visibleIngredients.length > 0
-                              ? visibleIngredients.join(", ")
-                              : "Ingredients available on the recipe page"}
-                          </p>
-                        </div>
-                      )}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            key={`prep-overlay-${item.id}`}
+                            initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                            transition={{ duration: 0.18, ease: "easeOut" }}
+                            className="absolute left-3 right-3 top-[calc(68%-5.75rem)] z-10 rounded-lg border border-primary/15 bg-white/90 p-2 text-[10px] text-[#536451] shadow-lg shadow-primary/15 backdrop-blur md:text-xs"
+                          >
+                            <div className="flex items-start justify-between gap-2 font-bold text-[#1f3d2b]">
+                              <div>
+                                <span>Prep time</span>
+                                <div className="text-sm font-semibold text-[#1f3d2b]">{item.time || "15m"}</div>
+                              </div>
+                              <button
+                                type="button"
+                                aria-label={`Close prep time details for ${item.title}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedRecipeCardId(null);
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-primary/15 bg-white text-[#536451] shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <p className="mt-1 text-[#667864] line-clamp-2">
+                              {visibleIngredients.length > 0
+                                ? visibleIngredients.join(", ")
+                                : "Ingredients available on the recipe page"}
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       <div className="absolute inset-x-0 bottom-0 top-[68%] bg-white/96 px-3 pb-3 pt-4 text-[#1f3d2b] transition-all duration-300">
                         <p className="line-clamp-2 [overflow-wrap:anywhere] font-bold text-xs md:text-sm leading-snug mb-1">{item.title}</p>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold">
                           <span className="shrink-0 text-primary">{item.match || "95%"} Match</span>
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-1.5 md:px-2 py-0.5 text-[#536451]">
-                            <Leaf className="h-3 w-3 text-primary" />
-                            gentle
-                          </span>
+                          {item.isGentle && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-1.5 md:px-2 py-0.5 text-[#536451]">
+                              <Leaf className="h-3 w-3 text-primary" />
+                              gentle
+                            </span>
+                          )}
                           <span className="shrink-0 text-[#667864]">{item.time || "15m"}</span>
                         </div>
                       </div>
