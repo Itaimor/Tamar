@@ -1,11 +1,23 @@
 import { useRef, useState, useEffect } from "react";
 import { Play, Plus, Info, ChevronRight, ChevronLeft, Check, Heart, X, Sparkles, HeartPulse, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
-import { recordRecipeInteraction, fetchSavedRecipes, fetchTasteFeedbackCount, toggleSaveRecipe } from "@/lib/recipeInteractions";
+import {
+  Cooklist,
+  addRecipeToDefaultCooklist,
+  createCooklist,
+  fetchCooklists,
+  fetchRecipeCooklistIds,
+  fetchSavedRecipes,
+  fetchTasteFeedbackCount,
+  recordRecipeInteraction,
+  setRecipeCooklists,
+} from "@/lib/recipeInteractions";
 import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
 import { fetchAnalysisDashboard } from "@/lib/analysis";
 import { supabase } from "@/lib/supabase";
@@ -20,6 +32,7 @@ type SavedRecipeRow = {
 };
 
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
+const getColdStartGuideKey = (userId: string) => `tamar:coldStartGuide:${userId}`;
 
 const getFirstNSentences = (text: string, n: number): string => {
   if (!text) return "";
@@ -48,11 +61,24 @@ const Home = () => {
   const [onboardingRecipes, setOnboardingRecipes] = useState<RecipeItem[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
   const [isIbsOnboardingCompleted, setIsIbsOnboardingCompleted] = useState(true);
+  const [isColdStartSetupSkipped, setIsColdStartSetupSkipped] = useState(() => {
+    if (!user) return false;
+    try {
+      return window.localStorage.getItem(getColdStartGuideKey(user.id)) === "skipped";
+    } catch {
+      return false;
+    }
+  });
   const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
   const [expandedRecipeCardId, setExpandedRecipeCardId] = useState<number | null>(null);
+  const [cooklistDialogRecipe, setCooklistDialogRecipe] = useState<{ id: number; title: string } | null>(null);
+  const [cooklists, setCooklists] = useState<Cooklist[]>([]);
+  const [selectedCooklistIds, setSelectedCooklistIds] = useState<number[]>([]);
+  const [cooklistPickerLoading, setCooklistPickerLoading] = useState(false);
+  const [newCooklistName, setNewCooklistName] = useState("");
   const [cachedHeroRecipe, setCachedHeroRecipe] = useState<RecipeItem | null>(() => {
     try {
       const saved = window.localStorage.getItem(HERO_RECIPE_STORAGE_KEY);
@@ -114,7 +140,40 @@ const Home = () => {
   }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      setIsColdStartSetupSkipped(false);
+      return;
+    }
+
+    const readSkippedState = () => {
+      try {
+        setIsColdStartSetupSkipped(window.localStorage.getItem(getColdStartGuideKey(user.id)) === "skipped");
+      } catch {
+        setIsColdStartSetupSkipped(false);
+      }
+    };
+
+    const handleSkipAll = () => {
+      setIsColdStartSetupSkipped(true);
+      setIsOnboardingCompleted(true);
+      setIsIbsOnboardingCompleted(true);
+      setOnboardingRecipes([]);
+      setCurrentMedoidIdx(0);
+      setFeedback({});
+    };
+
+    readSkippedState();
+    window.addEventListener("tamar:cold-start-skip-all", handleSkipAll);
+    return () => window.removeEventListener("tamar:cold-start-skip-all", handleSkipAll);
+  }, [user]);
+
+  useEffect(() => {
     const loadIbsOnboardingStatus = async () => {
+      if (isColdStartSetupSkipped) {
+        setIsIbsOnboardingCompleted(true);
+        return;
+      }
+
       if (!user || !supabase) {
         setIsIbsOnboardingCompleted(true);
         return;
@@ -130,14 +189,14 @@ const Home = () => {
     };
 
     loadIbsOnboardingStatus();
-  }, [user]);
+  }, [isColdStartSetupSkipped, user]);
 
   useEffect(() => {
     const loadRecommendations = async () => {
       if (user && supabase) {
         try {
           const tasteFeedbackCount = await fetchTasteFeedbackCount(user.id);
-          if (tasteFeedbackCount === 0) {
+          if (tasteFeedbackCount === 0 && !isColdStartSetupSkipped) {
             const starters = await loadTasteOnboardingRecipes();
             const defaultRecs = await fetchDefaultRecipes(6);
             setOnboardingRecipes(starters);
@@ -146,6 +205,16 @@ const Home = () => {
             setCurrentMedoidIdx(0);
             setFeedback({});
             setIsOnboardingCompleted(false);
+            return;
+          }
+
+          if (tasteFeedbackCount === 0 && isColdStartSetupSkipped) {
+            setOnboardingRecipes([]);
+            setIsOnboardingCompleted(true);
+            const defaultRecs = await fetchDefaultRecipes(6);
+            setCuratedRecipes(defaultRecs);
+            updateHeroCache(defaultRecs);
+            queueRecipeImages(defaultRecs);
             return;
           }
 
@@ -290,7 +359,7 @@ const Home = () => {
       }
     };
     loadGentleIngredients();
-  }, [user, session?.access_token, recommendationRefreshKey]);
+  }, [isColdStartSetupSkipped, user, session?.access_token, recommendationRefreshKey]);
 
   useEffect(() => {
     const loadOtherSections = async () => {
@@ -316,23 +385,76 @@ const Home = () => {
 
     const isCurrentlySaved = savedRecipeIds.includes(String(item.id));
     try {
-      const isSaved = await toggleSaveRecipe({
-        userId: user.id,
-        recipeId: item.id,
-        recipeTitle: item.title,
-        isCurrentlySaved,
-      });
-
-      if (isSaved) {
+      if (!isCurrentlySaved) {
+        await addRecipeToDefaultCooklist({
+          userId: user.id,
+          recipeId: item.id,
+          recipeTitle: item.title,
+        });
         setSavedRecipeIds((prev) => [...prev, String(item.id)]);
-        toast.success(`"${item.title}" saved to your CookBook!`);
-      } else {
-        setSavedRecipeIds((prev) => prev.filter((id) => id !== String(item.id)));
-        toast.success(`"${item.title}" removed from your CookBook.`);
+        toast.success(`"${item.title}" added to Liked.`);
+        setRecommendationRefreshKey((key) => key + 1);
+        return;
       }
-      setRecommendationRefreshKey((key) => key + 1);
+
+      setCooklistDialogRecipe(item);
+      setCooklistPickerLoading(true);
+      const [lists, recipeListIds] = await Promise.all([
+        fetchCooklists(user.id),
+        fetchRecipeCooklistIds(user.id, item.id),
+      ]);
+      setCooklists(lists);
+      setSelectedCooklistIds(recipeListIds);
     } catch (error) {
       toast.error("Failed to update saved recipes. Please try again.");
+    } finally {
+      setCooklistPickerLoading(false);
+    }
+  };
+
+  const handleCooklistCheckedChange = (cooklistId: number, checked: boolean) => {
+    setSelectedCooklistIds((current) =>
+      checked ? [...new Set([...current, cooklistId])] : current.filter((id) => id !== cooklistId)
+    );
+  };
+
+  const handleCreateCooklist = async () => {
+    if (!user || !cooklistDialogRecipe || !newCooklistName.trim()) return;
+
+    try {
+      const newCooklist = await createCooklist(user.id, newCooklistName);
+      if (!newCooklist) return;
+      setCooklists((current) => [...current, newCooklist]);
+      setSelectedCooklistIds((current) => [...new Set([...current, newCooklist.id])]);
+      setNewCooklistName("");
+      toast.success(`"${newCooklist.name}" created.`);
+    } catch (error) {
+      toast.error("Failed to create cooklist.");
+    }
+  };
+
+  const handleSaveCooklistSelection = async () => {
+    if (!user || !cooklistDialogRecipe) return;
+
+    try {
+      await setRecipeCooklists({
+        userId: user.id,
+        recipeId: cooklistDialogRecipe.id,
+        recipeTitle: cooklistDialogRecipe.title,
+        cooklistIds: selectedCooklistIds,
+      });
+
+      const stillSaved = selectedCooklistIds.length > 0;
+      setSavedRecipeIds((prev) =>
+        stillSaved
+          ? [...new Set([...prev, String(cooklistDialogRecipe.id)])]
+          : prev.filter((id) => id !== String(cooklistDialogRecipe.id))
+      );
+      setCooklistDialogRecipe(null);
+      setRecommendationRefreshKey((key) => key + 1);
+      toast.success(stillSaved ? "Cooklists updated." : `"${cooklistDialogRecipe.title}" removed from your CookBook.`);
+    } catch (error) {
+      toast.error("Failed to update cooklists.");
     }
   };
 
@@ -369,29 +491,34 @@ const Home = () => {
   };
 
   const handleSkipOnboarding = async () => {
-    if (user && onboardingRecipes.length > 0) {
+    if (user) {
       try {
-        await Promise.all(
-          onboardingRecipes.map((recipe) =>
-            recordRecipeInteraction({
-              userId: user.id,
-              recipeId: recipe.id,
-              recipeTitle: recipe.title,
-              interactionType: "dismissed",
-            }),
-          ),
-        );
-      } catch (error) {
-        console.error("Failed to record skipped onboarding recipes:", error);
+        window.localStorage.setItem(getColdStartGuideKey(user.id), "skipped");
+      } catch {
+        // Storage is optional; skipping should still affect this session.
       }
     }
 
+    setIsColdStartSetupSkipped(true);
     setIsOnboardingCompleted(true);
+    setIsIbsOnboardingCompleted(true);
+    setOnboardingRecipes([]);
+    setCurrentMedoidIdx(0);
+    setFeedback({});
     setRecommendationRefreshKey((key) => key + 1);
-    toast.info("Onboarding skipped. Using general recommendations.");
+    toast.info("Setup skipped. Using general recommendations.");
   };
 
   const handleResetOnboarding = async () => {
+    if (user) {
+      try {
+        window.localStorage.setItem(getColdStartGuideKey(user.id), "started");
+      } catch {
+        // The retrain action still works even when local storage is unavailable.
+      }
+    }
+
+    setIsColdStartSetupSkipped(false);
     const starters = await loadTasteOnboardingRecipes();
     setOnboardingRecipes(starters);
     setIsOnboardingCompleted(false);
@@ -478,21 +605,6 @@ const Home = () => {
     };
   }, [sections]);
 
-  const handleRecipeUse = async (item: { id: number; title: string }) => {
-    if (user) {
-      await recordRecipeInteraction({
-        userId: user.id,
-        recipeId: item.id,
-        recipeTitle: item.title,
-        interactionType: "started",
-      });
-    } else {
-      toast.info("Sign up to save recipe activity for future recommendations.");
-    }
-
-    navigate(`/recipes/${item.id}`);
-  };
-
   const handleRecipeDetails = (item: { id: number }) => {
     navigate(`/recipes/${item.id}`);
   };
@@ -550,7 +662,7 @@ const Home = () => {
               <div className="flex flex-wrap gap-4">
                 <Button
                   onClick={() =>
-                    handleRecipeUse({
+                    handleRecipeFeedbackChat({
                       id: heroRecipe.id,
                       title: heroTitle,
                     })
@@ -765,7 +877,7 @@ const Home = () => {
                           </span>
                         </div>
                       )}
-                      <div className="absolute left-3 right-3 top-[calc(68%-2.75rem)] z-10 flex items-center gap-2">
+                      <div className="absolute left-3 right-3 top-[calc(68%-2.75rem)] z-10 flex items-center gap-2 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
                         <button
                           type="button"
                           aria-label={`Open meal feedback chat for ${item.title}`}
@@ -886,6 +998,49 @@ const Home = () => {
           <p className="mt-8 text-xs">© 2026-2027 Tamar Food, Inc.</p>
         </div>
       </footer>
+
+      <Dialog open={Boolean(cooklistDialogRecipe)} onOpenChange={(open) => !open && setCooklistDialogRecipe(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose cooklists</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+              {cooklistPickerLoading ? (
+                <div className="h-20 rounded-lg bg-secondary animate-pulse" />
+              ) : (
+                cooklists.map((cooklist) => (
+                  <label
+                    key={cooklist.id}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-primary/10 px-3 py-2 hover:bg-primary/5"
+                  >
+                    <Checkbox
+                      checked={selectedCooklistIds.includes(cooklist.id)}
+                      onCheckedChange={(checked) => handleCooklistCheckedChange(cooklist.id, checked === true)}
+                    />
+                    <span className="flex-1 text-sm font-semibold text-[#1f3d2b]">{cooklist.name}</span>
+                    {cooklist.is_default && <span className="text-xs font-bold text-primary">default</span>}
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newCooklistName}
+                onChange={(event) => setNewCooklistName(event.target.value)}
+                placeholder="New cooklist"
+                className="min-h-10 flex-1 rounded-lg border border-primary/15 bg-white px-3 text-sm outline-none focus:border-primary"
+              />
+              <Button type="button" variant="outline" onClick={handleCreateCooklist}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button type="button" className="w-full" onClick={handleSaveCooklistSelection}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar {

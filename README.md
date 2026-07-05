@@ -43,7 +43,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/pages/Landing.tsx` | Public landing page. |
 | `src/pages/Home.tsx` | Main recipe homepage with hero, recommendation rows, onboarding/taste feedback, saved-state actions, and image-fill queueing. |
 | `src/pages/RecipeDetail.tsx` | Recipe detail view with ingredients, steps, and interaction logging. |
-| `src/pages/CookBook.tsx` | Saved recipe cookbook view. |
+| `src/pages/CookBook.tsx` | Cooklist-based cookbook view for saved recipes. |
 | `src/pages/Index.tsx` | Shell for secondary tools/screens such as chat, diary, and analysis. |
 | `src/components/AuthProvider.tsx` | Supabase auth session provider and profile synchronization. |
 | `src/components/AuthDialog.tsx` | Sign-in/sign-up UI. |
@@ -59,7 +59,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | --- | --- |
 | `src/lib/supabase.ts` | Browser Supabase client setup from `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. |
 | `src/lib/recipes.ts` | Recipe fetching, mapping, deterministic match display, image fallback/category logic, and recipe image selection. See [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md). |
-| `src/lib/recipeInteractions.ts` | Reads/writes recipe interactions, saved recipes, onboarding feedback counts, and cookbook save toggles. |
+| `src/lib/recipeInteractions.ts` | Reads/writes recipe interactions, saved recipes, onboarding feedback counts, and cooklist membership helpers. |
 | `src/lib/diary.ts` | Reads and writes Diary meals/check-ins, expands chat check-in foods, and includes started/completed recipe activity. |
 | `src/lib/coldStart.ts` | Legacy/static cold-start recipe vector definitions and helper behavior. |
 | `src/lib/utils.ts` | Shared frontend utility helpers. |
@@ -108,6 +108,10 @@ The recommender architecture source of truth is [docs/IBS_Recommender_Online_Lig
 | `supabase/migrations/20260601000000_add_category_recommendation_columns.sql` | Adds category-specific recommendation columns. |
 | `supabase/migrations/20260602000000_add_recommendation_category_rows.sql` | Adds category recommendation row support. |
 | `supabase/migrations/20260702000000_create_non_nhanes_recommender_tables.sql` | Adds non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, risks, candidates, and model predictions. |
+| `supabase/migrations/20260705000000_create_cooklists.sql` | Adds user cooklists and cooklist recipe memberships with a default Liked list. |
+| `supabase/migrations/20260706000000_add_meal_images_and_personal_cooklist_recipes.sql` | Adds optional meal-log images and personal recipe metadata for cooklist recipes. |
+| `supabase/migrations/20260706000001_create_user_uploads_bucket.sql` | Creates the Supabase Storage bucket and object policies for user-uploaded meal and personal recipe images. |
+| `supabase/migrations/20260707000000_add_cookbook_recommendation_columns.sql` | Adds stored cookbook-only recommendation arrays to `user_recommendations`. |
 
 Use the project Supabase skill and the design document before changing schema, RLS, recommendation storage, or API-facing tables.
 
@@ -141,7 +145,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=...
 5. In Supabase Authentication, enable email/password, Google, and Facebook providers.
 6. Add your local URL, usually `http://127.0.0.1:8080` or `http://localhost:8080`, to the allowed redirect URLs.
 
-Recipe interactions are stored in `recipe_interactions` so they can later become recommendation signals for the "Curated for You" section.
+Recipe interactions are stored in `recipe_interactions` so they can later become recommendation signals for the "Curated for You" section. Cookbook organization lives in `cooklists` and `cooklist_recipes`; adding a catalog recipe to the default Liked cooklist also records a `saved` interaction. Personal recipes can be stored in cooklists without creating catalog recommendation events. CookBook sidebar recommendations are stored separately on `user_recommendations` and are limited to recipes already in the user's cooklists.
 
 ## Design Alignment
 

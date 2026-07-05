@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound.tsx";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ChatScreen from "@/components/ChatScreen";
 import DigestiveScrollIndicator from "@/components/DigestiveScrollIndicator";
+import ColdStartGuide from "@/components/ColdStartGuide";
 import type { RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { Loader2 } from "lucide-react";
 
@@ -42,7 +43,9 @@ const AuthGate = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppShell = () => {
+  const { user } = useAuth();
   const [isChatDockOpen, setIsChatDockOpen] = useState(false);
+  const [isColdStartGuideOpen, setIsColdStartGuideOpen] = useState(false);
   const [foodLogRequestKey, setFoodLogRequestKey] = useState(0);
   const [recipeFeedbackRequest, setRecipeFeedbackRequest] = useState<{
     key: number;
@@ -50,8 +53,38 @@ const AppShell = () => {
   } | null>(null);
   const location = useLocation();
 
+  const coldStartGuideKey = user ? `tamar:coldStartGuide:${user.id}` : null;
   const params = new URLSearchParams(location.search);
   const isFullChatPage = location.pathname === "/app" && (params.get("tab") || "chat") === "chat";
+
+  useEffect(() => {
+    if (!coldStartGuideKey) {
+      setIsColdStartGuideOpen(false);
+      return;
+    }
+
+    try {
+      setIsColdStartGuideOpen(!window.localStorage.getItem(coldStartGuideKey));
+    } catch {
+      setIsColdStartGuideOpen(false);
+    }
+  }, [coldStartGuideKey]);
+
+  const closeColdStartGuide = (status: "started" | "skipped") => {
+    if (coldStartGuideKey) {
+      try {
+        window.localStorage.setItem(coldStartGuideKey, status);
+      } catch {
+        // If storage is unavailable, the in-memory close still keeps this session moving.
+      }
+    }
+
+    setIsColdStartGuideOpen(false);
+
+    if (status === "skipped") {
+      window.dispatchEvent(new CustomEvent("tamar:cold-start-skip-all"));
+    }
+  };
 
   useEffect(() => {
     if (isFullChatPage) {
@@ -113,6 +146,11 @@ const AppShell = () => {
         </aside>
       )}
 
+      <ColdStartGuide
+        open={Boolean(user && isColdStartGuideOpen)}
+        onBegin={() => closeColdStartGuide("started")}
+        onSkip={() => closeColdStartGuide("skipped")}
+      />
       <FloatingChatButton onOpen={openFoodLogDock} />
       <DigestiveScrollIndicator />
     </>

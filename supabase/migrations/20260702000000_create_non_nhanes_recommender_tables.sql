@@ -73,6 +73,7 @@ create table if not exists public.meal_logs (
   logged_at timestamptz not null default now(),
   portion_size numeric,
   portion_unit text,
+  image_url text,
   notes text,
   created_at timestamptz not null default now()
 );

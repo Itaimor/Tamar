@@ -8,14 +8,24 @@ import { useAuth } from "@/components/AuthProvider";
 import { useChatSession } from "@/components/ChatSessionProvider";
 import type { IbsTranscriptMessage, RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { createHealthReport, createMealLog } from "@/lib/diary";
-import { recordRecipeInteraction } from "@/lib/recipeInteractions";
+import { uploadUserImage } from "@/lib/imageUploads";
+import {
+  addPersonalRecipeToCooklist,
+  fetchCookbookRecipeTitleExists,
+  fetchRecipeCooklistIds,
+  findOrCreateCooklist,
+  recordRecipeInteraction,
+  setRecipeCooklists,
+} from "@/lib/recipeInteractions";
+import { fetchDefaultRecipes, fetchRecipesByIds, type RecipeItem } from "@/lib/recipes";
+import { supabase } from "@/lib/supabase";
 import {
   applyIbsCheckInToProfile,
   summarizeIbsCheckIn,
 } from "@/lib/ibsProfile";
 import { validateIbsCheckInResult } from "@/lib/ibsRisk";
 
-const chips = ["Log Food", "How I Feel", "Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
+const chips = ["Recommend Me", "Log Food", "Add Recipe", "How I Feel", "Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
 const MAX_MODEL_HISTORY_MESSAGES = 24;
 
 type RecipeFeedbackRequest = {
@@ -36,9 +46,76 @@ const isPositive = (text: string) => /\b(liked|like|love|loved|good|great|tasty|
 const isNegative = (text: string) => /\b(disliked|didn'?t like|bad|not good|no|meh|bland|awful)\b/i.test(text);
 const soundsOkay = (text: string) => /\b(good|fine|okay|ok|great|normal|no symptoms|no pain|all good|well)\b/i.test(text);
 const soundsRough = (text: string) => /\b(pain|bloat|bloated|diarrhea|constipation|nausea|cramp|cramps|bad|rough|uncomfortable|sick)\b/i.test(text);
+const isRecommendationRequest = (text: string) =>
+  /\b(recommend|recommendation|suggest|curated for you|what should i (eat|cook|make)|give me (a )?recipe)\b/i.test(text);
+
+const extractLabeledValue = (text: string, label: string) => {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(?:^|\\n)\\s*${escapedLabel}\\s*:\\s*([^\\n]+)`, "i");
+  return text.match(pattern)?.[1]?.trim() || "";
+};
+
+type PendingCookbookAdd = {
+  stage: "confirm" | "cooklist";
+  recipeId?: string | number | null;
+  title: string;
+  imageUrl?: string | null;
+  description?: string | null;
+  afterRecipeFeedback?: RecipeFeedbackRecipe | null;
+};
+
+const stripLabeledLines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(title|recipe|cooklist|list|image|ingredients|steps|instructions|notes)\s*:/i.test(line))
+    .join("\n")
+    .trim();
+
+const parsePersonalRecipeMessage = (text: string) => {
+  const title =
+    extractLabeledValue(text, "title") ||
+    extractLabeledValue(text, "recipe") ||
+    stripLabeledLines(text).split(/\r?\n/)[0]?.trim() ||
+    text.trim();
+
+  return {
+    title,
+    cooklistName: extractLabeledValue(text, "cooklist") || extractLabeledValue(text, "list"),
+    imageUrl: extractLabeledValue(text, "image"),
+    ingredients: extractLabeledValue(text, "ingredients"),
+    instructions: extractLabeledValue(text, "steps") || extractLabeledValue(text, "instructions"),
+    description: extractLabeledValue(text, "notes"),
+  };
+};
+
+const withMatchScores = (
+  recipes: RecipeItem[],
+  scores: number[] | null | undefined,
+): RecipeItem[] =>
+  recipes.map((recipe, index) => {
+    const score = scores && scores[index] !== undefined ? scores[index] : undefined;
+    return score ? { ...recipe, match: `${Math.round(score * 100)}%` } : recipe;
+  });
+
+const formatRecommendationMessage = (recipes: RecipeItem[], personalized: boolean) => {
+  if (recipes.length === 0) {
+    return "I could not find recipe recommendations yet. Try the Home page first so Tamar can load recipes, then ask me again.";
+  }
+
+  const intro = personalized
+    ? "Here are a few from your Curated for You recommendations:"
+    : "I do not have personalized Curated for You results yet, so here are a few general picks to start with:";
+
+  const lines = recipes.slice(0, 5).map((recipe, index) => {
+    const details = [recipe.match ? `${recipe.match} match` : null, recipe.time].filter(Boolean).join(", ");
+    return `${index + 1}. ${recipe.title}${details ? ` (${details})` : ""}`;
+  });
+
+  return `${intro}\n\n${lines.join("\n")}\n\nIf you pick one, use the play button on its recipe card so I can help log feedback after you eat it.`;
+};
 
 const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackRequest = null, onClose }: ChatScreenProps) => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const {
     messages,
     setMessages,
@@ -53,10 +130,17 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   } = useChatSession();
   const [searchParams, setSearchParams] = useSearchParams();
   const [inputValue, setInputValue] = useState("");
+  const [pendingImageUrl, setPendingImageUrl] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isAwaitingPersonalRecipe, setIsAwaitingPersonalRecipe] = useState(false);
+  const [pendingCookbookAdd, setPendingCookbookAdd] = useState<PendingCookbookAdd | null>(null);
   const handledIntentRef = useRef<string | null>(null);
   const handledFoodLogRequestRef = useRef(0);
   const handledRecipeFeedbackRequestRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const canAttachImage = isAwaitingFoodLog || recipeFeedback?.step === "confirm" || isAwaitingPersonalRecipe;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,13 +159,16 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     if (isLoading) return;
 
     setIbsTranscript(null);
+    setIsAwaitingPersonalRecipe(false);
+    setPendingCookbookAdd(null);
     setIsAwaitingFoodLog(true);
+    setPendingImageUrl("");
     setMessages((prev) => [
       ...prev,
       { role: "user", text: "Log Food" },
       {
         role: "ai",
-        text: "Tell me what you ate. You can keep it simple, like \"rice bowl with chicken\" or add a portion and a note.",
+        text: "Tell me what you ate. You can keep it simple, like \"rice bowl with chicken\". Use the camera button if you want to attach an image.",
       },
     ]);
   }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, user]);
@@ -95,7 +182,10 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     if (isLoading) return;
 
     setIbsTranscript(null);
+    setIsAwaitingPersonalRecipe(false);
     setIsAwaitingFoodLog(false);
+    setPendingCookbookAdd(null);
+    setPendingImageUrl("");
     setRecipeFeedback({ recipe, step: "confirm" });
     setMessages((prev) => [
       ...prev,
@@ -106,6 +196,194 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       },
     ]);
   }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, setRecipeFeedback, user]);
+
+  const startPersonalRecipeFlow = useCallback(() => {
+    if (!user) {
+      toast.info("Please sign in so Tamar can save your recipe.");
+      return;
+    }
+
+    if (isLoading) return;
+
+    setIbsTranscript(null);
+    setIsAwaitingFoodLog(false);
+    setRecipeFeedback(null);
+    setPendingCookbookAdd(null);
+    setPendingImageUrl("");
+    setIsAwaitingPersonalRecipe(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: "Add Recipe" },
+      {
+        role: "ai",
+        text: "Send your recipe name. You can also add lines like cooklist: Weeknights, ingredients: rice, tofu, ginger, steps: cook and assemble. Use the camera button if you want to attach an image.",
+      },
+    ]);
+  }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, setRecipeFeedback, user]);
+
+  const handleRecommendationRequest = async (text = "Recommend Me") => {
+    if (isLoading) return;
+
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+    setIbsTranscript(null);
+    setIsAwaitingPersonalRecipe(false);
+    setIsAwaitingFoodLog(false);
+    setRecipeFeedback(null);
+    setPendingCookbookAdd(null);
+    setPendingImageUrl("");
+    setIsLoading(true);
+
+    try {
+      if (user && session?.access_token) {
+        await fetch("/api/refresh-recommendations", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        }).catch((error) => {
+          console.info("Chat recommendation refresh skipped:", error);
+        });
+      }
+
+      if (user && supabase) {
+        const { data, error } = await supabase
+          .from("user_recommendations")
+          .select("recommended_recipe_ids, match_scores")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!error && data?.recommended_recipe_ids?.length > 0) {
+          const recipes = await fetchRecipesByIds(data.recommended_recipe_ids as string[]);
+          setMessages((prev) => [
+            ...prev,
+            { role: "ai", text: formatRecommendationMessage(withMatchScores(recipes, data.match_scores), true) },
+          ]);
+          return;
+        }
+      }
+
+      const fallbackRecipes = await fetchDefaultRecipes(5);
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: formatRecommendationMessage(fallbackRecipes, false) },
+      ]);
+    } catch (error) {
+      console.error("Chat recommendation error:", error);
+      toast.error("I could not load recommendations right now.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const askCookbookAddIfMissing = async ({
+    recipeId,
+    title,
+    imageUrl,
+    description,
+    afterRecipeFeedback,
+  }: Omit<PendingCookbookAdd, "stage">) => {
+    if (!user) return false;
+
+    try {
+      const alreadyInCookbook = recipeId
+        ? (await fetchRecipeCooklistIds(user.id, recipeId)).length > 0
+        : await fetchCookbookRecipeTitleExists(user.id, title);
+
+      if (alreadyInCookbook) return false;
+    } catch (error) {
+      console.warn("Could not check cookbook membership before prompting:", error);
+    }
+
+    setPendingCookbookAdd({
+      stage: "confirm",
+      recipeId,
+      title,
+      imageUrl,
+      description,
+      afterRecipeFeedback: afterRecipeFeedback || null,
+    });
+    setMessages((prev) => [
+      ...prev,
+      { role: "ai", text: `Do you want to add "${title}" to your CookBook?` },
+    ]);
+    return true;
+  };
+
+  const continueAfterCookbookPrompt = (pending: PendingCookbookAdd) => {
+    if (pending.afterRecipeFeedback) {
+      setRecipeFeedback({ recipe: pending.afterRecipeFeedback, step: "liked" });
+      setMessages((prev) => [...prev, { role: "ai", text: "Did you like the recipe?" }]);
+    }
+  };
+
+  const handleCookbookAddMessage = async (text: string) => {
+    if (!user || !pendingCookbookAdd) return;
+
+    const pending = pendingCookbookAdd;
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+
+    if (pending.stage === "confirm") {
+      if (isNo(text)) {
+        setPendingCookbookAdd(null);
+        setMessages((prev) => [...prev, { role: "ai", text: "No problem. I will leave your CookBook unchanged." }]);
+        continueAfterCookbookPrompt(pending);
+        return;
+      }
+
+      if (!isYes(text)) {
+        setMessages((prev) => [...prev, { role: "ai", text: "Should I add it to your CookBook? You can answer yes or no." }]);
+        return;
+      }
+
+      setPendingCookbookAdd({ ...pending, stage: "cooklist" });
+      setMessages((prev) => [...prev, { role: "ai", text: "Which cooklist should I save it to? If it does not exist yet, I will create it." }]);
+      return;
+    }
+
+    const cooklistName = text.trim();
+    if (!cooklistName) {
+      setMessages((prev) => [...prev, { role: "ai", text: "Tell me the cooklist name, like Liked or Weeknights." }]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const cooklist = await findOrCreateCooklist(user.id, cooklistName);
+      if (!cooklist) throw new Error("Could not find or create a cooklist.");
+
+      if (pending.recipeId) {
+        const existingIds = await fetchRecipeCooklistIds(user.id, pending.recipeId);
+        await setRecipeCooklists({
+          userId: user.id,
+          recipeId: pending.recipeId,
+          recipeTitle: pending.title,
+          cooklistIds: [...new Set([...existingIds, cooklist.id])],
+        });
+      } else {
+        await addPersonalRecipeToCooklist({
+          userId: user.id,
+          cooklistId: cooklist.id,
+          title: pending.title,
+          imageUrl: pending.imageUrl,
+          description: pending.description,
+        });
+      }
+
+      setPendingCookbookAdd(null);
+      setMessages((prev) => [...prev, { role: "ai", text: `Saved "${pending.title}" to ${cooklist.name}.` }]);
+      toast.success("Recipe saved to your CookBook.");
+      continueAfterCookbookPrompt(pending);
+    } catch (error) {
+      console.error("Chat cookbook add error:", error);
+      toast.error("I could not save that recipe to your CookBook.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const intent = searchParams.get("intent");
@@ -160,6 +438,8 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
     setMessages((prev) => [...prev, { role: "user", text: startMessage }]);
     setIbsTranscript(nextTranscript);
+    setIsAwaitingPersonalRecipe(false);
+    setIsAwaitingFoodLog(false);
     setIsLoading(true);
 
     try {
@@ -228,10 +508,11 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setIsLoading(true);
 
     try {
-      await createMealLog({
+      const savedMeal = await createMealLog({
         userId: user.id,
         foodName: text,
         loggedAt: new Date().toISOString(),
+        imageUrl: pendingImageUrl,
         notes: "Logged through Tamar chat.",
       });
 
@@ -243,10 +524,62 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
         },
       ]);
       setIsAwaitingFoodLog(false);
+      setPendingImageUrl("");
       toast.success("Food logged to your Diary.");
+      await askCookbookAddIfMissing({
+        recipeId: savedMeal.recipe_id || null,
+        title: savedMeal.food_name,
+        imageUrl: savedMeal.image_url || pendingImageUrl || null,
+        description: savedMeal.notes || "Logged through Tamar chat.",
+      });
     } catch (error) {
       console.error("Chat food log error:", error);
       toast.error("That meal was not saved. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePersonalRecipeMessage = async (text: string) => {
+    if (!user) return;
+
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+    setIsLoading(true);
+
+    try {
+      const parsed = parsePersonalRecipeMessage(text);
+      if (!parsed.title.trim()) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "I need a recipe name before I can save it." },
+        ]);
+        return;
+      }
+
+      const cooklist = await findOrCreateCooklist(user.id, parsed.cooklistName);
+      if (!cooklist) throw new Error("Could not find or create a cooklist.");
+
+      await addPersonalRecipeToCooklist({
+        userId: user.id,
+        cooklistId: cooklist.id,
+        title: parsed.title,
+        imageUrl: pendingImageUrl || parsed.imageUrl,
+        description: parsed.description,
+        ingredients: parsed.ingredients,
+        instructions: parsed.instructions,
+      });
+
+      setIsAwaitingPersonalRecipe(false);
+      setPendingImageUrl("");
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: `Saved "${parsed.title}" to ${cooklist.name}.` },
+      ]);
+      toast.success("Personal recipe saved to your CookBook.");
+    } catch (error) {
+      console.error("Chat personal recipe error:", error);
+      toast.error("That recipe was not saved. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -279,11 +612,12 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
       setIsLoading(true);
       try {
-        await createMealLog({
+        const savedMeal = await createMealLog({
           userId: user.id,
           recipeId: recipe.id,
           foodName: recipe.title,
           loggedAt: new Date().toISOString(),
+          imageUrl: pendingImageUrl,
           notes: "Logged through recipe feedback chat.",
         });
 
@@ -294,11 +628,21 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
           interactionType: "completed",
         });
 
-        setRecipeFeedback({ recipe, step: "liked" });
-        setMessages((prev) => [
-          ...prev,
-          { role: "ai", text: "Logged it. Did you like the recipe?" },
-        ]);
+        const promptedCookbook = await askCookbookAddIfMissing({
+          recipeId: recipe.id,
+          title: recipe.title,
+          imageUrl: savedMeal.image_url || pendingImageUrl || null,
+          description: "Logged through recipe feedback chat.",
+          afterRecipeFeedback: recipe,
+        });
+        setPendingImageUrl("");
+        if (!promptedCookbook) {
+          setRecipeFeedback({ recipe, step: "liked" });
+          setMessages((prev) => [
+            ...prev,
+            { role: "ai", text: "Logged it. Did you like the recipe?" },
+          ]);
+        }
       } catch (error) {
         console.error("Recipe feedback meal log error:", error);
         toast.error("That meal was not saved. Please try again.");
@@ -366,8 +710,18 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     const text = typeof e === "string" ? e : inputValue;
     if (!text.trim() || isLoading) return;
 
+    if (text === "Recommend Me" || (!isAwaitingFoodLog && !isAwaitingPersonalRecipe && !recipeFeedback && !ibsTranscript && isRecommendationRequest(text))) {
+      await handleRecommendationRequest(text);
+      return;
+    }
+
     if (text === "Log Food") {
       startFoodLogFlow();
+      return;
+    }
+
+    if (text === "Add Recipe") {
+      startPersonalRecipeFlow();
       return;
     }
 
@@ -378,6 +732,16 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
     if (isAwaitingFoodLog) {
       await handleFoodLogMessage(text);
+      return;
+    }
+
+    if (isAwaitingPersonalRecipe) {
+      await handlePersonalRecipeMessage(text);
+      return;
+    }
+
+    if (pendingCookbookAdd) {
+      await handleCookbookAddMessage(text);
       return;
     }
 
@@ -434,6 +798,24 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       toast.error("Failed to get response from Tamar. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleImageFileSelected = async (file: File | null | undefined) => {
+    if (!user || !file || !canAttachImage) return;
+
+    setIsUploadingImage(true);
+    try {
+      const folder = isAwaitingPersonalRecipe ? "personal-recipes" : "meal-logs";
+      const imageUrl = await uploadUserImage({ userId: user.id, file, folder });
+      setPendingImageUrl(imageUrl);
+      toast.success("Image attached.");
+    } catch (error) {
+      console.error("Chat image upload error:", error);
+      toast.error(error instanceof Error ? error.message : "Could not upload that image.");
+    } finally {
+      setIsUploadingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
     }
   };
 
@@ -513,7 +895,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       </div>
 
       {/* Footer Area */}
-      <div className="bg-background/80 backdrop-blur-md p-4 md:p-6 border-t">
+      <div className={`bg-background/80 backdrop-blur-md border-t ${docked ? "p-3 md:p-4" : "p-4 md:p-6"}`}>
         {/* Chips */}
         <div className="pb-4 flex gap-2 overflow-x-auto no-scrollbar">
           {chips.map((chip) => (
@@ -529,26 +911,58 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
         </div>
 
         {/* Input bar */}
+        {pendingImageUrl && canAttachImage && (
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-primary/15 bg-muted p-2">
+            <img src={pendingImageUrl} alt="" className="h-14 w-20 rounded-lg object-cover" />
+            <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">Image attached</p>
+            <button
+              type="button"
+              onClick={() => setPendingImageUrl("")}
+              className="rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-background"
+            >
+              Remove
+            </button>
+          </div>
+        )}
         <form
           onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-          className="relative flex items-center gap-2 group"
+          className="relative flex min-w-0 items-center gap-2 group"
         >
-          <div className="flex-1 flex items-center gap-3 bg-muted hover:bg-muted/80 focus-within:bg-muted/60 transition-all rounded-2xl px-4 py-3 md:py-4 border border-transparent focus-within:border-primary/20">
-            <Camera size={20} className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors" strokeWidth={1.5} />
+          <div className={`flex min-w-0 flex-1 items-center bg-muted hover:bg-muted/80 focus-within:bg-muted/60 transition-all rounded-2xl border border-transparent focus-within:border-primary/20 ${
+            docked ? "gap-2 px-3 py-3" : "gap-3 px-4 py-3 md:py-4"
+          }`}>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(event) => handleImageFileSelected(event.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={isLoading || isUploadingImage || !canAttachImage}
+              aria-label="Attach image"
+            >
+              {isUploadingImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} strokeWidth={1.5} />}
+            </button>
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Message Tamar..."
-              className="flex-1 bg-transparent text-sm md:text-base outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent text-sm md:text-base outline-none placeholder:text-muted-foreground"
               disabled={isLoading}
             />
-            <Mic size={20} className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors" strokeWidth={1.5} />
+            <Mic size={20} className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer transition-colors" strokeWidth={1.5} />
           </div>
           <button
             type="submit"
             disabled={!inputValue.trim() || isLoading}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl h-11 w-11 md:h-14 md:w-14 flex items-center justify-center transition-all shadow-md active:scale-95 shrink-0 disabled:opacity-50 disabled:grayscale"
+            className={`bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95 shrink-0 disabled:opacity-50 disabled:grayscale ${
+              docked ? "h-11 w-11" : "h-11 w-11 md:h-14 md:w-14"
+            }`}
           >
             {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
           </button>

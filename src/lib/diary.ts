@@ -8,6 +8,7 @@ export type MealLogRow = {
   logged_at: string;
   portion_size?: number | null;
   portion_unit?: string | null;
+  image_url?: string | null;
   notes?: string | null;
   created_at?: string | null;
 };
@@ -70,6 +71,15 @@ export type DiaryData = {
   entries: DiaryEntry[];
 };
 
+export type MealSourceOption = {
+  id: string;
+  foodName: string;
+  sourceLabel: string;
+  recipeId?: number | null;
+  imageUrl?: string | null;
+  helper?: string | null;
+};
+
 export type MealLogInput = {
   userId: string;
   foodName: string;
@@ -77,6 +87,7 @@ export type MealLogInput = {
   recipeId?: number | null;
   portionSize?: number | null;
   portionUnit?: string | null;
+  imageUrl?: string | null;
   notes?: string | null;
 };
 
@@ -142,6 +153,13 @@ const normalizeName = (value: string) =>
     .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const numericCatalogRecipeId = (recipeId: string | number | null | undefined) => {
+  const value = String(recipeId || "").trim();
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
 
 const addHours = (date: Date, hours: number) => new Date(date.getTime() + hours * 60 * 60 * 1000);
 
@@ -218,7 +236,7 @@ export const fetchDiaryData = async (userId: string): Promise<DiaryData> => {
       "meal_logs",
       supabase
         .from("meal_logs")
-        .select("id,user_id,recipe_id,food_name,logged_at,portion_size,portion_unit,notes,created_at")
+        .select("id,user_id,recipe_id,food_name,logged_at,portion_size,portion_unit,image_url,notes,created_at")
         .eq("user_id", userId)
         .order("logged_at", { ascending: false })
         .limit(120),
@@ -262,6 +280,43 @@ export const fetchDiaryData = async (userId: string): Promise<DiaryData> => {
   };
 };
 
+export const fetchCookbookMealOptions = async (userId: string): Promise<MealSourceOption[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("cooklist_recipes")
+    .select("id,recipe_id,recipe_title,recipe_source,image_url,description,created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(120);
+
+  if (error) {
+    console.warn("Cookbook meal options unavailable:", error.message || error);
+    return [];
+  }
+
+  const optionsByRecipe = new Map<string, MealSourceOption>();
+  (data || []).forEach((row) => {
+    const foodName = String(row.recipe_title || "").trim();
+    if (!foodName) return;
+
+    const recipeSource = row.recipe_source === "personal" ? "Personal recipe" : "Cookbook";
+    const recipeKey = `${row.recipe_source || "catalog"}-${row.recipe_id || row.id}-${normalizeName(foodName)}`;
+    if (optionsByRecipe.has(recipeKey)) return;
+
+    optionsByRecipe.set(recipeKey, {
+      id: `cookbook-${row.id}`,
+      foodName,
+      sourceLabel: recipeSource,
+      recipeId: row.recipe_source === "personal" ? null : numericCatalogRecipeId(row.recipe_id),
+      imageUrl: row.image_url || null,
+      helper: row.description || null,
+    });
+  });
+
+  return [...optionsByRecipe.values()];
+};
+
 export const createMealLog = async (input: MealLogInput): Promise<MealLogRow> => {
   const payload = {
     user_id: input.userId,
@@ -270,6 +325,7 @@ export const createMealLog = async (input: MealLogInput): Promise<MealLogRow> =>
     logged_at: normalizeDate(input.loggedAt),
     portion_size: input.portionSize || null,
     portion_unit: input.portionUnit || null,
+    image_url: input.imageUrl?.trim() || null,
     notes: input.notes?.trim() || null,
   };
 

@@ -51,6 +51,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     logged_at: body.logged_at || new Date().toISOString(),
     portion_size: body.portion_size || null,
     portion_unit: body.portion_unit || null,
+    image_url: typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
     notes: body.notes || null,
   };
 

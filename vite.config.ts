@@ -270,6 +270,7 @@ const localDiaryPlugin = (env: Record<string, string>) => ({
               logged_at: payload.logged_at,
               portion_size: payload.portion_size || null,
               portion_unit: payload.portion_unit || null,
+              image_url: typeof payload.image_url === "string" && payload.image_url.trim() ? payload.image_url.trim() : null,
               notes: payload.notes || null,
             }
           : {
@@ -314,9 +315,62 @@ const localDiaryPlugin = (env: Record<string, string>) => ({
 
 const PEXELS_CANDIDATES_PER_RECIPE = 8;
 
+const NON_FOOD_IMAGE_TERMS = [
+  "book",
+  "books",
+  "notebook",
+  "journal",
+  "magazine",
+  "library",
+  "paper",
+  "pen",
+  "pencil",
+  "desk",
+  "office",
+  "laptop",
+  "keyboard",
+  "document",
+];
+
+const FOOD_IMAGE_TERMS = [
+  "food",
+  "meal",
+  "dish",
+  "recipe",
+  "plate",
+  "bowl",
+  "drink",
+  "smoothie",
+  "juice",
+  "fruit",
+  "vegetable",
+  "bread",
+  "cake",
+  "salad",
+  "soup",
+  "pasta",
+  "rice",
+  "chicken",
+  "fish",
+  "dessert",
+  "breakfast",
+  "pancake",
+  "pancakes",
+  "waffle",
+  "waffles",
+  "corn",
+];
+
+const isLikelyFoodPhoto = (photo: any) => {
+  const alt = String(photo?.alt || "").toLowerCase();
+  if (!alt) return false;
+  if (NON_FOOD_IMAGE_TERMS.some((term) => alt.includes(term))) return false;
+  return FOOD_IMAGE_TERMS.some((term) => alt.includes(term));
+};
+
 const searchPexelsImages = async (query: string, apiKey: string) => {
   const response = await fetch(
-    `https://api.pexels.com/v1/search?query=${encodeURIComponent(`${query} recipe food`)}&per_page=${PEXELS_CANDIDATES_PER_RECIPE}&orientation=landscape`,
+    `https://api.pexels.com/v1/search?query=${encodeURIComponent(`${query} prepared food plated dish`)}&per_page=${PEXELS_CANDIDATES_PER_RECIPE}&orientation=landscape`,
     {
       headers: {
         Authorization: apiKey,
@@ -328,6 +382,7 @@ const searchPexelsImages = async (query: string, apiKey: string) => {
 
   const body = await response.json();
   return (body.photos || [])
+    .filter(isLikelyFoodPhoto)
     .map((photo: any) => photo.src?.large2x || photo.src?.large || photo.src?.medium)
     .filter(Boolean);
 };

@@ -40,10 +40,15 @@ from recommender_common import (
 )
 from risk_scoring import (
     RerankedCandidate,
+    build_feature_row,
+    clamp01,
+    compute_recipe_ingredient_risk,
     fetch_population_priors,
     fetch_recent_user_context,
     fetch_user_ingredient_risks,
     fetch_user_restrictions,
+    heuristic_symptom_risk,
+    is_hard_filtered,
     prediction_feature_payload,
     rerank_candidates,
 )
@@ -52,6 +57,7 @@ ARTIFACT_PATH = Path(__file__).resolve().parent / "artifacts" / "cf_item_factors
 PREFERENCE_MODEL_NAME = os.getenv("RECOMMENDER_PREFERENCE_MODEL_NAME")
 CANDIDATE_FETCH_LIMIT = int(os.getenv("RECOMMENDER_CANDIDATE_FETCH_LIMIT", "500"))
 MODEL_PREDICTION_WRITE_LIMIT = int(os.getenv("RECOMMENDER_MODEL_PREDICTION_WRITE_LIMIT", "120"))
+COOKBOOK_RECOMMENDATION_LIMIT = int(os.getenv("RECOMMENDER_COOKBOOK_LIMIT", "5"))
 
 
 def artifact_cache_ttl_seconds() -> int:
@@ -346,6 +352,225 @@ def compute_trending_recipe_ids(
     return counts.head(limit).index.tolist()
 
 
+def parse_iso_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    text = str(value or "")
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def split_personal_ingredients(value: object) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [
+        part.strip()
+        for chunk in text.splitlines()
+        for part in chunk.split(",")
+        if part.strip()
+    ]
+
+
+def fetch_cookbook_memberships(supabase: Client, user_id: str) -> list[dict]:
+    try:
+        response = (
+            supabase.table("cooklist_recipes")
+            .select("id,cooklist_id,recipe_id,recipe_title,recipe_source,image_url,ingredients,instructions,created_at,updated_at")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        print(f"[Warning] Failed to fetch cookbook memberships: {exc}")
+        return []
+
+    return response.data or []
+
+
+def group_cookbook_memberships(rows: list[dict]) -> dict[str, dict]:
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        recipe_id = str(row.get("recipe_id") or "")
+        if not recipe_id:
+            continue
+
+        created_at = parse_iso_datetime(row.get("created_at"))
+        current = grouped.get(recipe_id)
+        if current is None:
+            grouped[recipe_id] = {
+                "recipe_id": recipe_id,
+                "recipe_title": row.get("recipe_title") or recipe_id,
+                "recipe_source": row.get("recipe_source") or "catalog",
+                "image_url": row.get("image_url"),
+                "ingredients": row.get("ingredients"),
+                "instructions": row.get("instructions"),
+                "created_at": row.get("created_at"),
+                "latest_at": created_at,
+                "cooklist_count": 1,
+            }
+            continue
+
+        current["cooklist_count"] += 1
+        if created_at > current["latest_at"]:
+            current.update(
+                {
+                    "recipe_title": row.get("recipe_title") or current["recipe_title"],
+                    "recipe_source": row.get("recipe_source") or current["recipe_source"],
+                    "image_url": row.get("image_url") or current.get("image_url"),
+                    "ingredients": row.get("ingredients") or current.get("ingredients"),
+                    "instructions": row.get("instructions") or current.get("instructions"),
+                    "created_at": row.get("created_at") or current.get("created_at"),
+                    "latest_at": created_at,
+                }
+            )
+    return grouped
+
+
+def personal_recipe_reason(recency_score: float, frequency_score: float, combined_risk: float) -> str:
+    if combined_risk <= 0.25:
+        return "Gentler personal pick"
+    if recency_score >= 0.75:
+        return "Recently saved"
+    if frequency_score >= 0.65:
+        return "Saved in multiple cooklists"
+    return "From your personal recipes"
+
+
+def catalog_recipe_reason(candidate: RerankedCandidate) -> str:
+    if candidate.combined_risk_score <= 0.25:
+        return "Gentler saved pick"
+    if candidate.preference_score >= 0:
+        return "Matches your taste"
+    return "From your saved recipes"
+
+
+def compute_personal_cookbook_score(
+    item: dict,
+    restrictions: list[dict],
+    personal_signals,
+    population_signals,
+    recent_context: dict,
+    now: datetime,
+) -> tuple[float, str] | None:
+    recipe = {
+        "id": item["recipe_id"],
+        "name": item.get("recipe_title"),
+        "ingredients": split_personal_ingredients(item.get("ingredients")),
+        "minutes": None,
+        "nutrition": [],
+    }
+
+    if is_hard_filtered(recipe, restrictions):
+        return None
+
+    ingredient_risk = compute_recipe_ingredient_risk(recipe, personal_signals, population_signals)
+    feature_row = build_feature_row(recipe, ingredient_risk, recent_context, now=now)
+    symptom_risk = heuristic_symptom_risk(feature_row, ingredient_risk.score)
+    combined_risk = clamp01(0.4 * ingredient_risk.score + 0.6 * symptom_risk)
+
+    age_days = max(0.0, (now - item["latest_at"]).total_seconds() / 86400)
+    recency_score = clamp01(1.0 - (age_days / 45.0))
+    frequency_score = clamp01(float(item.get("cooklist_count") or 1) / 3.0)
+    raw_score = clamp01(0.55 * recency_score + 0.20 * frequency_score + 0.25 * (1.0 - combined_risk))
+    display_score = 0.78 + 0.20 * raw_score
+    return display_score, personal_recipe_reason(recency_score, frequency_score, combined_risk)
+
+
+def compute_cookbook_recommendations(
+    supabase: Client,
+    user_id: str,
+    cookbook_rows: list[dict],
+    score_by_id: dict[str, float],
+    precomputed_candidates: list[tuple[str, float]],
+    recipes_meta: dict[str, dict],
+    restrictions: list[dict],
+    personal_signals,
+    population_signals,
+    recent_context: dict,
+    limit: int = COOKBOOK_RECOMMENDATION_LIMIT,
+) -> list[dict]:
+    grouped = group_cookbook_memberships(cookbook_rows)
+    if not grouped:
+        return []
+
+    now = datetime.now(timezone.utc)
+    precomputed_by_id = {rid: score for rid, score in precomputed_candidates}
+    catalog_pairs: list[tuple[str, float]] = []
+    personal_items: list[dict] = []
+
+    for recipe_id, item in grouped.items():
+        source = str(item.get("recipe_source") or "catalog")
+        if source == "personal" or recipe_id.startswith("personal-"):
+            personal_items.append(item)
+        else:
+            catalog_pairs.append(
+                (
+                    recipe_id,
+                    float(precomputed_by_id.get(recipe_id, score_by_id.get(recipe_id, 0.0))),
+                )
+            )
+
+    catalog_ranked = rerank_candidates(
+        candidates=catalog_pairs,
+        recipes_meta=recipes_meta,
+        restrictions=restrictions,
+        personal_signals=personal_signals,
+        population_signals=population_signals,
+        recent_context=recent_context,
+    )
+    catalog_scores = normalize_match_scores([candidate.final_score for candidate in catalog_ranked])
+
+    mixed: list[dict] = []
+    for candidate, display_score in zip(catalog_ranked, catalog_scores):
+        source_item = grouped.get(candidate.recipe_id, {})
+        mixed.append(
+            {
+                "recipe_id": candidate.recipe_id,
+                "recipe_source": "catalog",
+                "score": float(display_score),
+                "reason": catalog_recipe_reason(candidate),
+                "created_at": source_item.get("created_at"),
+            }
+        )
+
+    for item in personal_items:
+        scored = compute_personal_cookbook_score(
+            item=item,
+            restrictions=restrictions,
+            personal_signals=personal_signals,
+            population_signals=population_signals,
+            recent_context=recent_context,
+            now=now,
+        )
+        if scored is None:
+            continue
+        display_score, reason = scored
+        mixed.append(
+            {
+                "recipe_id": item["recipe_id"],
+                "recipe_source": "personal",
+                "score": float(display_score),
+                "reason": reason,
+                "created_at": item.get("created_at"),
+            }
+        )
+
+    mixed.sort(
+        key=lambda item: (
+            item["score"],
+            parse_iso_datetime(item.get("created_at")),
+        ),
+        reverse=True,
+    )
+    return mixed[:limit]
+
+
 # ---------------------------------------------------------------------------
 # Bursting-with-Flavor — Route A: centroid in CF embedding space.
 #
@@ -545,6 +770,7 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     personal_signals = fetch_user_ingredient_risks(supabase, user_id)
     population_signals = fetch_population_priors(supabase)
     recent_context = fetch_recent_user_context(supabase, user_id)
+    cookbook_rows = fetch_cookbook_memberships(supabase, user_id)
     risk_ranked_candidates = rerank_candidates(
         candidates=candidate_pairs,
         recipes_meta=recipes_meta,
@@ -640,6 +866,19 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
 
     healthy = take(risk_ranked_ids, predicate=is_healthy, count=k, score_lookup=final_score_by_id)
     quick = take(risk_ranked_ids, predicate=is_quick, count=k, score_lookup=final_score_by_id)
+    cookbook_recommendations = compute_cookbook_recommendations(
+        supabase=supabase,
+        user_id=user_id,
+        cookbook_rows=cookbook_rows,
+        score_by_id=score_by_id,
+        precomputed_candidates=precomputed_candidates,
+        recipes_meta=recipes_meta,
+        restrictions=restrictions,
+        personal_signals=personal_signals,
+        population_signals=population_signals,
+        recent_context=recent_context,
+        limit=COOKBOOK_RECOMMENDATION_LIMIT,
+    )
 
     if upload:
         curated_candidates = [candidate_by_id[rid] for rid, _ in curated if rid in candidate_by_id]
@@ -659,6 +898,10 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
             "healthy_match_scores": normalize_match_scores([s for _, s in healthy]),
             "quick_recipe_ids": [rid for rid, _ in quick],
             "quick_match_scores": normalize_match_scores([s for _, s in quick]),
+            "cookbook_recipe_ids": [item["recipe_id"] for item in cookbook_recommendations],
+            "cookbook_recipe_sources": [item["recipe_source"] for item in cookbook_recommendations],
+            "cookbook_match_scores": [item["score"] for item in cookbook_recommendations],
+            "cookbook_reasons": [item["reason"] for item in cookbook_recommendations],
             "updated_at": datetime.utcnow().isoformat(),
         }
         supabase.table("user_recommendations").upsert(payload).execute()

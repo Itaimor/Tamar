@@ -1,24 +1,44 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  BookOpen,
+  BookmarkPlus,
   CalendarDays,
   CheckCircle2,
   Clock3,
+  History as HistoryIcon,
   HeartPulse,
   Loader2,
   NotebookPen,
   Plus,
   RefreshCw,
+  Search,
   SmilePlus,
   Utensils,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import ImageUploadDropzone from "@/components/ImageUploadDropzone";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Cooklist,
+  addPersonalRecipeToCooklist,
+  ensureDefaultCooklist,
+  fetchCookbookRecipeTitleExists,
+  fetchCooklists,
+  fetchRecipeCooklistIds,
+  findOrCreateCooklist,
+  setRecipeCooklists,
+} from "@/lib/recipeInteractions";
 import {
   DiaryData,
   DiaryEntry,
+  MealLogRow,
+  MealSourceOption,
   createHealthReport,
   createMealLog,
+  fetchCookbookMealOptions,
   fetchDiaryData,
 } from "@/lib/diary";
 
@@ -62,6 +82,69 @@ const feelingText = (severity: number, noSymptoms?: boolean) => {
   return "Rough";
 };
 
+const normalizeMealName = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildHistoryMealOptions = (meals: MealLogRow[]): MealSourceOption[] => {
+  const seen = new Set<string>();
+  return meals
+    .map((meal) => {
+      const foodName = meal.food_name.trim();
+      const key = normalizeMealName(foodName);
+      if (!foodName || seen.has(key)) return null;
+      seen.add(key);
+      return {
+        id: `history-${meal.id}`,
+        foodName,
+        sourceLabel: "History",
+        recipeId: meal.recipe_id || null,
+        imageUrl: meal.image_url || null,
+        helper: formatTime(meal.logged_at),
+      };
+    })
+    .filter((option): option is MealSourceOption => Boolean(option));
+};
+
+type CooklistCandidate = {
+  recipeId?: string | number | null;
+  title: string;
+  imageUrl?: string | null;
+  description?: string | null;
+};
+
+const candidateFromEntry = (entry: DiaryEntry): CooklistCandidate | null => {
+  if (entry.type === "meal") {
+    return {
+      recipeId: entry.meal.recipe_id || null,
+      title: entry.meal.food_name,
+      imageUrl: entry.meal.image_url || null,
+      description: entry.meal.notes || null,
+    };
+  }
+
+  if (entry.type === "chat_food") {
+    return {
+      title: entry.food.food_name,
+      description: entry.food.checkin_summary || entry.food.source_label,
+    };
+  }
+
+  if (entry.type === "recipe") {
+    return {
+      recipeId: entry.recipe.recipe_id,
+      title: entry.recipe.recipe_title,
+      description: entry.recipe.interaction_type === "completed" ? "Completed from diary." : "Started from diary.",
+    };
+  }
+
+  return null;
+};
+
 const StatTile = ({
   icon: Icon,
   label,
@@ -96,7 +179,15 @@ const EmptyState = ({ title, body }: { title: string; body: string }) => (
   </div>
 );
 
-const TimelineEntry = ({ entry, index }: { entry: DiaryEntry; index: number }) => {
+const TimelineEntry = ({
+  entry,
+  index,
+  onAddToCooklist,
+}: {
+  entry: DiaryEntry;
+  index: number;
+  onAddToCooklist: (candidate: CooklistCandidate) => void;
+}) => {
   const isFood = entry.type === "meal" || entry.type === "chat_food" || entry.type === "recipe";
   const title =
     entry.type === "meal"
@@ -132,6 +223,8 @@ const TimelineEntry = ({ entry, index }: { entry: DiaryEntry; index: number }) =
             : entry.report.notes;
   const Icon = isFood ? Utensils : HeartPulse;
   const tone = isFood ? "bg-cyan-300/12 text-cyan-100" : "bg-rose-300/12 text-rose-100";
+  const imageUrl = entry.type === "meal" ? entry.meal.image_url : null;
+  const cooklistCandidate = candidateFromEntry(entry);
 
   return (
     <motion.div
@@ -144,15 +237,35 @@ const TimelineEntry = ({ entry, index }: { entry: DiaryEntry; index: number }) =
         <Icon size={18} />
       </div>
       <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt={title}
+            className="mb-3 aspect-video w-full rounded-lg border border-white/10 object-cover"
+            loading="lazy"
+          />
+        )}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{title}</p>
             <p className="mt-1 text-xs text-white/45">{subtitle}</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/55">
-            <Clock3 size={12} />
-            {formatTime(entry.at)}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {cooklistCandidate && (
+              <button
+                type="button"
+                onClick={() => onAddToCooklist(cooklistCandidate)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/20 bg-cyan-200/[0.08] px-2.5 py-1 text-xs font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-200/[0.14]"
+              >
+                <BookmarkPlus size={12} />
+                Cooklist
+              </button>
+            )}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/55">
+              <Clock3 size={12} />
+              {formatTime(entry.at)}
+            </span>
+          </div>
         </div>
         {notes && <p className="mt-3 text-sm leading-relaxed text-white/55">{notes}</p>}
       </div>
@@ -173,10 +286,21 @@ const HistoryScreen = () => {
   const [savingMeal, setSavingMeal] = useState(false);
   const [savingReport, setSavingReport] = useState(false);
   const [mealName, setMealName] = useState("");
+  const [mealRecipeId, setMealRecipeId] = useState<number | null>(null);
   const [mealAt, setMealAt] = useState(localDateTimeValue());
   const [portionSize, setPortionSize] = useState("");
   const [portionUnit, setPortionUnit] = useState("serving");
+  const [mealImageUrl, setMealImageUrl] = useState("");
   const [mealNotes, setMealNotes] = useState("");
+  const [mealPickerSource, setMealPickerSource] = useState<"cookbook" | "history">("cookbook");
+  const [mealPickerSearch, setMealPickerSearch] = useState("");
+  const [cookbookOptions, setCookbookOptions] = useState<MealSourceOption[]>([]);
+  const [cooklists, setCooklists] = useState<Cooklist[]>([]);
+  const [cooklistCandidate, setCooklistCandidate] = useState<CooklistCandidate | null>(null);
+  const [selectedCooklistIds, setSelectedCooklistIds] = useState<number[]>([]);
+  const [newCooklistName, setNewCooklistName] = useState("");
+  const [savingCooklist, setSavingCooklist] = useState(false);
+  const [diarySearch, setDiarySearch] = useState("");
   const [symptomType, setSymptomType] = useState("digestive_discomfort");
   const [reportedAt, setReportedAt] = useState(localDateTimeValue());
   const [severity, setSeverity] = useState(3);
@@ -198,14 +322,42 @@ const HistoryScreen = () => {
     return { mealsToday, reportsToday, roughNotes, totalFoodEntries: foodEntries.length };
   }, [data]);
 
+  const filteredEntries = useMemo(() => {
+    const query = normalizeMealName(diarySearch);
+    if (!query) return data.entries;
+
+    return data.entries.filter((entry) => {
+      const candidate = candidateFromEntry(entry);
+      const searchable =
+        entry.type === "checkin"
+          ? `${entry.report.symptom_type} ${entry.report.notes || ""}`
+          : entry.type === "chat_checkin"
+            ? `${entry.checkin.summary} ${(entry.checkin.symptoms || []).join(" ")}`
+            : `${candidate?.title || ""} ${candidate?.description || ""}`;
+      return normalizeMealName(searchable).includes(query);
+    });
+  }, [data.entries, diarySearch]);
+
   const groupedEntries = useMemo(() => {
     const groups = new Map<string, DiaryEntry[]>();
-    data.entries.forEach((entry) => {
+    filteredEntries.forEach((entry) => {
       const key = formatDay(entry.at);
       groups.set(key, [...(groups.get(key) || []), entry]);
     });
     return [...groups.entries()];
-  }, [data.entries]);
+  }, [filteredEntries]);
+
+  const historyMealOptions = useMemo(() => buildHistoryMealOptions(data.meals), [data.meals]);
+  const visibleMealOptions = useMemo(() => {
+    const sourceOptions = mealPickerSource === "cookbook" ? cookbookOptions : historyMealOptions;
+    const query = normalizeMealName(mealPickerSearch);
+    if (!query) return sourceOptions.slice(0, 12);
+    return sourceOptions
+      .filter((option) =>
+        normalizeMealName(`${option.foodName} ${option.sourceLabel} ${option.helper || ""}`).includes(query)
+      )
+      .slice(0, 20);
+  }, [cookbookOptions, historyMealOptions, mealPickerSearch, mealPickerSource]);
 
   const loadDiary = useCallback(async () => {
     if (authLoading) return;
@@ -230,6 +382,136 @@ const HistoryScreen = () => {
     loadDiary();
   }, [loadDiary]);
 
+  const loadCookbookState = useCallback(async () => {
+    if (!configured || !user) {
+      setCookbookOptions([]);
+      setCooklists([]);
+      return;
+    }
+
+    try {
+      await ensureDefaultCooklist(user.id);
+      const [options, lists] = await Promise.all([
+        fetchCookbookMealOptions(user.id),
+        fetchCooklists(user.id),
+      ]);
+      setCookbookOptions(options);
+      setCooklists(lists);
+    } catch (error) {
+      console.error("Failed to load cookbook meal options:", error);
+      setCookbookOptions([]);
+      setCooklists([]);
+    }
+  }, [configured, user]);
+
+  useEffect(() => {
+    loadCookbookState();
+  }, [loadCookbookState]);
+
+  const chooseMealOption = (option: MealSourceOption) => {
+    setMealName(option.foodName);
+    setMealRecipeId(option.recipeId || null);
+    setMealImageUrl(option.imageUrl || "");
+  };
+
+  const openCooklistDialog = useCallback(async (candidate: CooklistCandidate) => {
+    if (!user) return;
+
+    setCooklistCandidate(candidate);
+    setSavingCooklist(true);
+    try {
+      await ensureDefaultCooklist(user.id);
+      const lists = cooklists.length > 0 ? cooklists : await fetchCooklists(user.id);
+      setCooklists(lists);
+
+      if (candidate.recipeId) {
+        setSelectedCooklistIds(await fetchRecipeCooklistIds(user.id, candidate.recipeId));
+      } else {
+        const exists = await fetchCookbookRecipeTitleExists(user.id, candidate.title);
+        if (exists) {
+          toast.info(`"${candidate.title}" is already in your CookBook.`);
+          setCooklistCandidate(null);
+          return;
+        }
+        setSelectedCooklistIds(lists.find((cooklist) => cooklist.is_default)?.id ? [lists.find((cooklist) => cooklist.is_default)!.id] : []);
+      }
+    } catch (error) {
+      console.error("Failed to prepare cooklist picker:", error);
+      toast.error("Could not load cooklists.");
+      setCooklistCandidate(null);
+    } finally {
+      setSavingCooklist(false);
+    }
+  }, [cooklists, user]);
+
+  const handleCooklistCheckedChange = (cooklistId: number, checked: boolean) => {
+    setSelectedCooklistIds((current) =>
+      checked ? [...new Set([...current, cooklistId])] : current.filter((id) => id !== cooklistId)
+    );
+  };
+
+  const handleCreateCooklist = async () => {
+    if (!user || !newCooklistName.trim()) return;
+
+    setSavingCooklist(true);
+    try {
+      const created = await findOrCreateCooklist(user.id, newCooklistName);
+      if (!created) return;
+      setCooklists((current) => {
+        if (current.some((cooklist) => cooklist.id === created.id)) return current;
+        return [...current, created];
+      });
+      setSelectedCooklistIds((current) => [...new Set([...current, created.id])]);
+      setNewCooklistName("");
+      toast.success(`"${created.name}" created.`);
+    } catch (error) {
+      console.error("Failed to create cooklist:", error);
+      toast.error("Could not create that cooklist.");
+    } finally {
+      setSavingCooklist(false);
+    }
+  };
+
+  const saveCooklistCandidate = async () => {
+    if (!user || !cooklistCandidate) return;
+    if (selectedCooklistIds.length === 0) {
+      toast.error("Choose at least one cooklist.");
+      return;
+    }
+
+    setSavingCooklist(true);
+    try {
+      if (cooklistCandidate.recipeId) {
+        await setRecipeCooklists({
+          userId: user.id,
+          recipeId: cooklistCandidate.recipeId,
+          recipeTitle: cooklistCandidate.title,
+          cooklistIds: selectedCooklistIds,
+        });
+      } else {
+        await Promise.all(selectedCooklistIds.map((cooklistId) =>
+          addPersonalRecipeToCooklist({
+            userId: user.id,
+            cooklistId,
+            title: cooklistCandidate.title,
+            imageUrl: cooklistCandidate.imageUrl,
+            description: cooklistCandidate.description,
+          })
+        ));
+      }
+
+      toast.success(`"${cooklistCandidate.title}" added to your CookBook.`);
+      setCooklistCandidate(null);
+      setSelectedCooklistIds([]);
+      await loadCookbookState();
+    } catch (error) {
+      console.error("Failed to save recipe to cooklist:", error);
+      toast.error("Could not update your cooklists.");
+    } finally {
+      setSavingCooklist(false);
+    }
+  };
+
   const submitMeal = async (event: FormEvent) => {
     event.preventDefault();
     if (!user) return;
@@ -241,20 +523,40 @@ const HistoryScreen = () => {
 
     setSavingMeal(true);
     try {
-      await createMealLog({
+      const savedMeal = await createMealLog({
         userId: user.id,
         foodName: trimmedName,
         loggedAt: mealAt,
+        recipeId: mealRecipeId,
         portionSize: portionSize ? Number(portionSize) : null,
         portionUnit: portionUnit.trim() || null,
+        imageUrl: mealImageUrl,
         notes: mealNotes,
       });
       toast.success("Meal added to your diary.");
       setMealName("");
+      setMealRecipeId(null);
       setPortionSize("");
+      setMealImageUrl("");
       setMealNotes("");
       setMealAt(localDateTimeValue());
       await loadDiary();
+      let alreadyInCookbook = false;
+      try {
+        alreadyInCookbook = savedMeal.recipe_id
+          ? (await fetchRecipeCooklistIds(user.id, savedMeal.recipe_id)).length > 0
+          : await fetchCookbookRecipeTitleExists(user.id, savedMeal.food_name);
+      } catch (error) {
+        console.warn("Could not check cookbook membership after meal save:", error);
+      }
+      if (!alreadyInCookbook) {
+        openCooklistDialog({
+          recipeId: savedMeal.recipe_id || null,
+          title: savedMeal.food_name,
+          imageUrl: savedMeal.image_url || null,
+          description: savedMeal.notes || null,
+        });
+      }
     } catch (error) {
       console.error("Failed to save meal:", error);
       toast.error("Could not save that meal. Please try again.");
@@ -371,11 +673,83 @@ const HistoryScreen = () => {
             <h2 className="text-base font-semibold">Add a meal</h2>
           </div>
           <div className="mt-5 grid gap-4">
+            <div className="grid gap-3 rounded-lg border border-white/10 bg-black/15 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs font-medium text-white/55">Choose a saved or recent meal</span>
+                <div className="grid grid-cols-2 rounded-lg border border-white/10 bg-black/20 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMealPickerSource("cookbook")}
+                    className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition ${
+                      mealPickerSource === "cookbook"
+                        ? "bg-cyan-200 text-slate-950"
+                        : "text-white/60 hover:bg-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    <BookOpen size={13} />
+                    Cookbook
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMealPickerSource("history")}
+                    className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition ${
+                      mealPickerSource === "history"
+                        ? "bg-cyan-200 text-slate-950"
+                        : "text-white/60 hover:bg-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    <HistoryIcon size={13} />
+                    History
+                  </button>
+                </div>
+              </div>
+              <label className="relative block">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
+                <input
+                  value={mealPickerSearch}
+                  onChange={(event) => setMealPickerSearch(event.target.value)}
+                  placeholder={mealPickerSource === "cookbook" ? "Search your cookbook" : "Search meal history"}
+                  className="h-10 w-full rounded-lg border border-white/10 bg-black/20 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                />
+              </label>
+              {visibleMealOptions.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {visibleMealOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => chooseMealOption(option)}
+                      className="min-w-0 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-left transition hover:border-cyan-200/45 hover:bg-cyan-200/[0.08]"
+                    >
+                      <span className="block truncate text-sm font-medium text-white">{option.foodName}</span>
+                      <span className="mt-1 flex min-w-0 items-center gap-2 text-xs text-white/45">
+                        <span className="shrink-0">{option.sourceLabel}</span>
+                        {option.helper && (
+                          <>
+                            <span className="text-white/25">/</span>
+                            <span className="truncate">{option.helper}</span>
+                          </>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-white/10 px-3 py-3 text-sm text-white/45">
+                  {mealPickerSource === "cookbook"
+                    ? "Saved cookbook meals will show up here."
+                    : "Meals you previously logged will show up here."}
+                </div>
+              )}
+            </div>
             <label className="grid gap-2">
               <span className="text-xs font-medium text-white/55">What did you eat?</span>
               <input
                 value={mealName}
-                onChange={(event) => setMealName(event.target.value)}
+                onChange={(event) => {
+                  setMealName(event.target.value);
+                  setMealRecipeId(null);
+                }}
                 placeholder="Rice bowl with tofu"
                 className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
               />
@@ -412,6 +786,14 @@ const HistoryScreen = () => {
                 />
               </label>
             </div>
+            <ImageUploadDropzone
+              userId={user.id}
+              folder="meal-logs"
+              imageUrl={mealImageUrl}
+              onImageUrlChange={setMealImageUrl}
+              label="Image"
+              dark
+            />
             <label className="grid gap-2">
               <span className="text-xs font-medium text-white/55">Notes</span>
               <textarea
@@ -523,9 +905,18 @@ const HistoryScreen = () => {
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/55">
             <CalendarDays size={13} />
-            {data.entries.length} saved notes
+            {filteredEntries.length} of {data.entries.length} saved notes
           </span>
         </div>
+        <label className="relative mt-4 block max-w-xl">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
+          <input
+            value={diarySearch}
+            onChange={(event) => setDiarySearch(event.target.value)}
+            placeholder="Search recent diary"
+            className="h-10 w-full rounded-lg border border-white/10 bg-black/20 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-200/60"
+          />
+        </label>
 
         <div className="mt-5 space-y-6">
           {groupedEntries.length > 0 ? (
@@ -534,7 +925,12 @@ const HistoryScreen = () => {
                 <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/40">{day}</h3>
                 <div className="space-y-3">
                   {entries.map((entry, index) => (
-                    <TimelineEntry key={`${entry.type}-${entry.id}`} entry={entry} index={index} />
+                    <TimelineEntry
+                      key={`${entry.type}-${entry.id}`}
+                      entry={entry}
+                      index={index}
+                      onAddToCooklist={openCooklistDialog}
+                    />
                   ))}
                 </div>
               </div>
@@ -547,6 +943,75 @@ const HistoryScreen = () => {
           )}
         </div>
       </section>
+
+      <Dialog
+        open={Boolean(cooklistCandidate)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCooklistCandidate(null);
+            setSelectedCooklistIds([]);
+            setNewCooklistName("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add to cooklist</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Choose where to save {cooklistCandidate ? `"${cooklistCandidate.title}"` : "this recipe"}.
+            </p>
+            <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+              {savingCooklist && cooklists.length === 0 ? (
+                <div className="h-20 rounded-lg bg-secondary animate-pulse" />
+              ) : (
+                cooklists.map((cooklist) => (
+                  <label
+                    key={cooklist.id}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-primary/10 px-3 py-2 hover:bg-primary/5"
+                  >
+                    <Checkbox
+                      checked={selectedCooklistIds.includes(cooklist.id)}
+                      onCheckedChange={(checked) => handleCooklistCheckedChange(cooklist.id, checked === true)}
+                    />
+                    <span className="flex-1 text-sm font-semibold text-[#1f3d2b]">{cooklist.name}</span>
+                    {cooklist.is_default && <span className="text-xs font-bold text-primary">default</span>}
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newCooklistName}
+                onChange={(event) => setNewCooklistName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleCreateCooklist();
+                }}
+                placeholder="New cooklist"
+                className="min-h-10 flex-1 rounded-lg border border-primary/15 px-3 text-sm outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={handleCreateCooklist}
+                disabled={savingCooklist || !newCooklistName.trim()}
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-primary/15 px-3 text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={saveCooklistCandidate}
+              disabled={savingCooklist || selectedCooklistIds.length === 0}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingCooklist ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}
+              Save to cooklist
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
