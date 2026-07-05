@@ -812,19 +812,41 @@ const Home = () => {
                           <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? "-rotate-90" : "rotate-90"}`} />
                         </button>
                       </div>
-                      {isExpanded && (
-                        <div className="absolute left-3 right-3 top-[calc(68%-5.75rem)] z-10 rounded-lg border border-primary/15 bg-white/90 p-2 text-[10px] text-[#536451] shadow-lg shadow-primary/15 backdrop-blur md:text-xs">
-                          <div className="flex items-center justify-between gap-2 font-bold text-[#1f3d2b]">
-                            <span>Prep time</span>
-                            <span>{item.time || "15m"}</span>
-                          </div>
-                          <p className="mt-1 text-[#667864] line-clamp-2">
-                            {visibleIngredients.length > 0
-                              ? visibleIngredients.join(", ")
-                              : "Ingredients available on the recipe page"}
-                          </p>
-                        </div>
-                      )}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            key={`prep-overlay-${item.id}`}
+                            initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                            transition={{ duration: 0.18, ease: "easeOut" }}
+                            className="absolute left-3 right-3 top-[calc(68%-5.75rem)] z-10 rounded-lg border border-primary/15 bg-white/90 p-2 text-[10px] text-[#536451] shadow-lg shadow-primary/15 backdrop-blur md:text-xs"
+                          >
+                            <div className="flex items-start justify-between gap-2 font-bold text-[#1f3d2b]">
+                              <div>
+                                <span>Prep time</span>
+                                <div className="text-sm font-semibold text-[#1f3d2b]">{item.time || "15m"}</div>
+                              </div>
+                              <button
+                                type="button"
+                                aria-label={`Close prep time details for ${item.title}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedRecipeCardId(null);
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-primary/15 bg-white text-[#536451] shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <p className="mt-1 text-[#667864] line-clamp-2">
+                              {visibleIngredients.length > 0
+                                ? visibleIngredients.join(", ")
+                                : "Ingredients available on the recipe page"}
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       <div className="absolute inset-x-0 bottom-0 top-[68%] bg-white/96 px-3 pb-3 pt-4 text-[#1f3d2b] transition-all duration-300">
                         <p className="line-clamp-2 [overflow-wrap:anywhere] font-bold text-xs md:text-sm leading-snug mb-1">{item.title}</p>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold">
