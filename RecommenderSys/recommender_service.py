@@ -41,6 +41,7 @@ class MealLogRequest(BaseModel):
     logged_at: str | None = None
     portion_size: float | None = None
     portion_unit: str | None = None
+    image_url: str | None = None
     notes: str | None = None
 
 
@@ -110,6 +111,7 @@ def create_meal_log(
         logged_at=payload.logged_at,
         portion_size=payload.portion_size,
         portion_unit=payload.portion_unit,
+        image_url=payload.image_url,
         notes=payload.notes,
     )
     return {"ok": True, **result}

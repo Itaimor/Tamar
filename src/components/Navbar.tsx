@@ -156,6 +156,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               href="#" 
               onClick={(e) => { e.preventDefault(); navigate("/"); }}
               className={linkClass("/")}
+              data-tour="home"
             >
               Home
             </a>
@@ -163,6 +164,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               href="#" 
               onClick={(e) => { e.preventDefault(); navigate("/cookbook"); }}
               className={linkClass("/cookbook")}
+              data-tour="cookbook"
             >
               CookBook
             </a>
@@ -170,6 +172,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               href="#" 
               onClick={(e) => { e.preventDefault(); navigate(getTabParam("chat")); }}
               className={linkClass(getTabParam("chat"))}
+              data-tour="chat"
             >
               Chat
             </a>
@@ -177,6 +180,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               href="#" 
               onClick={(e) => { e.preventDefault(); navigate(getTabParam("analysis")); }}
               className={linkClass(getTabParam("analysis"))}
+              data-tour="analysis"
             >
               Analysis
             </a>
@@ -184,6 +188,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               href="#"
               onClick={(e) => { e.preventDefault(); navigate(getTabParam("diary")); }}
               className={linkClass(getTabParam("diary"))}
+              data-tour="diary"
             >
               Diary
             </a>
@@ -196,6 +201,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
             onClick={() => setSearchOpen(true)}
             className="rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
             aria-label="Search recipes"
+            data-tour="search"
           >
             <Search className="w-5 h-5" />
           </button>

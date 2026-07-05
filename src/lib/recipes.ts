@@ -160,10 +160,36 @@ const MEAL_TYPE_RULES: Array<[string, string[]]> = [
   ["meal_main", ["chicken", "beef", "pork", "salmon", "fish", "shrimp", "tofu", "steak"]],
 ];
 
+const TRUSTED_IMAGE_SOURCES = new Set(["manual", "admin"]);
+const NON_FOOD_IMAGE_URL_TERMS = [
+  "book",
+  "books",
+  "notebook",
+  "journal",
+  "magazine",
+  "library",
+  "paper",
+  "pen",
+  "pencil",
+  "desk",
+  "office",
+  "laptop",
+  "keyboard",
+  "document",
+];
+
+const hasNonFoodImageUrlTerm = (url: string): boolean => {
+  const normalizedUrl = decodeURIComponent(url).toLowerCase();
+  return NON_FOOD_IMAGE_URL_TERMS.some((term) =>
+    new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}([^a-z0-9]|$)`).test(normalizedUrl),
+  );
+};
+
 // Helper to determine if an image URL is an Unsplash placeholder or generic fallback image
 const isPlaceholderImage = (url: string | null | undefined): boolean => {
   if (!url) return true;
   return (
+    hasNonFoodImageUrlTerm(url) ||
     url.includes("photo-1546069901-ba9599a7e63c") ||
     url.includes("photo-1512621776951-a57141f2eefd") ||
     url === "/images/hero.png" ||
@@ -284,9 +310,11 @@ const getStoredRecipeImage = (item: any): { imageUrl: string | null; sourceTier:
 const getRecipeImage = (item: any, forceFallbackImage = false, usedImageSignatures?: Set<string>): string => {
   if (forceFallbackImage) return getCategoryImage(item, usedImageSignatures);
 
-  const { imageUrl } = getStoredRecipeImage(item);
+  const { imageUrl, sourceTier } = getStoredRecipeImage(item);
 
-  if (isPlaceholderImage(imageUrl)) return getCategoryImage(item, usedImageSignatures);
+  if (!TRUSTED_IMAGE_SOURCES.has(sourceTier || "") || isPlaceholderImage(imageUrl)) {
+    return getCategoryImage(item, usedImageSignatures);
+  }
 
   usedImageSignatures?.add(getImageSignature(imageUrl));
   return imageUrl;
@@ -310,7 +338,7 @@ const mapRecipeRows = (items: any[]): RecipeItem[] => {
 
   for (const item of items) {
     const { imageUrl, sourceTier } = getStoredRecipeImage(item);
-    const isProtectedSource = sourceTier === "manual" || sourceTier === "admin";
+    const isProtectedSource = TRUSTED_IMAGE_SOURCES.has(sourceTier || "");
     if (!isProtectedSource && imageUrl && !isPlaceholderImage(imageUrl)) {
       const signature = getImageSignature(imageUrl);
       storedImageCounts.set(signature, (storedImageCounts.get(signature) || 0) + 1);
@@ -319,7 +347,7 @@ const mapRecipeRows = (items: any[]): RecipeItem[] => {
 
   return items.map((item) => {
     const { imageUrl, sourceTier } = getStoredRecipeImage(item);
-    const isProtectedSource = sourceTier === "manual" || sourceTier === "admin";
+    const isProtectedSource = TRUSTED_IMAGE_SOURCES.has(sourceTier || "");
     const signature = imageUrl ? getImageSignature(imageUrl) : "";
     const forceFallbackImage =
       !isProtectedSource &&

@@ -32,12 +32,15 @@ The current app includes an IBS profile layer plus the first non-NHANES recommen
 Implemented scope:
 
 - Maintain a code-side IBS ingredient catalog and aliases in `src/lib/ibsIngredients.ts`.
+- Show a first-run step-by-step website tour that spotlights Home, CookBook, Chat, Analysis, Diary, search, and quick food logging before optional personalization setup.
+- Allow users to skip the first-run tutorial/setup without saving synthetic recipe dislikes or IBS questionnaire answers; skipped users continue with general recommendations until they explicitly retrain taste.
 - Ask a visible IBS cold-start questionnaire in `src/components/IbsOnboardingCard.tsx`.
 - Persist personal IBS ingredient grades in `public.user_ibs_ingredient_risks`.
 - Persist IBS onboarding/check-in state in `public.user_ibs_profiles`.
 - Persist completed `How I Feel` check-ins in `public.user_ibs_checkins`.
 - Mirror foods collected by completed `How I Feel` chat check-ins into the Diary/`meal_logs` flow.
 - Route recommended-recipe eating evidence through a chat-guided recipe feedback flow before writing recipe-backed `meal_logs`.
+- Allow the chat to answer recommendation requests by reading the same `user_recommendations.recommended_recipe_ids` row that powers Home's `Curated for You` section, refreshing through `/api/refresh-recommendations` when the user is signed in.
 - Add the `How I Feel` chat flow before `Analyze my Lunch`.
 - Add non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
 - Store offline preference candidates in `public.user_candidate_recipes`.
@@ -47,7 +50,11 @@ Implemented scope:
 - Support immediate meal-log and health-report updates through the Python recommender service.
 - Support optional offline symptom-risk model training in `RecommenderSys/train_symptom_model.py`.
 - Show a user-facing Diary page for logging meals and how the user feels.
+- Allow the Diary to search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline, and to add food-history entries from Recent diary into cooklists.
 - Show a user-facing Analysis page that summarizes possible trigger foods, easier foods, recent meal/symptom patterns, and next-step suggestions from the same risk and logging tables.
+- Allow meal logs created from the Diary, chat food logging, or recipe-feedback chat to carry an optional uploaded image stored in Supabase Storage and referenced by `image_url`.
+- Allow users to add personal, non-catalog recipes to cooklists from the CookBook page, Diary, or Tamar chat.
+- Show cookbook-only recommendations in the CookBook page from recipes already saved in the user's cooklists, using risk-reranked catalog recipes plus heuristic personal-recipe ranking.
 
 Out of scope for this implemented phase:
 
@@ -63,12 +70,14 @@ The Diary page is the user-facing entry point for food and symptom history.
 
 It lets signed-in users:
 
-1. Save a meal with time, optional portion, and notes.
+1. Save a meal with time, optional portion, optional uploaded image, and notes.
 2. Save a how-you-feel check-in with time, symptom type, severity, no-symptom state, and notes.
 3. See foods captured through the chat-based IBS check-in.
 4. See started/completed recipe activity as food-history context.
 5. Review a combined meal/check-in timeline grouped by day.
-6. See simple counts for today's meals, today's check-ins, and rougher notes saved.
+6. Search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline.
+7. Add food-history entries from the recent diary timeline into a cooklist.
+8. See simple counts for today's meals, today's check-ins, and rougher notes saved.
 
 Writes go through frontend API bridges:
 
@@ -94,6 +103,8 @@ health_reports
 user_ibs_checkins
 recipe_interactions
 ```
+
+When a `meal_logs.image_url` is present, the Diary may show it as meal context. Meal images are user-facing diary evidence only; they do not change ingredient extraction, symptom attribution, or recommender scoring unless a later design explicitly adds image understanding.
 
 Existing chat check-ins are shown by expanding `user_ibs_checkins.food_windows` into chat-sourced food entries. Future completed chat check-ins also write `meal_logs` rows for the collected foods so backend learning can use them.
 
@@ -300,6 +311,39 @@ interaction_type
 created_at
 ```
 
+Cookbook organization is separate from preference events:
+
+```text
+cooklists
+---------
+id
+user_id
+name
+is_default
+created_at
+updated_at
+
+cooklist_recipes
+----------------
+id
+cooklist_id
+user_id
+recipe_id
+recipe_title
+recipe_source
+image_url
+description
+ingredients
+instructions
+created_at
+```
+
+Every user can have many cooklists. The default cooklist is named `Liked`; clicking the recipe plus button for an unsaved recipe adds the recipe there and records a `saved` interaction. Clicking plus for a recipe that is already in the cookbook opens a cooklist picker. Cooklist membership changes do not create additional recommendation event types; the existing `saved` interaction remains the recommender signal for a recipe that is anywhere in the cookbook.
+
+Users can rename or delete non-default cooklists from the CookBook page. Deleting a cooklist removes its memberships; if a catalog recipe is no longer present in any cooklist afterward, the corresponding `saved` interaction is removed so recommendation signals stay aligned with the current cookbook.
+
+Cooklists can also contain personal recipes entered by the user. Personal recipes use `recipe_source = 'personal'`, a generated text `recipe_id`, and optional image, ingredient, and instruction notes stored directly on `cooklist_recipes`. They are private cookbook content and are not treated as catalog recipes, LightFM items, or catalog recommendation candidates unless a later import/promote flow explicitly converts them into catalog recipes. Personal recipes may still appear in the cookbook-only recommendation sidebar through heuristic ranking based on recency, cooklist frequency, and ingredient-risk signals from their stored notes.
+
 Current interaction weights:
 
 ```text
@@ -338,6 +382,11 @@ Meal logs can be created from:
 2. Completed chat-based `How I Feel` check-ins, where each collected food-window item is converted into a meal log.
 3. The recommender service when a recipe-backed meal is logged.
 4. The chat-guided recommended-recipe feedback flow after the user confirms they ate the recipe.
+5. The chat `Log Food` flow, which can attach an optional uploaded image.
+
+The Diary manual meal form can be prefilled from the user's cookbook or from recently logged meals. Cookbook personal recipes are logged by food name, image, and notes only; catalog cookbook recipes may also carry their numeric `recipe_id` when that id matches the `recipes` table.
+
+After a Diary meal is logged, the app may ask whether to add it to the CookBook if the same catalog recipe or same-titled personal recipe is not already present. Recent Diary food entries can also be added to cooklists later. Catalog-backed entries use `setRecipeCooklists` and create/refresh the `saved` preference interaction; non-catalog meal/chat-food entries become private personal cooklist recipes and are not recommendation candidates.
 
 Used by:
 
@@ -361,6 +410,7 @@ food_name
 logged_at
 portion_size
 portion_unit
+image_url
 notes
 created_at
 ```
@@ -1261,6 +1311,21 @@ Index:
 (user_id, preference_score)
 ```
 
+### 14.1.1 user_recommendations Cookbook Columns
+
+The `user_recommendations` row stores Home recommendation arrays and the CookBook sidebar arrays:
+
+```text
+cookbook_recipe_ids
+cookbook_recipe_sources
+cookbook_match_scores
+cookbook_reasons
+```
+
+The Home arrays (`recommended_recipe_ids`, category recipe ids, and their score arrays) are catalog recommendations from the broader recipe database and continue to exclude recipes the user already intentionally saved or liked. The cookbook arrays are different: their candidate pool is only the user's current `cooklist_recipes` rows.
+
+Catalog cookbook candidates reuse the online preference/risk path: fetch preference scores, apply strict restrictions, compute ingredient/symptom risk, and rerank by final score. Personal cookbook candidates are not LightFM/catalog items; they are mixed into the cookbook sidebar with a bounded heuristic score from recency, cooklist frequency, and ingredient-risk heuristics over their stored ingredient notes.
+
 ---
 
 ## 14.2 user_restrictions
@@ -1490,7 +1555,30 @@ Flow:
 
 ---
 
-## 15.6 Chat-Guided Recommended Recipe Feedback Flow
+## 15.6 Personal Recipe To Cooklist Flow
+
+Example:
+
+```text
+CookBook form or chat chip: Add Recipe
+```
+
+Flow:
+
+```text
+1. User provides a recipe title and optionally a target cooklist, uploaded image, ingredients, and instructions.
+2. If the target cooklist does not exist, create it; otherwise use the selected/mentioned cooklist.
+3. Insert a `cooklist_recipes` row with `recipe_source = 'personal'` and a generated text recipe id.
+4. Do not insert a `recipe_interactions` row for the personal recipe.
+5. Do not include the personal recipe in LightFM training or catalog candidate generation.
+6. The personal recipe may appear in the CookBook sidebar recommendation list through heuristic scoring over its saved metadata; this does not promote it to a catalog recipe.
+```
+
+The CookBook page supports searching across saved recipe names, descriptions, and personal ingredient notes. The Diary page uses the same cooklist storage helpers to add food-history entries to existing or newly created cooklists.
+
+---
+
+## 15.7 Chat-Guided Recommended Recipe Feedback Flow
 
 Example:
 
@@ -1504,7 +1592,7 @@ Flow:
 1. Open the Tamar chat panel for the selected recipe.
 2. Ask whether the user ate the recipe and wants to log it.
 3. If the user says no, stop without writing meal or health evidence.
-4. If the user says yes, call POST /api/meal-log with recipe_id, food_name, and logged_at.
+4. If the user says yes, call POST /api/meal-log with recipe_id, food_name, logged_at, and optional image_url.
 5. Record a completed recipe interaction for preference/history context.
 6. Ask whether the user liked the recipe and record liked or dismissed when clear.
 7. Ask how the user is feeling in general.
@@ -1512,6 +1600,54 @@ Flow:
 ```
 
 The arrow/details control on a recipe card should only reveal recipe metadata such as ingredients and prep time. It should not log a meal. Logging a recommended recipe as eaten requires explicit chat confirmation.
+
+After chat logs a food or confirms a recommended recipe as eaten, Tamar asks whether to add it to the CookBook when it is not already saved. If the user says yes, Tamar asks for a cooklist name and creates that cooklist when needed. Catalog recipes are saved as catalog cooklist rows and preserve recommendation signals; free-text chat foods are saved as private personal recipes.
+
+---
+
+## 15.8 Chat Recommendation Request Flow
+
+Example:
+
+```text
+Chat chip or user message: Recommend Me
+```
+
+Flow:
+
+```text
+1. If the user is signed in, call POST /api/refresh-recommendations with the user id.
+2. Read the user's `user_recommendations.recommended_recipe_ids` and `match_scores` row.
+3. Fetch the recipe rows for those ids using the same recipe mapping path as Home.
+4. Format the top recipes as a concise chat response.
+5. If no personalized row is available, fall back to general default recipes.
+```
+
+The chat recommendation response is a presentation layer over the existing Curated for You output. It must not create a separate ranking algorithm or call Gemini to invent catalog recommendations. Eating a recommended recipe still requires the chat-guided feedback flow in section 15.7 before writing meal or health evidence.
+
+---
+
+## 15.9 CookBook Sidebar Recommendation Flow
+
+Example:
+
+```text
+CookBook page: From Your CookBook
+```
+
+Flow:
+
+```text
+1. If the user is signed in, call POST /api/refresh-recommendations.
+2. The recommender service refreshes Home recommendation arrays and cookbook-only arrays in the same `user_recommendations` row.
+3. Catalog cookbook recipes are candidate-limited to the user's `cooklist_recipes` rows, then reranked with preference, hard restriction, ingredient-risk, and symptom-risk signals.
+4. Personal cookbook recipes are not sent through LightFM; they receive heuristic scores from saved metadata.
+5. The CookBook page reads `cookbook_recipe_ids`, `cookbook_recipe_sources`, `cookbook_match_scores`, and `cookbook_reasons`.
+6. If the stored cookbook arrays are absent, stale, or unavailable, the page falls back to a local ranking over the already loaded `cooklist_recipes` rows so the sidebar can still recommend from the user's cookbook.
+7. The page renders five compact recommendations in a right sidebar on desktop and above cooklist sections on mobile.
+```
+
+This flow deliberately differs from Home's `Curated for You`: Home recommends unsaved catalog recipes from the broader candidate pool, while the CookBook sidebar recommends only recipes already inside the user's cookbook.
 
 ---
 

@@ -107,6 +107,11 @@ In Supabase SQL Editor, run the SQL files in `supabase/migrations` in filename o
 20260601000000_add_category_recommendation_columns.sql
 20260602000000_add_recommendation_category_rows.sql
 20260621000000_create_ibs_tables.sql
+20260702000000_create_non_nhanes_recommender_tables.sql
+20260705000000_create_cooklists.sql
+20260706000000_add_meal_images_and_personal_cooklist_recipes.sql
+20260706000001_create_user_uploads_bucket.sql
+20260707000000_add_cookbook_recommendation_columns.sql
 ```
 
 You should end up with these important tables:
@@ -114,8 +119,13 @@ You should end up with these important tables:
 - `recipes`
 - `historical_interactions`
 - `recipe_interactions`
+- `cooklists`
+- `cooklist_recipes`
+- `meal_logs`
+- `health_reports`
 - `user_recommendations`
 - `recipe_images`
+- Storage bucket `user-uploads` for user-uploaded meal and personal recipe images
 - `user_ibs_profiles`
 - `user_ibs_ingredient_risks`
 - `user_ibs_checkins`

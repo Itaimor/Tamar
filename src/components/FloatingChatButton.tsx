@@ -22,6 +22,7 @@ const FloatingChatButton = ({ onOpen }: FloatingChatButtonProps) => {
       onClick={onOpen}
       className="fixed bottom-5 right-4 z-40 group flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-full border border-primary/15 bg-white/95 px-3 py-2 text-left text-foreground shadow-2xl shadow-primary/20 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-[#fbf7ec] hover:shadow-primary/25 active:translate-y-0 sm:bottom-6 sm:right-6 sm:px-4 sm:py-3"
       aria-label="Open Tamar chat to log food"
+      data-tour="floating-chat"
     >
       <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/25 transition-transform duration-300 group-hover:scale-105">
         <MessageCircle className="h-6 w-6" />

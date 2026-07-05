@@ -106,6 +106,7 @@ def log_meal(
     logged_at: Any = None,
     portion_size: float | None = None,
     portion_unit: str | None = None,
+    image_url: str | None = None,
     notes: str | None = None,
 ) -> dict:
     logged_dt = parse_or_now(logged_at)
@@ -116,6 +117,7 @@ def log_meal(
         "logged_at": logged_dt.isoformat(),
         "portion_size": portion_size,
         "portion_unit": portion_unit,
+        "image_url": image_url,
         "notes": notes,
     }
 
