@@ -4,7 +4,7 @@ import {
   buildTamarChatSystemInstruction,
   ChatRagAuthError,
   extractBearerToken,
-} from "./chat-rag-context";
+} from "./chat-rag-context.js";
 
 export default async function handler(req: any, res: any) {
   // Only allow POST requests
