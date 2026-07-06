@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { syncTamarTreeAfterCare } from "@/lib/tamarTree";
 
 export type MealLogRow = {
   id: number;
@@ -8,6 +9,11 @@ export type MealLogRow = {
   logged_at: string;
   portion_size?: number | null;
   portion_unit?: string | null;
+  calories?: number | null;
+  protein_g?: number | null;
+  fat_g?: number | null;
+  nutrition_source?: "manual" | "catalog_recipe" | "gemini_estimate" | null;
+  nutrition_confidence?: number | null;
   image_url?: string | null;
   notes?: string | null;
   created_at?: string | null;
@@ -77,6 +83,11 @@ export type MealSourceOption = {
   sourceLabel: string;
   recipeId?: number | null;
   imageUrl?: string | null;
+  calories?: number | null;
+  proteinG?: number | null;
+  fatG?: number | null;
+  nutritionSource?: "manual" | "catalog_recipe" | "gemini_estimate" | null;
+  nutritionConfidence?: number | null;
   helper?: string | null;
 };
 
@@ -87,8 +98,17 @@ export type MealLogInput = {
   recipeId?: number | null;
   portionSize?: number | null;
   portionUnit?: string | null;
+  calories?: number | null;
+  proteinG?: number | null;
+  fatG?: number | null;
+  nutritionSource?: "manual" | "catalog_recipe" | "gemini_estimate" | null;
+  nutritionConfidence?: number | null;
   imageUrl?: string | null;
   notes?: string | null;
+};
+
+export type MealLogUpdateInput = MealLogInput & {
+  id: number;
 };
 
 export type HealthReportInput = {
@@ -160,6 +180,24 @@ const numericCatalogRecipeId = (recipeId: string | number | null | undefined) =>
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
+
+const mealLogSelect = "id,user_id,recipe_id,food_name,logged_at,portion_size,portion_unit,calories,protein_g,fat_g,nutrition_source,nutrition_confidence,image_url,notes,created_at";
+
+const buildMealLogPayload = (input: MealLogInput) => ({
+  user_id: input.userId,
+  food_name: input.foodName.trim(),
+  recipe_id: input.recipeId || null,
+  logged_at: normalizeDate(input.loggedAt),
+  portion_size: input.portionSize ?? null,
+  portion_unit: input.portionUnit?.trim() || null,
+  calories: input.calories ?? null,
+  protein_g: input.proteinG ?? null,
+  fat_g: input.fatG ?? null,
+  nutrition_source: input.nutritionSource || null,
+  nutrition_confidence: input.nutritionConfidence ?? null,
+  image_url: input.imageUrl?.trim() || null,
+  notes: input.notes?.trim() || null,
+});
 
 const addHours = (date: Date, hours: number) => new Date(date.getTime() + hours * 60 * 60 * 1000);
 
@@ -236,7 +274,7 @@ export const fetchDiaryData = async (userId: string): Promise<DiaryData> => {
       "meal_logs",
       supabase
         .from("meal_logs")
-        .select("id,user_id,recipe_id,food_name,logged_at,portion_size,portion_unit,image_url,notes,created_at")
+        .select(mealLogSelect)
         .eq("user_id", userId)
         .order("logged_at", { ascending: false })
         .limit(120),
@@ -318,20 +356,14 @@ export const fetchCookbookMealOptions = async (userId: string): Promise<MealSour
 };
 
 export const createMealLog = async (input: MealLogInput): Promise<MealLogRow> => {
-  const payload = {
-    user_id: input.userId,
-    food_name: input.foodName.trim(),
-    recipe_id: input.recipeId || null,
-    logged_at: normalizeDate(input.loggedAt),
-    portion_size: input.portionSize || null,
-    portion_unit: input.portionUnit || null,
-    image_url: input.imageUrl?.trim() || null,
-    notes: input.notes?.trim() || null,
-  };
+  const payload = buildMealLogPayload(input);
 
   try {
     const apiResult = await postDiaryApi<{ meal_log?: MealLogRow }>("/api/meal-log", payload);
-    if (apiResult?.meal_log) return apiResult.meal_log;
+    if (apiResult?.meal_log) {
+      await syncTamarTreeAfterCare(input.userId, "water", apiResult.meal_log.logged_at);
+      return apiResult.meal_log;
+    }
   } catch (error) {
     console.warn("Meal-log API unavailable; falling back to Supabase insert.", error);
   }
@@ -339,7 +371,39 @@ export const createMealLog = async (input: MealLogInput): Promise<MealLogRow> =>
   if (!supabase) throw new Error("Tamar is not connected to Supabase yet.");
   const { data, error } = await supabase.from("meal_logs").insert(payload).select().single();
   if (error) throw error;
+  await syncTamarTreeAfterCare(input.userId, "water", data.logged_at);
   return data as MealLogRow;
+};
+
+export const updateMealLog = async (input: MealLogUpdateInput): Promise<MealLogRow> => {
+  if (!supabase) throw new Error("Tamar is not connected to Supabase yet.");
+
+  const { user_id: _userId, ...payload } = buildMealLogPayload(input);
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .update(payload)
+    .eq("id", input.id)
+    .eq("user_id", input.userId)
+    .select(mealLogSelect)
+    .single();
+
+  if (error) throw error;
+  return data as MealLogRow;
+};
+
+export const deleteMealLog = async (userId: string, mealId: number) => {
+  if (!supabase) throw new Error("Tamar is not connected to Supabase yet.");
+
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .delete()
+    .eq("id", mealId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("Meal not found.");
 };
 
 export const createHealthReport = async (input: HealthReportInput): Promise<HealthReportRow> => {
@@ -355,7 +419,10 @@ export const createHealthReport = async (input: HealthReportInput): Promise<Heal
 
   try {
     const apiResult = await postDiaryApi<{ health_report?: HealthReportRow }>("/api/health-report", payload);
-    if (apiResult?.health_report) return apiResult.health_report;
+    if (apiResult?.health_report) {
+      await syncTamarTreeAfterCare(input.userId, "compost", apiResult.health_report.reported_at);
+      return apiResult.health_report;
+    }
   } catch (error) {
     console.warn("Health-report API unavailable; falling back to Supabase insert.", error);
   }
@@ -363,5 +430,6 @@ export const createHealthReport = async (input: HealthReportInput): Promise<Heal
   if (!supabase) throw new Error("Tamar is not connected to Supabase yet.");
   const { data, error } = await supabase.from("health_reports").insert(payload).select().single();
   if (error) throw error;
+  await syncTamarTreeAfterCare(input.userId, "compost", data.reported_at);
   return data as HealthReportRow;
 };

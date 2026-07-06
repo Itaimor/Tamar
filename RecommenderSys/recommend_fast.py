@@ -245,15 +245,15 @@ def build_user_vector(user_ratings: pd.DataFrame, artifact: dict) -> Optional[np
 #   - Curated:  unconstrained CF top-k.
 #   - Trending: global popularity in `recipe_interactions` (positive types
 #               only) over the last week, dedup-ed against earlier rows.
-#   - Flavor:   currently disabled — left as NULL while the team decides
-#               between a keyword predicate and embedding-based ranking.
+#   - Flavor:   CF embedding similarity to a bold-flavor seed centroid,
+#               filtered by flavor keywords and deduped against earlier rows.
 #   - Healthy:  CF top-k restricted to recipes passing `is_healthy`.
 #   - Quick:    CF top-k restricted to recipes passing `is_quick`.
 #
 # The single greedy pass enforces "a recipe shown under one heading does not
 # appear under another": once a recipe is assigned to row N, it is added to
 # `assigned` and skipped by all later rows. The walk order (defined here) is
-# Curated -> Trending -> Healthy -> Quick. Curated wins ties because it is
+# Curated -> Trending -> Flavor -> Healthy -> Quick. Curated wins ties because it is
 # the most personalized signal we have.
 # ---------------------------------------------------------------------------
 

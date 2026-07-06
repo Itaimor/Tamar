@@ -12,6 +12,45 @@ type ApiResponse = {
   };
 };
 
+const optionalNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+};
+
+const optionalConfidence = (value: unknown) => {
+  const numeric = optionalNumber(value);
+  if (numeric === null) return null;
+  return Math.max(0, Math.min(1, numeric));
+};
+
+const nutritionSource = (value: unknown) => {
+  const source = typeof value === "string" ? value.trim() : "";
+  return ["manual", "catalog_recipe", "gemini_estimate"].includes(source) ? source : null;
+};
+
+const numericRecipeId = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const nutritionFromRecipe = (recipe: { nutrition?: unknown } | null) => {
+  const values = Array.isArray(recipe?.nutrition) ? recipe.nutrition : [];
+  const calories = optionalNumber(values[0]);
+  const fat = optionalNumber(values[1]);
+  const protein = optionalNumber(values[4]);
+  if (calories === null && fat === null && protein === null) return null;
+
+  return {
+    calories,
+    protein_g: protein,
+    fat_g: fat,
+    nutrition_source: "catalog_recipe",
+    nutrition_confidence: 0.9,
+  };
+};
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -44,16 +83,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(400).json({ error: "Food name is required." });
   }
 
+  const recipeId = numericRecipeId(body.recipe_id);
   const payload = {
     user_id: data.user.id,
     food_name: foodName,
-    recipe_id: body.recipe_id || null,
+    recipe_id: recipeId,
     logged_at: body.logged_at || new Date().toISOString(),
-    portion_size: body.portion_size || null,
+    portion_size: optionalNumber(body.portion_size),
     portion_unit: body.portion_unit || null,
     image_url: typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
     notes: body.notes || null,
+    calories: optionalNumber(body.calories),
+    protein_g: optionalNumber(body.protein_g),
+    fat_g: optionalNumber(body.fat_g),
+    nutrition_source: nutritionSource(body.nutrition_source),
+    nutrition_confidence: optionalConfidence(body.nutrition_confidence),
   };
+
+  if (
+    recipeId &&
+    payload.calories === null &&
+    payload.protein_g === null &&
+    payload.fat_g === null
+  ) {
+    const { data: recipe } = await supabase
+      .from("recipes")
+      .select("nutrition")
+      .eq("id", recipeId)
+      .maybeSingle();
+    Object.assign(payload, nutritionFromRecipe(recipe));
+  }
 
   if (recommenderUrl) {
     try {

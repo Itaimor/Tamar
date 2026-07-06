@@ -53,6 +53,34 @@ def fetch_recipe(supabase: Client, recipe_id: str | int) -> Optional[dict]:
         return None
 
 
+def non_negative_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if numeric >= 0 else None
+
+
+def nutrition_from_recipe(recipe: Optional[dict]) -> dict:
+    values = (recipe or {}).get("nutrition") or []
+    if not isinstance(values, list):
+        values = []
+    calories = non_negative_float(values[0]) if len(values) > 0 else None
+    fat_g = non_negative_float(values[1]) if len(values) > 1 else None
+    protein_g = non_negative_float(values[4]) if len(values) > 4 else None
+    if calories is None and protein_g is None and fat_g is None:
+        return {}
+    return {
+        "calories": calories,
+        "protein_g": protein_g,
+        "fat_g": fat_g,
+        "nutrition_source": "catalog_recipe",
+        "nutrition_confidence": 0.9,
+    }
+
+
 def fetch_recipe_ingredient_names(supabase: Client, recipe_id: str | int) -> list[str]:
     try:
         response = (
@@ -108,8 +136,29 @@ def log_meal(
     portion_unit: str | None = None,
     image_url: str | None = None,
     notes: str | None = None,
+    calories: float | None = None,
+    protein_g: float | None = None,
+    fat_g: float | None = None,
+    nutrition_source: str | None = None,
+    nutrition_confidence: float | None = None,
 ) -> dict:
     logged_dt = parse_or_now(logged_at)
+    recipe = fetch_recipe(supabase, recipe_id) if recipe_id is not None else None
+    nutrition_payload = {
+        "calories": non_negative_float(calories),
+        "protein_g": non_negative_float(protein_g),
+        "fat_g": non_negative_float(fat_g),
+        "nutrition_source": nutrition_source if nutrition_source in {"manual", "catalog_recipe", "gemini_estimate"} else None,
+        "nutrition_confidence": clamp01(float(nutrition_confidence)) if nutrition_confidence is not None else None,
+    }
+    if (
+        recipe is not None
+        and nutrition_payload["calories"] is None
+        and nutrition_payload["protein_g"] is None
+        and nutrition_payload["fat_g"] is None
+    ):
+        nutrition_payload.update(nutrition_from_recipe(recipe))
+
     meal_payload = {
         "user_id": user_id,
         "recipe_id": int(recipe_id) if recipe_id is not None else None,
@@ -119,6 +168,7 @@ def log_meal(
         "portion_unit": portion_unit,
         "image_url": image_url,
         "notes": notes,
+        **nutrition_payload,
     }
 
     response = supabase.table("meal_logs").insert(meal_payload).execute()

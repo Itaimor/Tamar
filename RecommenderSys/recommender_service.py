@@ -43,6 +43,11 @@ class MealLogRequest(BaseModel):
     portion_unit: str | None = None
     image_url: str | None = None
     notes: str | None = None
+    calories: float | None = None
+    protein_g: float | None = None
+    fat_g: float | None = None
+    nutrition_source: str | None = None
+    nutrition_confidence: float | None = None
 
 
 class HealthReportRequest(BaseModel):
@@ -113,6 +118,11 @@ def create_meal_log(
         portion_unit=payload.portion_unit,
         image_url=payload.image_url,
         notes=payload.notes,
+        calories=payload.calories,
+        protein_g=payload.protein_g,
+        fat_g=payload.fat_g,
+        nutrition_source=payload.nutrition_source,
+        nutrition_confidence=payload.nutrition_confidence,
     )
     return {"ok": True, **result}
 

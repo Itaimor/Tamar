@@ -7,7 +7,13 @@ import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { useChatSession } from "@/components/ChatSessionProvider";
 import type { IbsTranscriptMessage, RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
+import { useCanopyAccess } from "@/hooks/useCanopyAccess";
 import { createHealthReport, createMealLog } from "@/lib/diary";
+import {
+  FoodImageAnalysis,
+  analyzeFoodImage,
+  buildFoodImageSuggestionNotes,
+} from "@/lib/foodImageAnalysis";
 import { uploadUserImage } from "@/lib/imageUploads";
 import {
   addPersonalRecipeToCooklist,
@@ -25,7 +31,7 @@ import {
 } from "@/lib/ibsProfile";
 import { validateIbsCheckInResult } from "@/lib/ibsRisk";
 
-const chips = ["Recommend Me", "Log Food", "Add Recipe", "How I Feel", "Analyze my Lunch", "Log Stress Level", "View Weekly Risk"];
+const chips = ["Recommend Me", "Log Food", "Add Recipe", "How I Feel", "Analyze my Lunch"];
 const MAX_MODEL_HISTORY_MESSAGES = 24;
 
 type RecipeFeedbackRequest = {
@@ -48,6 +54,18 @@ const soundsOkay = (text: string) => /\b(good|fine|okay|ok|great|normal|no sympt
 const soundsRough = (text: string) => /\b(pain|bloat|bloated|diarrhea|constipation|nausea|cramp|cramps|bad|rough|uncomfortable|sick)\b/i.test(text);
 const isRecommendationRequest = (text: string) =>
   /\b(recommend|recommendation|suggest|curated for you|what should i (eat|cook|make)|give me (a )?recipe)\b/i.test(text);
+
+const formatPhotoSuggestionMessage = (analysis: FoodImageAnalysis) => {
+  if (!analysis.is_food || !analysis.food_name) {
+    return "I could not confidently identify food from that photo. Tell me what to call it and I will log it with the image attached.";
+  }
+
+  const visible = analysis.visible_ingredients.length
+    ? ` I can see ${analysis.visible_ingredients.slice(0, 5).join(", ")}.`
+    : "";
+  const question = analysis.questions[0] ? ` ${analysis.questions[0]}` : "";
+  return `I think this is "${analysis.food_name}".${visible}${question} Reply yes to log that, or type a different meal name.`;
+};
 
 const extractLabeledValue = (text: string, label: string) => {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -116,6 +134,7 @@ const formatRecommendationMessage = (recipes: RecipeItem[], personalized: boolea
 
 const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackRequest = null, onClose }: ChatScreenProps) => {
   const { user, session } = useAuth();
+  const { canopyDialog, openImageUploadPrompt } = useCanopyAccess(user);
   const {
     messages,
     setMessages,
@@ -132,6 +151,8 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   const [inputValue, setInputValue] = useState("");
   const [pendingImageUrl, setPendingImageUrl] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isAnalyzingFoodImage, setIsAnalyzingFoodImage] = useState(false);
+  const [pendingFoodImageAnalysis, setPendingFoodImageAnalysis] = useState<FoodImageAnalysis | null>(null);
   const [isAwaitingPersonalRecipe, setIsAwaitingPersonalRecipe] = useState(false);
   const [pendingCookbookAdd, setPendingCookbookAdd] = useState<PendingCookbookAdd | null>(null);
   const handledIntentRef = useRef<string | null>(null);
@@ -163,6 +184,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setPendingCookbookAdd(null);
     setIsAwaitingFoodLog(true);
     setPendingImageUrl("");
+    setPendingFoodImageAnalysis(null);
     setMessages((prev) => [
       ...prev,
       { role: "user", text: "Log Food" },
@@ -187,6 +209,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setPendingCookbookAdd(null);
     setPendingImageUrl("");
     setRecipeFeedback({ recipe, step: "confirm" });
+    setPendingFoodImageAnalysis(null);
     setMessages((prev) => [
       ...prev,
       { role: "user", text: `I want to start ${recipe.title}` },
@@ -210,6 +233,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setRecipeFeedback(null);
     setPendingCookbookAdd(null);
     setPendingImageUrl("");
+    setPendingFoodImageAnalysis(null);
     setIsAwaitingPersonalRecipe(true);
     setMessages((prev) => [
       ...prev,
@@ -232,6 +256,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setRecipeFeedback(null);
     setPendingCookbookAdd(null);
     setPendingImageUrl("");
+    setPendingFoodImageAnalysis(null);
     setIsLoading(true);
 
     try {
@@ -503,17 +528,48 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   const handleFoodLogMessage = async (text: string) => {
     if (!user) return;
 
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    const trimmedText = text.trim();
+    if (pendingFoodImageAnalysis) {
+      if (isNo(trimmedText)) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", text: trimmedText },
+          { role: "ai", text: "No problem. Tell me what to call this meal and I will keep the image attached." },
+        ]);
+        setInputValue("");
+        setPendingFoodImageAnalysis(null);
+        return;
+      }
+
+      if (isYes(trimmedText) && !pendingFoodImageAnalysis.food_name) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", text: trimmedText },
+          { role: "ai", text: "I need a meal name before I can save it. What should I call this?" },
+        ]);
+        setInputValue("");
+        setPendingFoodImageAnalysis(null);
+        return;
+      }
+    }
+
+    const confirmedPhotoSuggestion = pendingFoodImageAnalysis && isYes(trimmedText);
+    const foodName = confirmedPhotoSuggestion ? pendingFoodImageAnalysis.food_name : trimmedText;
+    const photoNotes = pendingFoodImageAnalysis?.is_food
+      ? buildFoodImageSuggestionNotes(pendingFoodImageAnalysis)
+      : "";
+
+    setMessages((prev) => [...prev, { role: "user", text: trimmedText }]);
     setInputValue("");
     setIsLoading(true);
 
     try {
       const savedMeal = await createMealLog({
         userId: user.id,
-        foodName: text,
+        foodName,
         loggedAt: new Date().toISOString(),
         imageUrl: pendingImageUrl,
-        notes: "Logged through Tamar chat.",
+        notes: [photoNotes, "Logged through Tamar chat."].filter(Boolean).join(" "),
       });
 
       setMessages((prev) => [
@@ -525,6 +581,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       ]);
       setIsAwaitingFoodLog(false);
       setPendingImageUrl("");
+      setPendingFoodImageAnalysis(null);
       toast.success("Food logged to your Diary.");
       await askCookbookAddIfMissing({
         recipeId: savedMeal.recipe_id || null,
@@ -572,6 +629,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
       setIsAwaitingPersonalRecipe(false);
       setPendingImageUrl("");
+      setPendingFoodImageAnalysis(null);
       setMessages((prev) => [
         ...prev,
         { role: "ai", text: `Saved "${parsed.title}" to ${cooklist.name}.` },
@@ -636,6 +694,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
           afterRecipeFeedback: recipe,
         });
         setPendingImageUrl("");
+        setPendingFoodImageAnalysis(null);
         if (!promptedCookbook) {
           setRecipeFeedback({ recipe, step: "liked" });
           setMessages((prev) => [
@@ -772,12 +831,16 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
       const firstUserIndex = history.findIndex(m => m.role === "user");
       const validHistory = firstUserIndex !== -1 ? history.slice(firstUserIndex) : [];
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
 
       const response = await fetch("/api/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           prompt: text,
           history: validHistory,
@@ -803,13 +866,46 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
   const handleImageFileSelected = async (file: File | null | undefined) => {
     if (!user || !file || !canAttachImage) return;
+    if (!openImageUploadPrompt()) {
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
 
     setIsUploadingImage(true);
     try {
       const folder = isAwaitingPersonalRecipe ? "personal-recipes" : "meal-logs";
       const imageUrl = await uploadUserImage({ userId: user.id, file, folder });
       setPendingImageUrl(imageUrl);
+      setPendingFoodImageAnalysis(null);
       toast.success("Image attached.");
+      if (isAwaitingFoodLog) {
+        setIsAnalyzingFoodImage(true);
+        try {
+          const analysis = await analyzeFoodImage({ imageUrl, context: "meal_log" });
+          setPendingFoodImageAnalysis(analysis);
+          if (analysis.is_food && analysis.food_name) {
+            setInputValue(analysis.food_name);
+          }
+          setMessages((prev) => [
+            ...prev,
+            { role: "ai", text: formatPhotoSuggestionMessage(analysis) },
+          ]);
+        } catch (error) {
+          console.error("Chat food image analysis error:", error);
+          toast.error(error instanceof Error ? error.message : "Could not analyze that photo.");
+          setMessages((prev) => [
+            ...prev,
+            { role: "ai", text: "Image attached. Tell me what you ate and I will log it with the photo." },
+          ]);
+        } finally {
+          setIsAnalyzingFoodImage(false);
+        }
+      } else if (isAwaitingPersonalRecipe) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "Image attached as the recipe photo. Send the recipe name when you are ready." },
+        ]);
+      }
     } catch (error) {
       console.error("Chat image upload error:", error);
       toast.error(error instanceof Error ? error.message : "Could not upload that image.");
@@ -935,17 +1031,21 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
               ref={imageInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               className="sr-only"
               onChange={(event) => handleImageFileSelected(event.target.files?.[0])}
             />
             <button
               type="button"
-              onClick={() => imageInputRef.current?.click()}
+              onClick={() => {
+                if (!openImageUploadPrompt()) return;
+                imageInputRef.current?.click();
+              }}
               className="shrink-0 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={isLoading || isUploadingImage || !canAttachImage}
+              disabled={isLoading || isUploadingImage || isAnalyzingFoodImage || !canAttachImage}
               aria-label="Attach image"
             >
-              {isUploadingImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} strokeWidth={1.5} />}
+              {isUploadingImage || isAnalyzingFoodImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} strokeWidth={1.5} />}
             </button>
             <input
               type="text"
@@ -959,7 +1059,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
           </div>
           <button
             type="submit"
-            disabled={!inputValue.trim() || isLoading}
+            disabled={!inputValue.trim() || isLoading || isAnalyzingFoodImage}
             className={`bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95 shrink-0 disabled:opacity-50 disabled:grayscale ${
               docked ? "h-11 w-11" : "h-11 w-11 md:h-14 md:w-14"
             }`}
@@ -968,6 +1068,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
           </button>
         </form>
       </div>
+      {canopyDialog}
     </div>
   );
 };

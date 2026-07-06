@@ -4,9 +4,25 @@ import { useLocation } from "react-router-dom";
 import AuthDialog from "@/components/AuthDialog";
 import { Button } from "@/components/ui/button";
 
+const heroImages = [
+  {
+    src: "/images/hero.png",
+    alt: "Fresh Mediterranean bowl with herbs and vegetables",
+  },
+  {
+    src: "/images/salad.png",
+    alt: "Colorful gut-friendly salad with fresh vegetables",
+  },
+  {
+    src: "/images/pizza.png",
+    alt: "Freshly prepared pizza with bright toppings",
+  },
+];
+
 const Landing = () => {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup");
+  const [heroImageIndex, setHeroImageIndex] = useState(0);
   const location = useLocation();
 
   useEffect(() => {
@@ -16,6 +32,14 @@ const Landing = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location]);
+
+  useEffect(() => {
+    const imageTimer = window.setInterval(() => {
+      setHeroImageIndex((currentIndex) => (currentIndex + 1) % heroImages.length);
+    }, 3200);
+
+    return () => window.clearInterval(imageTimer);
+  }, []);
 
   const openAuth = (mode: "signup" | "signin") => {
     setAuthMode(mode);
@@ -50,8 +74,20 @@ const Landing = () => {
       </header>
 
       <main className="relative flex min-h-[92dvh] flex-col justify-between px-4 pb-8 pt-24 sm:px-6 md:px-12 lg:px-16 xl:px-24 max-w-full overflow-x-hidden">
-        <img src="/images/hero.png" alt="Fresh Mediterranean bowl with herbs and vegetables" className="absolute right-8 top-28 hidden h-[430px] max-h-[58vh] w-[38%] rounded-[2rem] bg-white/45 object-contain p-3 opacity-95 shadow-2xl shadow-primary/10 md:block xl:w-[36%]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#fbf7ec] via-[#fbf7ec] md:via-[#fbf7ec] md:to-[#fbf7ec]/62" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[58vw] overflow-hidden md:block">
+          {heroImages.map((image, index) => (
+            <img
+              key={image.src}
+              src={image.src}
+              alt={image.alt}
+              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-out ${
+                index === heroImageIndex ? "opacity-95" : "opacity-0"
+              }`}
+            />
+          ))}
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#fbf7ec] via-[#fbf7ec]/88 to-[#fbf7ec]/10" />
+        <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#fbf7ec] to-transparent" />
         <section className="relative z-10 flex flex-1 items-center py-8 sm:py-12 md:py-14 lg:py-18">
           <div className="w-full max-w-full md:max-w-[46%] xl:max-w-[50%]">
             <div className="mb-4 sm:mb-5 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white/70 px-3 py-1 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-primary shadow-sm">

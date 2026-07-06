@@ -1,8 +1,9 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BookOpen,
   BookmarkPlus,
+  Camera,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -10,17 +11,22 @@ import {
   HeartPulse,
   Loader2,
   NotebookPen,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
   SmilePlus,
+  Sparkles,
+  Trash2,
   Utensils,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { CanopyFeaturePanel } from "@/components/CanopyUpgradeDialog";
 import ImageUploadDropzone from "@/components/ImageUploadDropzone";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Cooklist,
   addPersonalRecipeToCooklist,
@@ -38,9 +44,24 @@ import {
   MealSourceOption,
   createHealthReport,
   createMealLog,
+  deleteMealLog,
   fetchCookbookMealOptions,
   fetchDiaryData,
+  updateMealLog,
 } from "@/lib/diary";
+import {
+  FoodImageAnalysis,
+  analyzeFoodImage,
+  buildFoodImageSuggestionNotes,
+} from "@/lib/foodImageAnalysis";
+import {
+  MealNutritionEstimate,
+  MealNutritionSource,
+  estimateMealNutrition,
+} from "@/lib/nutrition";
+import { uploadUserImage } from "@/lib/imageUploads";
+import { useCanopyAccess } from "@/hooks/useCanopyAccess";
+import TamarTreePanel from "@/components/TamarTreePanel";
 
 const symptomOptions = [
   { value: "digestive_discomfort", label: "Digestive discomfort" },
@@ -55,6 +76,11 @@ const symptomOptions = [
 const localDateTimeValue = (date = new Date()) => {
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const localDateTimeInputValue = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? localDateTimeValue() : localDateTimeValue(date);
 };
 
 const formatTime = (value: string) =>
@@ -90,6 +116,28 @@ const normalizeMealName = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const optionalNumberFromInput = (value: string) => {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+const sourceForManualNutrition = (calories: string, proteinG: string, fatG: string): MealNutritionSource | null =>
+  [calories, proteinG, fatG].some((value) => value.trim()) ? "manual" : null;
+
+const formatNutritionNumber = (value: number | null | undefined, suffix = "") => {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return null;
+  const rounded = Math.round(Number(value) * 10) / 10;
+  return `${Number.isInteger(rounded) ? String(Math.round(rounded)) : String(rounded)}${suffix}`;
+};
+
+const nutritionSourceLabel = (source: MealNutritionSource | null | undefined) => {
+  if (source === "catalog_recipe") return "Catalog nutrition";
+  if (source === "gemini_estimate") return "Gemini estimate";
+  if (source === "manual") return "Edited nutrition";
+  return null;
+};
+
 const buildHistoryMealOptions = (meals: MealLogRow[]): MealSourceOption[] => {
   const seen = new Set<string>();
   return meals
@@ -104,10 +152,21 @@ const buildHistoryMealOptions = (meals: MealLogRow[]): MealSourceOption[] => {
         sourceLabel: "History",
         recipeId: meal.recipe_id || null,
         imageUrl: meal.image_url || null,
+        calories: meal.calories ?? null,
+        proteinG: meal.protein_g ?? null,
+        fatG: meal.fat_g ?? null,
+        nutritionSource: meal.nutrition_source || null,
+        nutritionConfidence: meal.nutrition_confidence ?? null,
         helper: formatTime(meal.logged_at),
       };
     })
     .filter((option): option is MealSourceOption => Boolean(option));
+};
+
+const mergePhotoNotes = (currentNotes: string, analysis: FoodImageAnalysis) => {
+  const photoNotes = buildFoodImageSuggestionNotes(analysis);
+  if (!photoNotes || currentNotes.includes(photoNotes)) return currentNotes;
+  return currentNotes.trim() ? `${currentNotes.trim()}\n${photoNotes}` : photoNotes;
 };
 
 type CooklistCandidate = {
@@ -183,10 +242,16 @@ const TimelineEntry = ({
   entry,
   index,
   onAddToCooklist,
+  onEditMeal,
+  onDeleteMeal,
+  deletingMealId,
 }: {
   entry: DiaryEntry;
   index: number;
   onAddToCooklist: (candidate: CooklistCandidate) => void;
+  onEditMeal: (meal: MealLogRow) => void;
+  onDeleteMeal: (meal: MealLogRow) => void;
+  deletingMealId: number | null;
 }) => {
   const isFood = entry.type === "meal" || entry.type === "chat_food" || entry.type === "recipe";
   const title =
@@ -225,6 +290,15 @@ const TimelineEntry = ({
   const tone = isFood ? "bg-cyan-300/12 text-cyan-100" : "bg-rose-300/12 text-rose-100";
   const imageUrl = entry.type === "meal" ? entry.meal.image_url : null;
   const cooklistCandidate = candidateFromEntry(entry);
+  const isDeletingMeal = entry.type === "meal" && deletingMealId === entry.meal.id;
+  const nutritionParts = entry.type === "meal"
+    ? [
+        formatNutritionNumber(entry.meal.calories, " cal"),
+        formatNutritionNumber(entry.meal.protein_g, "g protein"),
+        formatNutritionNumber(entry.meal.fat_g, "g fat"),
+      ].filter(Boolean)
+    : [];
+  const nutritionSource = entry.type === "meal" ? nutritionSourceLabel(entry.meal.nutrition_source) : null;
 
   return (
     <motion.div
@@ -252,14 +326,50 @@ const TimelineEntry = ({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {cooklistCandidate && (
-              <button
-                type="button"
-                onClick={() => onAddToCooklist(cooklistCandidate)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/20 bg-cyan-200/[0.08] px-2.5 py-1 text-xs font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-200/[0.14]"
-              >
-                <BookmarkPlus size={12} />
-                Cooklist
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => onAddToCooklist(cooklistCandidate)}
+                    aria-label={`Add ${title} to cooklist`}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-transparent text-white/55 transition hover:border-cyan-200/45 hover:bg-cyan-200/[0.08] hover:text-cyan-100"
+                  >
+                    <BookmarkPlus size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Add to cooklist</TooltipContent>
+              </Tooltip>
+            )}
+            {entry.type === "meal" && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => onEditMeal(entry.meal)}
+                      aria-label={`Edit ${title}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-transparent text-white/55 transition hover:border-emerald-200/45 hover:bg-emerald-200/[0.08] hover:text-emerald-100"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit meal</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteMeal(entry.meal)}
+                      disabled={isDeletingMeal}
+                      aria-label={`Remove ${title}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-transparent text-white/55 transition hover:border-rose-200/45 hover:bg-rose-200/[0.08] hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDeletingMeal ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove meal</TooltipContent>
+                </Tooltip>
+              </>
             )}
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/55">
               <Clock3 size={12} />
@@ -268,6 +378,16 @@ const TimelineEntry = ({
           </div>
         </div>
         {notes && <p className="mt-3 text-sm leading-relaxed text-white/55">{notes}</p>}
+        {nutritionParts.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            {nutritionParts.map((part) => (
+              <span key={part} className="rounded-full border border-cyan-200/15 bg-cyan-200/[0.08] px-2.5 py-1 text-cyan-50">
+                {part}
+              </span>
+            ))}
+            {nutritionSource && <span className="text-white/38">{nutritionSource}</span>}
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -275,6 +395,13 @@ const TimelineEntry = ({
 
 const HistoryScreen = () => {
   const { user, loading: authLoading, configured } = useAuth();
+  const {
+    canopyDialog,
+    hasCanopyFeatureAccess,
+    openImageUploadPrompt,
+    openPremiumFeaturePrompt,
+    openPricing,
+  } = useCanopyAccess(user);
   const [data, setData] = useState<DiaryData>({
     meals: [],
     reports: [],
@@ -290,8 +417,32 @@ const HistoryScreen = () => {
   const [mealAt, setMealAt] = useState(localDateTimeValue());
   const [portionSize, setPortionSize] = useState("");
   const [portionUnit, setPortionUnit] = useState("serving");
+  const [calories, setCalories] = useState("");
+  const [proteinG, setProteinG] = useState("");
+  const [fatG, setFatG] = useState("");
+  const [nutritionSource, setNutritionSource] = useState<MealNutritionSource | null>(null);
+  const [nutritionConfidence, setNutritionConfidence] = useState<number | null>(null);
+  const [estimatingNutrition, setEstimatingNutrition] = useState(false);
   const [mealImageUrl, setMealImageUrl] = useState("");
+  const [mealPhotoAnalysis, setMealPhotoAnalysis] = useState<FoodImageAnalysis | null>(null);
+  const [analyzingMealImage, setAnalyzingMealImage] = useState(false);
   const [mealNotes, setMealNotes] = useState("");
+  const [editingMeal, setEditingMeal] = useState<MealLogRow | null>(null);
+  const [editMealName, setEditMealName] = useState("");
+  const [editMealRecipeId, setEditMealRecipeId] = useState<number | null>(null);
+  const [editMealAt, setEditMealAt] = useState(localDateTimeValue());
+  const [editPortionSize, setEditPortionSize] = useState("");
+  const [editPortionUnit, setEditPortionUnit] = useState("serving");
+  const [editCalories, setEditCalories] = useState("");
+  const [editProteinG, setEditProteinG] = useState("");
+  const [editFatG, setEditFatG] = useState("");
+  const [editNutritionSource, setEditNutritionSource] = useState<MealNutritionSource | null>(null);
+  const [editNutritionConfidence, setEditNutritionConfidence] = useState<number | null>(null);
+  const [estimatingEditNutrition, setEstimatingEditNutrition] = useState(false);
+  const [editMealImageUrl, setEditMealImageUrl] = useState("");
+  const [editMealNotes, setEditMealNotes] = useState("");
+  const [savingMealEdit, setSavingMealEdit] = useState(false);
+  const [deletingMealId, setDeletingMealId] = useState<number | null>(null);
   const [mealPickerSource, setMealPickerSource] = useState<"cookbook" | "history">("cookbook");
   const [mealPickerSearch, setMealPickerSearch] = useState("");
   const [cookbookOptions, setCookbookOptions] = useState<MealSourceOption[]>([]);
@@ -306,6 +457,7 @@ const HistoryScreen = () => {
   const [severity, setSeverity] = useState(3);
   const [noSymptoms, setNoSymptoms] = useState(false);
   const [reportNotes, setReportNotes] = useState("");
+  const mealFromImageInputRef = useRef<HTMLInputElement>(null);
 
   const todayStats = useMemo(() => {
     const todayKey = new Date().toDateString();
@@ -412,6 +564,125 @@ const HistoryScreen = () => {
     setMealName(option.foodName);
     setMealRecipeId(option.recipeId || null);
     setMealImageUrl(option.imageUrl || "");
+    if (hasCanopyFeatureAccess) {
+      setCalories(option.calories == null ? "" : String(option.calories));
+      setProteinG(option.proteinG == null ? "" : String(option.proteinG));
+      setFatG(option.fatG == null ? "" : String(option.fatG));
+      setNutritionSource(option.nutritionSource || null);
+      setNutritionConfidence(option.nutritionConfidence ?? null);
+    } else {
+      setCalories("");
+      setProteinG("");
+      setFatG("");
+      setNutritionSource(null);
+      setNutritionConfidence(null);
+    }
+    setMealPhotoAnalysis(null);
+  };
+
+  const applyNutritionEstimate = (estimate: MealNutritionEstimate, target: "new" | "edit") => {
+    const nextCalories = estimate.calories == null ? "" : String(estimate.calories);
+    const nextProtein = estimate.protein_g == null ? "" : String(estimate.protein_g);
+    const nextFat = estimate.fat_g == null ? "" : String(estimate.fat_g);
+
+    if (target === "new") {
+      setCalories(nextCalories);
+      setProteinG(nextProtein);
+      setFatG(nextFat);
+      setNutritionSource(estimate.source);
+      setNutritionConfidence(estimate.confidence);
+      return;
+    }
+
+    setEditCalories(nextCalories);
+    setEditProteinG(nextProtein);
+    setEditFatG(nextFat);
+    setEditNutritionSource(estimate.source);
+    setEditNutritionConfidence(estimate.confidence);
+  };
+
+  const requestNutritionEstimate = async (target: "new" | "edit") => {
+    if (!openPremiumFeaturePrompt("Macro tracking")) return;
+
+    const isEdit = target === "edit";
+    const foodName = isEdit ? editMealName : mealName;
+    const recipeId = isEdit ? editMealRecipeId : mealRecipeId;
+    const size = isEdit ? editPortionSize : portionSize;
+    const unit = isEdit ? editPortionUnit : portionUnit;
+    const notes = isEdit ? editMealNotes : mealNotes;
+    const photoAnalysis = isEdit ? null : mealPhotoAnalysis;
+
+    if (!foodName.trim() && !recipeId) {
+      toast.error("Add a food or meal name first.");
+      return;
+    }
+
+    if (isEdit) setEstimatingEditNutrition(true);
+    else setEstimatingNutrition(true);
+
+    try {
+      const estimate = await estimateMealNutrition({
+        foodName,
+        recipeId,
+        portionSize: size,
+        portionUnit: unit,
+        notes,
+        visibleIngredients: photoAnalysis?.visible_ingredients || [],
+        possibleHiddenIngredients: photoAnalysis?.possible_hidden_ingredients || [],
+      });
+      applyNutritionEstimate(estimate, target);
+      toast.success(estimate.source === "catalog_recipe" ? "Nutrition added from recipe." : "Nutrition estimate added.");
+    } catch (error) {
+      console.error("Failed to estimate meal nutrition:", error);
+      toast.error(error instanceof Error ? error.message : "Could not estimate nutrition.");
+    } finally {
+      if (isEdit) setEstimatingEditNutrition(false);
+      else setEstimatingNutrition(false);
+    }
+  };
+
+  const applyMealPhotoAnalysis = useCallback((analysis: FoodImageAnalysis, replaceName = false) => {
+    if (!analysis.is_food || !analysis.food_name) return;
+
+    if (replaceName || !mealName.trim()) {
+      setMealName(analysis.food_name);
+      setMealRecipeId(null);
+    }
+    setMealNotes((current) => mergePhotoNotes(current, analysis));
+  }, [mealName]);
+
+  const handleMealImageUrlChange = useCallback((imageUrl: string) => {
+    setMealImageUrl(imageUrl);
+    if (!imageUrl) setMealPhotoAnalysis(null);
+  }, []);
+
+  const handleMealFromImageFileSelected = async (file: File | null | undefined) => {
+    if (!user || !file) return;
+    if (!openImageUploadPrompt()) {
+      if (mealFromImageInputRef.current) mealFromImageInputRef.current.value = "";
+      return;
+    }
+
+    setMealPhotoAnalysis(null);
+    setAnalyzingMealImage(true);
+    try {
+      const imageUrl = await uploadUserImage({ userId: user.id, file, folder: "meal-logs" });
+      setMealImageUrl(imageUrl);
+      const analysis = await analyzeFoodImage({ imageUrl, context: "meal_log" });
+      setMealPhotoAnalysis(analysis);
+      if (analysis.is_food && analysis.food_name) {
+        applyMealPhotoAnalysis(analysis);
+        toast.success("Photo analyzed.");
+      } else {
+        toast.info("Image attached. Tamar could not confidently name the food.");
+      }
+    } catch (error) {
+      console.error("Diary food image analysis error:", error);
+      toast.error(error instanceof Error ? error.message : "Could not analyze that photo.");
+    } finally {
+      setAnalyzingMealImage(false);
+      if (mealFromImageInputRef.current) mealFromImageInputRef.current.value = "";
+    }
   };
 
   const openCooklistDialog = useCallback(async (candidate: CooklistCandidate) => {
@@ -512,6 +783,104 @@ const HistoryScreen = () => {
     }
   };
 
+  const resetMealEdit = () => {
+    setEditingMeal(null);
+    setEditMealName("");
+    setEditMealRecipeId(null);
+    setEditMealAt(localDateTimeValue());
+    setEditPortionSize("");
+    setEditPortionUnit("serving");
+    setEditCalories("");
+    setEditProteinG("");
+    setEditFatG("");
+    setEditNutritionSource(null);
+    setEditNutritionConfidence(null);
+    setEditMealImageUrl("");
+    setEditMealNotes("");
+  };
+
+  const openMealEdit = (meal: MealLogRow) => {
+    setEditingMeal(meal);
+    setEditMealName(meal.food_name);
+    setEditMealRecipeId(meal.recipe_id || null);
+    setEditMealAt(localDateTimeInputValue(meal.logged_at));
+    setEditPortionSize(meal.portion_size == null ? "" : String(meal.portion_size));
+    setEditPortionUnit(meal.portion_unit || "serving");
+    if (hasCanopyFeatureAccess) {
+      setEditCalories(meal.calories == null ? "" : String(meal.calories));
+      setEditProteinG(meal.protein_g == null ? "" : String(meal.protein_g));
+      setEditFatG(meal.fat_g == null ? "" : String(meal.fat_g));
+      setEditNutritionSource(meal.nutrition_source || null);
+      setEditNutritionConfidence(meal.nutrition_confidence ?? null);
+    } else {
+      setEditCalories("");
+      setEditProteinG("");
+      setEditFatG("");
+      setEditNutritionSource(null);
+      setEditNutritionConfidence(null);
+    }
+    setEditMealImageUrl(meal.image_url || "");
+    setEditMealNotes(meal.notes || "");
+  };
+
+  const submitMealEdit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!user || !editingMeal) return;
+
+    const trimmedName = editMealName.trim();
+    if (!trimmedName) {
+      toast.error("Add a food or meal name first.");
+      return;
+    }
+
+    setSavingMealEdit(true);
+    try {
+      await updateMealLog({
+        id: editingMeal.id,
+        userId: user.id,
+        foodName: trimmedName,
+        loggedAt: editMealAt,
+        recipeId: editMealRecipeId,
+        portionSize: editPortionSize ? Number(editPortionSize) : null,
+        portionUnit: editPortionUnit.trim() || null,
+        calories: hasCanopyFeatureAccess ? optionalNumberFromInput(editCalories) : editingMeal.calories ?? null,
+        proteinG: hasCanopyFeatureAccess ? optionalNumberFromInput(editProteinG) : editingMeal.protein_g ?? null,
+        fatG: hasCanopyFeatureAccess ? optionalNumberFromInput(editFatG) : editingMeal.fat_g ?? null,
+        nutritionSource: hasCanopyFeatureAccess ? editNutritionSource : editingMeal.nutrition_source || null,
+        nutritionConfidence: hasCanopyFeatureAccess ? editNutritionConfidence : editingMeal.nutrition_confidence ?? null,
+        imageUrl: editMealImageUrl,
+        notes: editMealNotes,
+      });
+      toast.success("Meal updated.");
+      resetMealEdit();
+      await loadDiary();
+    } catch (error) {
+      console.error("Failed to update meal:", error);
+      toast.error("Could not update that meal. Please try again.");
+    } finally {
+      setSavingMealEdit(false);
+    }
+  };
+
+  const removeMeal = async (meal: MealLogRow) => {
+    if (!user) return;
+    const confirmed = window.confirm(`Remove "${meal.food_name}" from your diary?`);
+    if (!confirmed) return;
+
+    setDeletingMealId(meal.id);
+    try {
+      await deleteMealLog(user.id, meal.id);
+      toast.success("Meal removed from your diary.");
+      if (editingMeal?.id === meal.id) resetMealEdit();
+      await loadDiary();
+    } catch (error) {
+      console.error("Failed to remove meal:", error);
+      toast.error("Could not remove that meal. Please try again.");
+    } finally {
+      setDeletingMealId(null);
+    }
+  };
+
   const submitMeal = async (event: FormEvent) => {
     event.preventDefault();
     if (!user) return;
@@ -530,6 +899,11 @@ const HistoryScreen = () => {
         recipeId: mealRecipeId,
         portionSize: portionSize ? Number(portionSize) : null,
         portionUnit: portionUnit.trim() || null,
+        calories: hasCanopyFeatureAccess ? optionalNumberFromInput(calories) : null,
+        proteinG: hasCanopyFeatureAccess ? optionalNumberFromInput(proteinG) : null,
+        fatG: hasCanopyFeatureAccess ? optionalNumberFromInput(fatG) : null,
+        nutritionSource: hasCanopyFeatureAccess ? nutritionSource : null,
+        nutritionConfidence: hasCanopyFeatureAccess ? nutritionConfidence : null,
         imageUrl: mealImageUrl,
         notes: mealNotes,
       });
@@ -537,7 +911,13 @@ const HistoryScreen = () => {
       setMealName("");
       setMealRecipeId(null);
       setPortionSize("");
+      setCalories("");
+      setProteinG("");
+      setFatG("");
+      setNutritionSource(null);
+      setNutritionConfidence(null);
       setMealImageUrl("");
+      setMealPhotoAnalysis(null);
       setMealNotes("");
       setMealAt(localDateTimeValue());
       await loadDiary();
@@ -623,7 +1003,8 @@ const HistoryScreen = () => {
   }
 
   return (
-    <div className="space-y-6 pb-2">
+    <TooltipProvider delayDuration={200}>
+    <div className="min-w-0 space-y-6 pb-2">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-cyan-200/80">Private food diary</p>
@@ -666,17 +1047,93 @@ const HistoryScreen = () => {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <form onSubmit={submitMeal} className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
-          <div className="flex items-center gap-2 text-white">
-            <Utensils size={18} className="text-cyan-200" />
-            <h2 className="text-base font-semibold">Add a meal</h2>
+      <TamarTreePanel userId={user.id} />
+
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.85fr)]">
+        <form onSubmit={submitMeal} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.035] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-white">
+            <div className="flex items-center gap-2">
+              <Utensils size={18} className="text-cyan-200" />
+              <h2 className="text-base font-semibold">Add a meal</h2>
+            </div>
+            <input
+              ref={mealFromImageInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(event) => handleMealFromImageFileSelected(event.target.files?.[0])}
+            />
           </div>
-          <div className="mt-5 grid gap-4">
-            <div className="grid gap-3 rounded-lg border border-white/10 bg-black/15 p-3">
+          <div className="mt-5 grid min-w-0 gap-4">
+            <div className="grid min-w-0 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!openImageUploadPrompt()) return;
+                  mealFromImageInputRef.current?.click();
+                }}
+                disabled={analyzingMealImage || savingMeal}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-cyan-200/30 bg-cyan-200/[0.08] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-200/[0.14] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {analyzingMealImage ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+                {analyzingMealImage ? "Reading image" : "Add meal from image"}
+              </button>
+              {analyzingMealImage && (
+                <div className="flex items-center gap-2 rounded-lg border border-cyan-200/20 bg-cyan-200/[0.06] px-3 py-2 text-sm text-cyan-50">
+                  <Loader2 size={15} className="animate-spin" />
+                  Reading photo
+                </div>
+              )}
+              {mealPhotoAnalysis && !analyzingMealImage && (
+                <div className="rounded-lg border border-cyan-200/20 bg-cyan-200/[0.06] p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-cyan-100/70">Photo suggestion</p>
+                      <p className="mt-1 text-sm font-semibold text-white">
+                        {mealPhotoAnalysis.is_food && mealPhotoAnalysis.food_name
+                          ? mealPhotoAnalysis.food_name
+                          : "Food not recognized"}
+                      </p>
+                    </div>
+                    {mealPhotoAnalysis.is_food && mealPhotoAnalysis.food_name && (
+                      <button
+                        type="button"
+                        onClick={() => applyMealPhotoAnalysis(mealPhotoAnalysis, true)}
+                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-cyan-200/25 px-3 text-xs font-medium text-cyan-50 transition hover:bg-cyan-200/[0.1]"
+                      >
+                        <CheckCircle2 size={13} />
+                        Use
+                      </button>
+                    )}
+                  </div>
+                  {mealPhotoAnalysis.visible_ingredients.length > 0 && (
+                    <p className="mt-2 text-xs leading-relaxed text-white/55">
+                      Visible: {mealPhotoAnalysis.visible_ingredients.join(", ")}
+                    </p>
+                  )}
+                  {mealPhotoAnalysis.possible_hidden_ingredients.length > 0 && (
+                    <p className="mt-1 text-xs leading-relaxed text-white/50">
+                      Possible: {mealPhotoAnalysis.possible_hidden_ingredients.join(", ")}
+                    </p>
+                  )}
+                  {mealPhotoAnalysis.portion_guess && (
+                    <p className="mt-1 text-xs leading-relaxed text-white/50">
+                      Portion: {mealPhotoAnalysis.portion_guess}
+                    </p>
+                  )}
+                  {mealPhotoAnalysis.questions.length > 0 && (
+                    <p className="mt-1 text-xs leading-relaxed text-white/50">
+                      {mealPhotoAnalysis.questions[0]}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-black/15 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs font-medium text-white/55">Choose a saved or recent meal</span>
-                <div className="grid grid-cols-2 rounded-lg border border-white/10 bg-black/20 p-1">
+                <div className="grid shrink-0 grid-cols-2 rounded-lg border border-white/10 bg-black/20 p-1">
                   <button
                     type="button"
                     onClick={() => setMealPickerSource("cookbook")}
@@ -713,7 +1170,7 @@ const HistoryScreen = () => {
                 />
               </label>
               {visibleMealOptions.length > 0 ? (
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
                   {visibleMealOptions.map((option) => (
                     <button
                       key={option.id}
@@ -742,29 +1199,31 @@ const HistoryScreen = () => {
                 </div>
               )}
             </div>
-            <label className="grid gap-2">
+            <label className="grid min-w-0 gap-2">
               <span className="text-xs font-medium text-white/55">What did you eat?</span>
               <input
                 value={mealName}
                 onChange={(event) => {
                   setMealName(event.target.value);
                   setMealRecipeId(null);
+                  setNutritionSource(sourceForManualNutrition(calories, proteinG, fatG));
+                  setNutritionConfidence(null);
                 }}
                 placeholder="Rice bowl with tofu"
-                className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                className="h-11 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
               />
             </label>
-            <div className="grid gap-4 md:grid-cols-[1fr_0.7fr_0.9fr]">
-              <label className="grid gap-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(12rem,1fr)_minmax(7rem,0.7fr)_minmax(8rem,0.9fr)]">
+              <label className="grid min-w-0 gap-2">
                 <span className="text-xs font-medium text-white/55">When?</span>
                 <input
                   type="datetime-local"
                   value={mealAt}
                   onChange={(event) => setMealAt(event.target.value)}
-                  className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-cyan-200/60"
+                  className="h-11 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-cyan-200/60"
                 />
               </label>
-              <label className="grid gap-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="text-xs font-medium text-white/55">Amount</span>
                 <input
                   type="number"
@@ -773,41 +1232,127 @@ const HistoryScreen = () => {
                   value={portionSize}
                   onChange={(event) => setPortionSize(event.target.value)}
                   placeholder="1"
-                  className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                  className="h-11 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
                 />
               </label>
-              <label className="grid gap-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="text-xs font-medium text-white/55">Unit</span>
                 <input
                   value={portionUnit}
                   onChange={(event) => setPortionUnit(event.target.value)}
                   placeholder="serving"
-                  className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                  className="h-11 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
                 />
               </label>
             </div>
+            {hasCanopyFeatureAccess ? (
+              <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-black/15 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-white/55">Nutrition</p>
+                    {nutritionSource && (
+                      <p className="mt-1 text-xs text-white/35">{nutritionSourceLabel(nutritionSource)}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => requestNutritionEstimate("new")}
+                    disabled={estimatingNutrition || !mealName.trim()}
+                    title="Auto calculate nutrition with Gemini"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-cyan-200/25 px-3 text-xs font-medium text-cyan-50 transition hover:bg-cyan-200/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {estimatingNutrition ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                    Auto calculate
+                  </button>
+                </div>
+                <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+                  <label className="grid min-w-0 gap-2">
+                    <span className="text-xs font-medium text-white/45">Calories</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={calories}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setCalories(next);
+                        setNutritionSource(sourceForManualNutrition(next, proteinG, fatG));
+                        setNutritionConfidence(null);
+                      }}
+                      placeholder="420"
+                      className="h-10 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-2">
+                    <span className="text-xs font-medium text-white/45">Protein g</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={proteinG}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setProteinG(next);
+                        setNutritionSource(sourceForManualNutrition(calories, next, fatG));
+                        setNutritionConfidence(null);
+                      }}
+                      placeholder="18"
+                      className="h-10 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-2">
+                    <span className="text-xs font-medium text-white/45">Fat g</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={fatG}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setFatG(next);
+                        setNutritionSource(sourceForManualNutrition(calories, proteinG, next));
+                        setNutritionConfidence(null);
+                      }}
+                      placeholder="14"
+                      className="h-10 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <CanopyFeaturePanel
+                icon={Sparkles}
+                title="Macro tracking is in Canopy+"
+                body="Calories, protein, fat, and nutrition estimates are available during your first 30 days, then continue with Canopy+."
+                onUpgrade={openPricing}
+              />
+            )}
             <ImageUploadDropzone
               userId={user.id}
               folder="meal-logs"
               imageUrl={mealImageUrl}
-              onImageUrlChange={setMealImageUrl}
+              onImageUrlChange={handleMealImageUrlChange}
               label="Image"
               dark
+              capture="environment"
+              primaryText="Drop a meal image here or browse"
+              helperText="Attach a photo to this diary entry"
+              onBeforeUpload={openImageUploadPrompt}
             />
-            <label className="grid gap-2">
+            <label className="grid min-w-0 gap-2">
               <span className="text-xs font-medium text-white/55">Notes</span>
               <textarea
                 value={mealNotes}
                 onChange={(event) => setMealNotes(event.target.value)}
                 placeholder="Anything useful, like spicy, late dinner, or ate quickly"
                 rows={3}
-                className="resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
+                className="w-full min-w-0 resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-200/60"
               />
             </label>
             <button
               type="submit"
-              disabled={savingMeal}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={savingMeal || analyzingMealImage}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-200 px-4 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingMeal ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
               Save meal
@@ -815,12 +1360,12 @@ const HistoryScreen = () => {
           </div>
         </form>
 
-        <form onSubmit={submitReport} className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+        <form onSubmit={submitReport} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.035] p-5">
           <div className="flex items-center gap-2 text-white">
             <HeartPulse size={18} className="text-rose-200" />
             <h2 className="text-base font-semibold">Add how you feel</h2>
           </div>
-          <div className="mt-5 grid gap-4">
+          <div className="mt-5 grid min-w-0 gap-4">
             <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/15 px-3 py-3">
               <span className="text-sm text-white/70">I feel good right now</span>
               <input
@@ -830,14 +1375,14 @@ const HistoryScreen = () => {
                 className="h-4 w-4 accent-emerald-300"
               />
             </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
+            <div className="grid min-w-0 gap-4 2xl:grid-cols-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="text-xs font-medium text-white/55">Main feeling</span>
                 <select
                   value={symptomType}
                   onChange={(event) => setSymptomType(event.target.value)}
                   disabled={noSymptoms}
-                  className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-rose-200/60 disabled:opacity-50"
+                  className="h-11 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-rose-200/60 disabled:opacity-50"
                 >
                   {symptomOptions.map((option) => (
                     <option key={option.value} value={option.value} className="bg-[#203629]">
@@ -846,13 +1391,13 @@ const HistoryScreen = () => {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="text-xs font-medium text-white/55">When?</span>
                 <input
                   type="datetime-local"
                   value={reportedAt}
                   onChange={(event) => setReportedAt(event.target.value)}
-                  className="h-11 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-rose-200/60"
+                  className="h-11 w-full min-w-0 rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-rose-200/60"
                 />
               </label>
             </div>
@@ -875,14 +1420,14 @@ const HistoryScreen = () => {
                 <span>Very rough</span>
               </div>
             </div>
-            <label className="grid gap-2">
+            <label className="grid min-w-0 gap-2">
               <span className="text-xs font-medium text-white/55">Notes</span>
               <textarea
                 value={reportNotes}
                 onChange={(event) => setReportNotes(event.target.value)}
                 placeholder="Optional context, like stress, sleep, timing, or what changed"
                 rows={3}
-                className="resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-rose-200/60"
+                className="w-full min-w-0 resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-rose-200/60"
               />
             </label>
             <button
@@ -930,6 +1475,9 @@ const HistoryScreen = () => {
                       entry={entry}
                       index={index}
                       onAddToCooklist={openCooklistDialog}
+                      onEditMeal={openMealEdit}
+                      onDeleteMeal={removeMeal}
+                      deletingMealId={deletingMealId}
                     />
                   ))}
                 </div>
@@ -945,6 +1493,204 @@ const HistoryScreen = () => {
       </section>
 
       <Dialog
+        open={Boolean(editingMeal)}
+        onOpenChange={(open) => {
+          if (!open && !savingMealEdit) resetMealEdit();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit meal</DialogTitle>
+            <DialogDescription className="sr-only">
+              Update the meal name, time, portion, image, and notes.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitMealEdit} className="space-y-4">
+            <label className="grid gap-2">
+              <span className="text-xs font-bold text-[#667864]">What did you eat?</span>
+              <input
+                value={editMealName}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  setEditMealName(nextName);
+                  setEditMealRecipeId(
+                    normalizeMealName(nextName) === normalizeMealName(editingMeal?.food_name || "")
+                      ? editingMeal?.recipe_id || null
+                      : null
+                  );
+                  setEditNutritionSource(sourceForManualNutrition(editCalories, editProteinG, editFatG));
+                  setEditNutritionConfidence(null);
+                }}
+                placeholder="Rice bowl with tofu"
+                className="min-h-11 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+              />
+            </label>
+            <div className="grid gap-4 md:grid-cols-[1fr_0.7fr_0.9fr]">
+              <label className="grid gap-2">
+                <span className="text-xs font-bold text-[#667864]">When?</span>
+                <input
+                  type="datetime-local"
+                  value={editMealAt}
+                  onChange={(event) => setEditMealAt(event.target.value)}
+                  className="min-h-11 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition focus:border-primary"
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-bold text-[#667864]">Amount</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  value={editPortionSize}
+                  onChange={(event) => setEditPortionSize(event.target.value)}
+                  placeholder="1"
+                  className="min-h-11 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-bold text-[#667864]">Unit</span>
+                <input
+                  value={editPortionUnit}
+                  onChange={(event) => setEditPortionUnit(event.target.value)}
+                  placeholder="serving"
+                  className="min-h-11 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+                />
+              </label>
+            </div>
+            {hasCanopyFeatureAccess ? (
+              <div className="grid gap-3 rounded-lg border border-primary/15 bg-primary/5 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-[#667864]">Nutrition</p>
+                    {editNutritionSource && (
+                      <p className="mt-1 text-xs text-[#8b9a87]">{nutritionSourceLabel(editNutritionSource)}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => requestNutritionEstimate("edit")}
+                    disabled={estimatingEditNutrition || !editMealName.trim()}
+                    title="Auto calculate nutrition with Gemini"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-primary/20 px-3 text-xs font-semibold text-[#536451] transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {estimatingEditNutrition ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                    Auto calculate
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="grid gap-2">
+                    <span className="text-xs font-bold text-[#667864]">Calories</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={editCalories}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setEditCalories(next);
+                        setEditNutritionSource(sourceForManualNutrition(next, editProteinG, editFatG));
+                        setEditNutritionConfidence(null);
+                      }}
+                      placeholder="420"
+                      className="min-h-10 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-xs font-bold text-[#667864]">Protein g</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={editProteinG}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setEditProteinG(next);
+                        setEditNutritionSource(sourceForManualNutrition(editCalories, next, editFatG));
+                        setEditNutritionConfidence(null);
+                      }}
+                      placeholder="18"
+                      className="min-h-10 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-xs font-bold text-[#667864]">Fat g</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={editFatG}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setEditFatG(next);
+                        setEditNutritionSource(sourceForManualNutrition(editCalories, editProteinG, next));
+                        setEditNutritionConfidence(null);
+                      }}
+                      placeholder="14"
+                      className="min-h-10 rounded-lg border border-primary/15 px-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <CanopyFeaturePanel
+                icon={Sparkles}
+                title="Macro tracking is in Canopy+"
+                body="Calories, protein, fat, and nutrition estimates are available during your first 30 days, then continue with Canopy+."
+                onUpgrade={openPricing}
+              />
+            )}
+            <ImageUploadDropzone
+              userId={user.id}
+              folder="meal-logs"
+              imageUrl={editMealImageUrl}
+              onImageUrlChange={setEditMealImageUrl}
+              label="Image"
+              onBeforeUpload={openImageUploadPrompt}
+            />
+            <label className="grid gap-2">
+              <span className="text-xs font-bold text-[#667864]">Notes</span>
+              <textarea
+                value={editMealNotes}
+                onChange={(event) => setEditMealNotes(event.target.value)}
+                placeholder="Anything useful, like spicy, late dinner, or ate quickly"
+                rows={3}
+                className="resize-none rounded-lg border border-primary/15 px-3 py-3 text-sm text-[#24352a] outline-none transition placeholder:text-[#8b9a87] focus:border-primary"
+              />
+            </label>
+            <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={() => editingMeal && removeMeal(editingMeal)}
+                disabled={savingMealEdit || deletingMealId === editingMeal?.id}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose-200/70 px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingMealId === editingMeal?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Remove
+              </button>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={resetMealEdit}
+                  disabled={savingMealEdit}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-primary/15 px-4 text-sm font-semibold text-[#536451] transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingMealEdit}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingMealEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={Boolean(cooklistCandidate)}
         onOpenChange={(open) => {
           if (!open) {
@@ -957,11 +1703,11 @@ const HistoryScreen = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add to cooklist</DialogTitle>
+            <DialogDescription>
+              Choose where to save {cooklistCandidate ? `"${cooklistCandidate.title}"` : "this recipe"}.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Choose where to save {cooklistCandidate ? `"${cooklistCandidate.title}"` : "this recipe"}.
-            </p>
             <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
               {savingCooklist && cooklists.length === 0 ? (
                 <div className="h-20 rounded-lg bg-secondary animate-pulse" />
@@ -1012,7 +1758,9 @@ const HistoryScreen = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {canopyDialog}
     </div>
+    </TooltipProvider>
   );
 };
 

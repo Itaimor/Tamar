@@ -31,7 +31,7 @@ const CATEGORY_IMAGES: Record<string, string[]> = {
   shrimp_pasta: [imageUrl("photo-1551183053-bf91a1d81141"), imageUrl("photo-1559737558-2f5a35f4523b"), imageUrl("photo-1512058564366-18510be2db19")],
   tuna_salad: [imageUrl("photo-1512621776951-a57141f2eefd"), imageUrl("photo-1559737558-2f5a35f4523b"), imageUrl("photo-1540189549336-e6e99c3679fe")],
   rice_bowl: [imageUrl("photo-1512058564366-18510be2db19"), imageUrl("photo-1546069901-ba9599a7e63c"), imageUrl("photo-1540189549336-e6e99c3679fe")],
-  breakfast_bowl: [imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1528207776546-365bb710ee93")],
+  breakfast_bowl: [imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1506084868230-bb9d95c24759")],
   roasted_vegetables: [imageUrl("photo-1540420773420-3366772f4999"), imageUrl("photo-1474979266404-7eaacbcd87c5"), imageUrl("photo-1568584711075-3d021a7c3ca3")],
   dips_spreads: [imageUrl("photo-1472476443507-c7a5948772fc"), imageUrl("photo-1515543904379-3d757afe72e4"), imageUrl("photo-1599490659213-e2b9527bd087")],
   smoothie_bowl: [imageUrl("photo-1502741224143-90386d7f8c82"), imageUrl("photo-1619566636858-adf3ef46400b"), imageUrl("photo-1517673132405-a56a62b18caf")],
@@ -46,8 +46,8 @@ const CATEGORY_IMAGES: Record<string, string[]> = {
   candy_chocolate: [imageUrl("photo-1606313564200-e75d5e30476c"), imageUrl("photo-1499636136210-6f4ee915583e"), imageUrl("photo-1578985545062-69928b1d9587")],
   bread_rolls: [imageUrl("photo-1509440159596-0249088772ff"), imageUrl("photo-1607958996333-41aef7caefaa"), imageUrl("photo-1528735602780-2552fd46c7af")],
   muffins_scones: [imageUrl("photo-1607958996333-41aef7caefaa"), imageUrl("photo-1499636136210-6f4ee915583e"), imageUrl("photo-1509440159596-0249088772ff")],
-  pancakes_waffles: [imageUrl("photo-1528207776546-365bb710ee93"), imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1517673132405-a56a62b18caf")],
-  eggs_breakfast: [imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1528207776546-365bb710ee93")],
+  pancakes_waffles: [imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1506084868230-bb9d95c24759"), imageUrl("photo-1499636136210-6f4ee915583e")],
+  eggs_breakfast: [imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1506084868230-bb9d95c24759")],
   oatmeal_cereal: [imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1502741224143-90386d7f8c82"), imageUrl("photo-1619566636858-adf3ef46400b")],
   chicken: [imageUrl("photo-1598515214211-89d3c73ae83b"), imageUrl("photo-1512058564366-18510be2db19"), imageUrl("photo-1540189549336-e6e99c3679fe")],
   beef_steak: [imageUrl("photo-1558030006-450675393462"), imageUrl("photo-1603360946369-dc9bb6258143"), imageUrl("photo-1518013431117-eb1465fa5752")],
@@ -79,7 +79,7 @@ const CATEGORY_IMAGES: Record<string, string[]> = {
   fruit: [imageUrl("photo-1619566636858-adf3ef46400b"), imageUrl("photo-1502741224143-90386d7f8c82"), imageUrl("photo-1481391319762-47dff72954d9")],
   jam_preserve: [imageUrl("photo-1608219992759-8d74ed8d76eb"), imageUrl("photo-1509440159596-0249088772ff"), imageUrl("photo-1619566636858-adf3ef46400b")],
   holiday: [imageUrl("photo-1481391319762-47dff72954d9"), imageUrl("photo-1578985545062-69928b1d9587"), imageUrl("photo-1606313564200-e75d5e30476c")],
-  meal_breakfast: [imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1528207776546-365bb710ee93")],
+  meal_breakfast: [imageUrl("photo-1525351484163-7529414344d8"), imageUrl("photo-1517673132405-a56a62b18caf"), imageUrl("photo-1506084868230-bb9d95c24759")],
   meal_baked: [imageUrl("photo-1509440159596-0249088772ff"), imageUrl("photo-1607958996333-41aef7caefaa"), imageUrl("photo-1499636136210-6f4ee915583e")],
   meal_dessert: [imageUrl("photo-1578985545062-69928b1d9587"), imageUrl("photo-1499636136210-6f4ee915583e"), imageUrl("photo-1621743478914-cc8a86d7e7b5")],
   meal_drink: [imageUrl("photo-1509042239860-f550ce710b93"), imageUrl("photo-1502741224143-90386d7f8c82"), imageUrl("photo-1536935338788-846bb9981813")],
@@ -87,6 +87,8 @@ const CATEGORY_IMAGES: Record<string, string[]> = {
   meal_main: [imageUrl("photo-1598515214211-89d3c73ae83b"), imageUrl("photo-1558030006-450675393462"), imageUrl("photo-1559737558-2f5a35f4523b")],
   general_food: [imageUrl("photo-1543352634-a1c51d9f1fa7"), imageUrl("photo-1540189549336-e6e99c3679fe"), imageUrl("photo-1546069901-ba9599a7e63c")],
 };
+
+const ALL_CATEGORY_IMAGES = Array.from(new Set(Object.values(CATEGORY_IMAGES).flat()));
 
 const SPECIFIC_CATEGORY_RULES: Array<[string, string[]]> = [
   ["banana_bread", ["banana bread", "banana loaf"]],
@@ -176,7 +178,22 @@ const NON_FOOD_IMAGE_URL_TERMS = [
   "laptop",
   "keyboard",
   "document",
+  "textbook",
+  "reading",
+  "school",
+  "study",
 ];
+
+const BLOCKED_NON_FOOD_IMAGE_SIGNATURES = new Set([
+  "photo-1495446815901-a7297e633e8d",
+  "photo-1497633762265-9d179a990aa6",
+  "photo-1507842217343-583bb7270b66",
+  "photo-1512820790803-83ca734da794",
+  "photo-1516979187457-637abb4f9353",
+  "photo-1524995997946-a1c2e315a42f",
+  "photo-1528207776546-365bb710ee93",
+  "photo-1544716278-ca5e3f4abd8c",
+]);
 
 const hasNonFoodImageUrlTerm = (url: string): boolean => {
   const normalizedUrl = decodeURIComponent(url).toLowerCase();
@@ -190,6 +207,7 @@ const isPlaceholderImage = (url: string | null | undefined): boolean => {
   if (!url) return true;
   return (
     hasNonFoodImageUrlTerm(url) ||
+    BLOCKED_NON_FOOD_IMAGE_SIGNATURES.has(getImageSignature(url)) ||
     url.includes("photo-1546069901-ba9599a7e63c") ||
     url.includes("photo-1512621776951-a57141f2eefd") ||
     url === "/images/hero.png" ||
@@ -230,7 +248,7 @@ const findCategory = (text: string, rules: Array<[string, string[]]>): string | 
   return null;
 };
 
-const getImageSignature = (imageUrl: string): string => {
+export const getImageSignature = (imageUrl: string): string => {
   const unsplashPhotoId = imageUrl.match(/photo-[a-z0-9-]+/i)?.[0];
   if (unsplashPhotoId) return unsplashPhotoId.toLowerCase();
 
@@ -242,8 +260,8 @@ const getImageSignature = (imageUrl: string): string => {
   }
 };
 
-const pickCategoryImage = (category: string, recipeId: number, usedImageSignatures?: Set<string>): string => {
-  const images = CATEGORY_IMAGES[category] || CATEGORY_IMAGES.general_food;
+const pickImageFromPool = (images: string[], recipeId: number, usedImageSignatures?: Set<string>): string | null => {
+  if (images.length === 0) return null;
   const startIndex = Math.abs(Number.isFinite(recipeId) ? recipeId : 0) % images.length;
 
   for (let offset = 0; offset < images.length; offset += 1) {
@@ -255,6 +273,18 @@ const pickCategoryImage = (category: string, recipeId: number, usedImageSignatur
     }
   }
 
+  return null;
+};
+
+const pickCategoryImage = (category: string, recipeId: number, usedImageSignatures?: Set<string>): string => {
+  const images = CATEGORY_IMAGES[category] || CATEGORY_IMAGES.general_food;
+  const categoryImage = pickImageFromPool(images, recipeId, usedImageSignatures);
+  if (categoryImage) return categoryImage;
+
+  const rowUniqueImage = pickImageFromPool(ALL_CATEGORY_IMAGES, recipeId, usedImageSignatures);
+  if (rowUniqueImage) return rowUniqueImage;
+
+  const startIndex = Math.abs(Number.isFinite(recipeId) ? recipeId : 0) % images.length;
   const fallbackImage = images[startIndex] || CATEGORY_IMAGES.general_food[0];
   usedImageSignatures?.add(getImageSignature(fallbackImage));
   return fallbackImage;
@@ -262,7 +292,7 @@ const pickCategoryImage = (category: string, recipeId: number, usedImageSignatur
 
 const getCategoryImage = (item: any, usedImageSignatures?: Set<string>): string => {
   const recipeId = Number(item.id);
-  const title = String(item.name || "");
+  const title = String(item.name || item.title || "");
   const ingredients = Array.isArray(item.ingredients) ? item.ingredients.join(" ") : "";
   const description = String(item.description || "");
 
@@ -311,12 +341,17 @@ const getRecipeImage = (item: any, forceFallbackImage = false, usedImageSignatur
   if (forceFallbackImage) return getCategoryImage(item, usedImageSignatures);
 
   const { imageUrl, sourceTier } = getStoredRecipeImage(item);
+  const storedImageSignature = imageUrl ? getImageSignature(imageUrl) : "";
 
-  if (!TRUSTED_IMAGE_SOURCES.has(sourceTier || "") || isPlaceholderImage(imageUrl)) {
+  if (
+    !TRUSTED_IMAGE_SOURCES.has(sourceTier || "") ||
+    isPlaceholderImage(imageUrl) ||
+    (!!storedImageSignature && usedImageSignatures?.has(storedImageSignature))
+  ) {
     return getCategoryImage(item, usedImageSignatures);
   }
 
-  usedImageSignatures?.add(getImageSignature(imageUrl));
+  usedImageSignatures?.add(storedImageSignature);
   return imageUrl;
 };
 
@@ -333,28 +368,31 @@ const mapRecipeRow = (item: any, forceFallbackImage = false, usedImageSignatures
 });
 
 const mapRecipeRows = (items: any[]): RecipeItem[] => {
-  const storedImageCounts = new Map<string, number>();
+  const usedImageSignatures = new Set<string>();
+  return items.map((item) => mapRecipeRow(item, false, usedImageSignatures));
+};
+
+export const ensureUniqueRecipeRowImages = (items: RecipeItem[]): RecipeItem[] => {
   const usedImageSignatures = new Set<string>();
 
-  for (const item of items) {
-    const { imageUrl, sourceTier } = getStoredRecipeImage(item);
-    const isProtectedSource = TRUSTED_IMAGE_SOURCES.has(sourceTier || "");
-    if (!isProtectedSource && imageUrl && !isPlaceholderImage(imageUrl)) {
-      const signature = getImageSignature(imageUrl);
-      storedImageCounts.set(signature, (storedImageCounts.get(signature) || 0) + 1);
-    }
-  }
-
   return items.map((item) => {
-    const { imageUrl, sourceTier } = getStoredRecipeImage(item);
-    const isProtectedSource = TRUSTED_IMAGE_SOURCES.has(sourceTier || "");
-    const signature = imageUrl ? getImageSignature(imageUrl) : "";
-    const forceFallbackImage =
-      !isProtectedSource &&
-      !!imageUrl &&
-      !isPlaceholderImage(imageUrl) &&
-      (storedImageCounts.get(signature) || 0) > 1;
-    return mapRecipeRow(item, forceFallbackImage, usedImageSignatures);
+    const currentImage = item.image || "";
+    const currentSignature = currentImage ? getImageSignature(currentImage) : "";
+    const canKeepCurrentImage =
+      currentImage &&
+      !isPlaceholderImage(currentImage) &&
+      currentSignature &&
+      !usedImageSignatures.has(currentSignature);
+
+    if (canKeepCurrentImage) {
+      usedImageSignatures.add(currentSignature);
+      return item;
+    }
+
+    return {
+      ...item,
+      image: getCategoryImage(item, usedImageSignatures),
+    };
   });
 };
 

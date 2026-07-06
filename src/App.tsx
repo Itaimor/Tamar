@@ -11,11 +11,13 @@ import Home from "./pages/Home.tsx";
 import CookBook from "./pages/CookBook.tsx";
 import RecipeDetail from "./pages/RecipeDetail.tsx";
 import Landing from "./pages/Landing.tsx";
+import Pricing from "./pages/Pricing.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ChatScreen from "@/components/ChatScreen";
 import DigestiveScrollIndicator from "@/components/DigestiveScrollIndicator";
 import ColdStartGuide from "@/components/ColdStartGuide";
+import TamarRewardToast from "@/components/TamarRewardToast";
 import type { RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { Loader2 } from "lucide-react";
 
@@ -128,6 +130,7 @@ const AppShell = () => {
         <Routes>
           <Route path="/" element={<AuthGate><Home /></AuthGate>} />
           <Route path="/cookbook" element={<AuthGate><CookBook /></AuthGate>} />
+          <Route path="/pricing" element={<AuthGate><Pricing /></AuthGate>} />
           <Route path="/recipes/:recipeId" element={<AuthGate><RecipeDetail /></AuthGate>} />
           <Route path="/app" element={<AuthGate><Index /></AuthGate>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
@@ -153,6 +156,7 @@ const AppShell = () => {
       />
       <FloatingChatButton onOpen={openFoodLogDock} />
       <DigestiveScrollIndicator />
+      <TamarRewardToast />
     </>
   );
 };

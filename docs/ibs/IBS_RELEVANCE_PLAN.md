@@ -43,7 +43,7 @@ Current relevant code:
 
 - `src/pages/Home.tsx` has the taste cold-start onboarding with Like/Dislike cards.
 - `src/components/ChatScreen.tsx` has chat chips and message flow.
-- `api/generate.ts` calls Gemini for general chat responses.
+- `api/generate.ts` calls Gemini for general chat responses and can include bounded signed-in app context from `api/chat-rag-context.ts`.
 - `src/lib/recipeInteractions.ts` stores recipe interaction signals.
 - `docs/IBS_Recommender_Online_LightFM_Design.md` already describes richer long-term architecture with meal logs, health reports, ingredient risks, symptom attribution, and risk-aware ranking.
 
@@ -247,13 +247,14 @@ Add a chip before `Analyze my Lunch`:
 How I Feel
 ```
 
-Current chip order should become:
+Current chip order should keep the implemented chat actions first:
 
 ```text
+Recommend Me
+Log Food
+Add Recipe
 How I Feel
 Analyze my Lunch
-Log Stress Level
-View Weekly Risk
 ```
 
 When the user clicks `How I Feel`, use app state to start a structured IBS check-in.

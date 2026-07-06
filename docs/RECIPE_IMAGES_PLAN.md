@@ -8,7 +8,7 @@ The recipe database contains recipe names, ingredients, and instructions, but mo
 
 The app now uses a layered image strategy:
 
-1. If a trusted `recipe_images.image_url` exists from a `manual` or `admin` source, use it.
+1. If a trusted `recipe_images.image_url` exists from a `manual` or `admin` source, use it unless it is known to be non-food content or would duplicate an earlier image in the same visible row.
 2. Otherwise, try specific title categories before broad categories.
 3. If the title does not match, try specific ingredient categories.
 4. If ingredients still do not give a clear food category, infer a broad meal type.
@@ -43,7 +43,7 @@ recipe id % number of images in category
 
 This keeps the same recipe visually stable between page loads while making rows feel more varied. Two recipes in the same category no longer always need to show the exact same image.
 
-When a fetched recipe batch is mapped for display, fallback selection also keeps track of images already used in that batch. If a later recipe lands on the same category image, the picker walks to the next image in that category pool when possible.
+When a fetched recipe batch is mapped for display, fallback selection also keeps track of images already used in that batch. If a later recipe lands on the same category image, the picker walks to the next image in that category pool when possible. If that category's pool is exhausted, the picker can draw from the broader curated image pool so a visible row does not repeat an image.
 
 Examples of richer categories:
 
@@ -90,9 +90,11 @@ If another recipe in the same request already chose that URL, the endpoint walks
 
 Existing `pexels-auto` rows may be refreshed only when their image URL is duplicated inside the current request. This allows bad automatic duplicates to be repaired without replacing manual/admin images.
 
-The frontend also has a duplicate safeguard for visible recipe batches. If multiple recipes in the same fetched batch have the same trusted stored image URL, those repeated cards use the richer category/meal fallback instead of showing the same image again. Duplicate checks normalize photo IDs/paths, so the same image can still be detected when query parameters differ. Images marked `manual` or `admin` are still trusted.
+The frontend also has a duplicate safeguard for visible recipe rows. After Home has assembled each carousel row, it checks image signatures in display order. The first valid image may be kept, including a trusted `manual` or `admin` image. Any later card with the same image signature uses the richer category/meal fallback instead. Duplicate checks normalize photo IDs/paths, so the same image can still be detected when query parameters differ.
 
-The frontend also treats stored image URLs with obvious non-food slugs, such as `books` or `notebook`, as invalid and falls back to curated category images.
+Recommendation ranking and row membership always take precedence over image constraints. Image safeguards are presentational only: they may choose a different image for an already-selected recipe, but they must not remove recipes, swap recipes, reorder recipes, change scores, or refetch recommendations to satisfy image uniqueness. If no distinct image is available, keep the recommended recipe and render the best available image rather than altering the recommendation row.
+
+The frontend also treats stored image URLs with obvious non-food slugs, such as `books` or `notebook`, as invalid and falls back to curated category images. Known bad photo signatures can also be blocklisted when a remote image ID resolves to non-food content without a helpful URL slug. The Pexels fill endpoint and the local Vite mirror refresh duplicated or known-bad automatic images when they appear in the current request.
 
 ## Required Env Vars
 

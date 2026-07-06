@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { Play, Plus, Info, ChevronRight, ChevronLeft, Check, Heart, X, Sparkles, HeartPulse, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
@@ -18,7 +18,14 @@ import {
   recordRecipeInteraction,
   setRecipeCooklists,
 } from "@/lib/recipeInteractions";
-import { recipeSections, RecipeItem, fetchRecipesByIds, fetchDefaultRecipes, fetchColdStartRecipes } from "@/lib/recipes";
+import {
+  recipeSections,
+  RecipeItem,
+  ensureUniqueRecipeRowImages,
+  fetchRecipesByIds,
+  fetchDefaultRecipes,
+  fetchColdStartRecipes,
+} from "@/lib/recipes";
 import { fetchAnalysisDashboard } from "@/lib/analysis";
 import { supabase } from "@/lib/supabase";
 import IbsOnboardingCard from "@/components/IbsOnboardingCard";
@@ -567,19 +574,19 @@ const Home = () => {
 
   const sections = recipeSections.map((sec) => {
     if (sec.title === "Curated for You") {
-      return { ...sec, items: curatedRecipes };
+      return { ...sec, items: ensureUniqueRecipeRowImages(curatedRecipes) };
     }
     if (sec.title === "Trending in Your Area") {
-      return { ...sec, items: trendingRecipes };
+      return { ...sec, items: ensureUniqueRecipeRowImages(trendingRecipes) };
     }
     if (sec.title === "Bursting with Flavor") {
-      return { ...sec, items: flavorRecipes };
+      return { ...sec, items: ensureUniqueRecipeRowImages(flavorRecipes) };
     }
     if (sec.title === "Healthy & Mindful") {
-      return { ...sec, items: healthyRecipes };
+      return { ...sec, items: ensureUniqueRecipeRowImages(healthyRecipes) };
     }
     if (sec.title === "Quick & Satisfying") {
-      return { ...sec, items: quickRecipes };
+      return { ...sec, items: ensureUniqueRecipeRowImages(quickRecipes) };
     }
     return sec;
   });
@@ -645,7 +652,7 @@ const Home = () => {
             </div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#fbf7ec] via-[#fbf7ec] md:via-[#fbf7ec] md:to-[#fbf7ec]/62" />
             <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#f1eadb] to-transparent" />
-            <div className="relative z-10 ml-4 max-w-[calc(100%-2rem)] pb-20 pt-28 md:ml-12 md:max-w-[46%] md:pb-28 md:pt-28 xl:max-w-[50%] animate-in fade-in slide-in-from-left-8 duration-1000">
+            <div className="relative z-10 ml-4 max-w-[calc(100%-2rem)] pb-20 pt-28 md:ml-12 md:max-w-[46%] md:pb-28 md:pt-28 xl:ml-20 xl:max-w-[50%] animate-in fade-in slide-in-from-left-8 duration-1000">
               <div className="flex items-center gap-2 mb-4">
                 <span className="inline-flex items-center gap-1.5 bg-white/75 text-primary border border-primary/25 text-[10px] uppercase font-bold px-2 py-1 rounded-full shadow-sm">
                   <HeartPulse className="h-3 w-3" />
@@ -684,7 +691,7 @@ const Home = () => {
         ) : (
           <div className="absolute inset-0 bg-secondary animate-pulse">
             <div className="absolute inset-0 bg-gradient-to-t from-[#f1eadb] via-[#fbf7ec]/20 to-transparent" />
-            <div className="absolute bottom-32 md:bottom-48 left-4 md:left-12 w-full max-w-2xl pr-8 space-y-6">
+            <div className="absolute bottom-32 left-4 w-full max-w-2xl space-y-6 pr-8 md:bottom-48 md:left-12 xl:left-20">
               <div className="flex items-center gap-2">
                 <div className="h-5 w-20 bg-primary/10 rounded-sm" />
                 <div className="h-4 w-32 bg-primary/10 rounded-sm" />
@@ -800,8 +807,8 @@ const Home = () => {
         )}
 
         {sections.map((section, idx) => (
-          <div key={idx} className="pl-4 md:pl-12 group/row">
-            <div className="flex items-center justify-between pr-4 md:pr-12 mb-3">
+          <div key={idx} className="pl-4 md:pl-12 xl:pl-20 group/row">
+            <div className="flex items-center justify-between pr-4 md:pr-12 xl:pr-20 mb-3">
               <h3 className="text-xl md:text-2xl font-bold text-[#1f3d2b] transition-colors flex items-center gap-2">
                 {section.title}
                 <ChevronRight className="w-5 h-5 text-primary/60 opacity-0 group-hover/row:opacity-100 transition-all -ml-2 group-hover/row:ml-0" />
@@ -1003,6 +1010,9 @@ const Home = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Choose cooklists</DialogTitle>
+            <DialogDescription className="sr-only">
+              Select the cooklists where this recipe should be saved.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="max-h-60 space-y-2 overflow-y-auto pr-1">

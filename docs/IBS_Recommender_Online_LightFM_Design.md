@@ -41,6 +41,7 @@ Implemented scope:
 - Mirror foods collected by completed `How I Feel` chat check-ins into the Diary/`meal_logs` flow.
 - Route recommended-recipe eating evidence through a chat-guided recipe feedback flow before writing recipe-backed `meal_logs`.
 - Allow the chat to answer recommendation requests by reading the same `user_recommendations.recommended_recipe_ids` row that powers Home's `Curated for You` section, refreshing through `/api/refresh-recommendations` when the user is signed in.
+- Add structured retrieval-augmented chat context for signed-in users by retrieving recent meals, symptom check-ins, restrictions, personalized ingredient signals, recent recipe activity, and current Curated for You recipes before Gemini answers general chat.
 - Add the `How I Feel` chat flow before `Analyze my Lunch`.
 - Add non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
 - Store offline preference candidates in `public.user_candidate_recipes`.
@@ -51,8 +52,9 @@ Implemented scope:
 - Support optional offline symptom-risk model training in `RecommenderSys/train_symptom_model.py`.
 - Show a user-facing Diary page for logging meals and how the user feels.
 - Allow the Diary to search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline, and to add food-history entries from Recent diary into cooklists.
-- Show a user-facing Analysis page that summarizes possible trigger foods, easier foods, recent meal/symptom patterns, and next-step suggestions from the same risk and logging tables.
+- Show a user-facing Analysis page that summarizes possible trigger foods, easier foods, recent meal/symptom patterns, and next-step suggestions from the same risk and logging tables; its next-step cards may use lightweight content-based matching over already recommended recipes to suggest a recipe experiment.
 - Allow meal logs created from the Diary, chat food logging, or recipe-feedback chat to carry an optional uploaded image stored in Supabase Storage and referenced by `image_url`.
+- Allow Gemini-assisted food-photo analysis in Chat `Log Food`, the Diary meal form, and the CookBook personal-recipe form. Dedicated "from image" actions may prefill a meal/recipe title, visible-food notes, ingredient notes, and clarification prompts, but normal image upload fields remain image attachments. The user must confirm or edit the result before it is saved as `meal_logs` evidence or private personal recipe content.
 - Allow users to add personal, non-catalog recipes to cooklists from the CookBook page, Diary, or Tamar chat.
 - Show cookbook-only recommendations in the CookBook page from recipes already saved in the user's cooklists, using risk-reranked catalog recipes plus heuristic personal-recipe ranking.
 
@@ -70,20 +72,24 @@ The Diary page is the user-facing entry point for food and symptom history.
 
 It lets signed-in users:
 
-1. Save a meal with time, optional portion, optional uploaded image, and notes.
+1. Save a meal with time, optional portion, optional calories/protein/fat, optional uploaded image, and notes. A separate `Add meal from image` action may upload a photo, attach it to the draft, and use Gemini to suggest a plain meal name and visible-food notes before the user saves. Nutrition values are editable tracking data; catalog-backed meals may prefill from Food.com recipe nutrition, and free-text/photo-assisted meals may use Gemini estimates before the user saves.
 2. Save a how-you-feel check-in with time, symptom type, severity, no-symptom state, and notes.
 3. See foods captured through the chat-based IBS check-in.
 4. See started/completed recipe activity as food-history context.
-5. Review a combined meal/check-in timeline grouped by day.
-6. Search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline.
-7. Add food-history entries from the recent diary timeline into a cooklist.
-8. See simple counts for today's meals, today's check-ins, and rougher notes saved.
+5. Edit or remove user-owned meal-log rows from the visible diary timeline.
+6. Review a combined meal/check-in timeline grouped by day.
+7. Search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline.
+8. Add food-history entries from the recent diary timeline into a cooklist.
+9. See simple counts for today's meals, today's check-ins, and rougher notes saved.
+10. See and care for the user's Tamar tree. Meal logs water the tree, how-you-feel check-ins compost it, and a day with both can grow it once.
 
 Writes go through frontend API bridges:
 
 ```text
 POST /api/meal-log
 POST /api/health-report
+POST /api/analyze-food-image
+POST /api/estimate-meal-nutrition
 ```
 
 When the Python recommender service is configured, those bridges call:
@@ -104,11 +110,30 @@ user_ibs_checkins
 recipe_interactions
 ```
 
-When a `meal_logs.image_url` is present, the Diary may show it as meal context. Meal images are user-facing diary evidence only; they do not change ingredient extraction, symptom attribution, or recommender scoring unless a later design explicitly adds image understanding.
+The Tamar tree habit loop reads existing logging tables and writes only gamification state:
+
+```text
+user_tamar_tree_runs
+user_tamar_tree_reward_events
+```
+
+Tree state is an engagement overlay. It does not create health conclusions, ingredient exposure records, risk scores, recipe interactions, or recommendation inputs. A food log is water, a manual or chat how-you-feel check-in is compost, and both on the same local calendar day produce at most one tree level. Food-only or feeling-only days keep the tree alive but do not increase level. After seven consecutive local calendar dates with no water and no compost, the current tree dies; replanting creates a new sapling while preserving prior run records for Analysis.
+
+When a `meal_logs.image_url` is present, the Diary may show it as meal context. The normal Diary image field is an attachment field only. Before saving a new meal, the separate `Add meal from image` action may send a user-owned uploaded image to Gemini through `/api/analyze-food-image` and return conservative suggestions such as a meal title, visible ingredients, plausible hidden ingredients, confidence, and clarification questions. These suggestions are draft UI state only. They do not create ingredient exposure records, symptom attribution, or recommender scoring changes by themselves. The only durable learning signal is the confirmed `meal_logs` row that the user saves or confirms in chat. `/api/estimate-meal-nutrition` is separate from image recognition: it returns editable calories, protein, and fat for tracking, using catalog recipe nutrition when possible and Gemini estimates otherwise.
+
+Chat uses the same distinction:
+
+1. In `Log Food`, an attached photo is interpreted as food evidence to draft a meal log. If the user replies yes, Tamar logs the suggested meal name; if the user edits or types another name, Tamar logs the user's text with the image attached.
+2. In `Add Recipe`, an attached photo is treated as the personal recipe image by default. It is not automatically logged as eaten.
+3. In recommended-recipe feedback, an attached photo is meal context for the confirmed catalog recipe, not a separate recipe-recognition signal.
+
+The CookBook personal-recipe form reserves its normal image field for the saved recipe image. A separate `Add recipe from image` action can upload a photo, attach it to the draft, and send it through `/api/analyze-food-image`. Its suggestion may draft a private personal recipe title and ingredient notes, but it does not create a meal log, does not create a catalog recipe, and does not insert `recipe_interactions`.
 
 Existing chat check-ins are shown by expanding `user_ibs_checkins.food_windows` into chat-sourced food entries. Future completed chat check-ins also write `meal_logs` rows for the collected foods so backend learning can use them.
 
 Recommended recipes should become eating evidence only after the user explicitly confirms through chat that they ate the recipe. That flow writes a recipe-backed `meal_logs` row and then asks for preference and general feeling feedback. Recipe `viewed`, `saved`, or unconfirmed `started` interactions are not enough to create a meal log.
+
+User-owned `meal_logs` entries are editable and removable from the Diary timeline. Chat-derived food entries and recipe-interaction entries remain read-only context unless they have a corresponding `meal_logs` row.
 
 Diary language should stay friendly and plain. Avoid model-heavy wording and present the page as tracking, not diagnosis.
 
@@ -132,16 +157,24 @@ user_ingredient_exposures
 meal_logs
 health_reports
 user_ibs_checkins
+user_recommendations
+recipes
 ```
 
-It does not write new health conclusions and does not change recommendation scores directly. Recommendation scoring remains owned by the backend risk/reranking flow.
+It does not write new health conclusions and does not change recommendation scores directly. Recommendation scoring remains owned by the backend risk/reranking flow. The Analysis page may use the current `user_recommendations` recipe arrays as a bounded candidate pool for explanation-only content-based experiment suggestions.
 
 Current Analysis sections:
 
 - **Foods to watch**: ingredients with higher current risk scores, labeled with friendly language such as `Strong signal`, `Worth watching`, or `Early clue`.
 - **Foods that seem easier**: ingredients with lower current risk scores and some supporting exposure/check-in history.
 - **Recent pattern**: weekly view of meals logged and average symptom level.
-- **What to test next**: lightweight suggestions such as logging a good-day check-in, testing one ingredient with/without a similar meal, or using an easier food as a meal anchor.
+- **Nutrition over seven days**: daily calories, protein, and fat from saved meal-log nutrition, with user-selectable metric lines. This is tracking information, not a health conclusion.
+- **Tamar Record**: current tree level, streaks, best run, reward count, and replant history from tree gamification tables. This is motivational progress only.
+- **What to test next**: lightweight suggestions such as logging a good-day check-in, testing one ingredient with/without a similar meal, using an easier food as a meal anchor, or trying a recipe whose name/ingredients/description are content-similar to foods that have looked easier while avoiding the strongest watchlist ingredients.
+
+Content-based Analysis suggestions are not a second production recommender. They use local recipe text similarity over already-generated recommendation candidates to choose an experiment card and link to the recipe detail page when possible.
+
+The navbar Insights popover is a lightweight navigation layer over the same user activity. It may prompt the user to log a stale meal, add a how-you-feel note, care for a Tamar tree that needs water/compost, replant a dead Tamar, revisit Analysis, or return to saved CookBook meals based on recent meal/check-in timestamps, tree state, and local page-visit recency. Opening the popover marks those navigation nudges as seen for the signed-in user and clears the notification badge; it does not write health conclusions or change recommendation scores.
 
 Language rules:
 
@@ -149,6 +182,74 @@ Language rules:
 - Prefer pattern language: `may be worth watching`, `early clue`, `seems easier`, `Tamar is still learning`.
 - Avoid model-heavy terms in the UI such as `confidence`, `positive evidence`, `negative evidence`, or `risk model`.
 - Clearly frame the page as pattern tracking, not diagnosis.
+
+## 1.4 Tamar Tree Habit Loop
+
+The Tamar tree is a companion/habit layer for logging consistency. It is not a recommender feature, symptom model feature, medical inference, or ingredient-risk signal.
+
+Placement:
+
+1. Diary shows the full tree and care state above the meal/check-in forms.
+2. Navbar shows a compact tree badge with today's missing care action.
+3. Insights may nudge the user to water, compost, rescue, or replant the tree.
+4. Analysis shows Tamar Record as historical engagement progress.
+
+Care rules:
+
+1. A confirmed `meal_logs` row waters the tree for the row's local calendar date.
+2. A confirmed `health_reports` row or completed `user_ibs_checkins` row composts the tree for the row's local calendar date.
+3. A day grows the tree at most once, and only if that same local date has both water and compost.
+4. Food-only or feeling-only days count as care and prevent death, but do not increase tree level.
+5. Seven consecutive local dates with no water and no compost kill the current tree run.
+6. Once dead, that run does not revive from later logs. Replanting starts a new current run while preserving prior run history.
+7. If the user replants after already logging today, today's existing care can count for the new sapling.
+
+Reward rules:
+
+1. Water and compost create small care animations.
+2. A full-care growth day creates a growth reward and increments streak/level.
+3. Levels 1-7 should visibly change often.
+4. After level 7, deterministic cosmetic rewards occur at least every 2 levels, medium moments every 5 levels, and larger world changes every 10 levels.
+5. Major world zones unlock at level 100 (clouds), 200 (atmosphere/space), and 300 (UFO easter egg).
+6. Rewards must be cosmetic and deterministic, not randomized or tied to symptom outcomes.
+
+Data ownership:
+
+```text
+user_tamar_tree_runs
+--------------------
+id
+user_id
+is_current
+status
+level
+growth_days
+current_streak
+longest_streak
+best_level
+last_watered_date
+last_composted_date
+last_care_date
+last_growth_date
+planted_at
+died_at
+updated_at
+
+user_tamar_tree_reward_events
+-----------------------------
+id
+user_id
+run_id
+event_key
+event_type
+care_date
+level
+title
+body
+created_at
+```
+
+These tables are user-owned and protected by RLS. They are allowed to support UI status, records, and idempotent reward events only. They must not be joined into final ranking, risk scoring, LightFM inputs, XGBoost labels/features, ingredient attribution, or diagnosis-like copy.
 
 Current concrete tables:
 
@@ -388,6 +489,8 @@ The Diary manual meal form can be prefilled from the user's cookbook or from rec
 
 After a Diary meal is logged, the app may ask whether to add it to the CookBook if the same catalog recipe or same-titled personal recipe is not already present. Recent Diary food entries can also be added to cooklists later. Catalog-backed entries use `setRecipeCooklists` and create/refresh the `saved` preference interaction; non-catalog meal/chat-food entries become private personal cooklist recipes and are not recommendation candidates.
 
+Users can edit or delete meal-log rows they own from the Diary timeline. Editing a meal name away from its catalog recipe title should clear the stale `recipe_id`; deleting a meal log removes that diary evidence but does not create or remove recipe preference events.
+
 Used by:
 
 ```text
@@ -396,6 +499,7 @@ Ingredient risk learning
 Health risk model
 Diary food-history timeline
 Analysis meal-pattern summaries
+Tamar tree watering state
 ```
 
 Example table:
@@ -410,6 +514,11 @@ food_name
 logged_at
 portion_size
 portion_unit
+calories
+protein_g
+fat_g
+nutrition_source
+nutrition_confidence
 image_url
 notes
 created_at
@@ -458,6 +567,7 @@ Ingredient risk updates
 XGBoost training data
 Diary check-in timeline
 Analysis symptom-pattern summaries
+Tamar tree compost state
 ```
 
 The Diary page creates `health_reports` through `/api/health-report`. The chat-based `How I Feel` flow stores its structured result in `user_ibs_checkins`; the Diary also reads that table so chat check-ins appear next to manual check-ins.
@@ -484,6 +594,7 @@ The Diary uses those saved `food_windows` in two ways:
 
 1. Existing check-ins are expanded into chat-sourced food entries for the timeline.
 2. Future completed check-ins also write the collected foods into `meal_logs` so exposure tracking and backend learning can use them.
+3. Completed check-ins compost the Tamar tree, while the mirrored food rows may also water it.
 
 If a chat-sourced food already has a matching `meal_logs` row near the same time, the Diary shows the meal log and suppresses the duplicate chat-derived food entry.
 
@@ -1485,6 +1596,52 @@ Flow:
 
 ---
 
+## 15.2.1 Food Image Analysis Endpoint
+
+Example:
+
+```text
+POST /api/analyze-food-image
+```
+
+Flow:
+
+```text
+1. Authenticate the user in the frontend API bridge.
+2. Require `image_url` to point at the signed-in user's own `user-uploads` Supabase Storage path.
+3. Fetch only supported food-photo image formats and send the image to Gemini.
+4. Return conservative JSON: is_food, food_name, visible_ingredients, possible_hidden_ingredients, portion_guess, confidence, questions, and notes.
+5. Do not write database rows, ingredient exposure records, risk scores, recipe interactions, or cookbook rows from this endpoint.
+6. Let Chat, Diary, or CookBook show the suggestion as editable draft state only when the user chooses a dedicated photo-analysis action. A later confirmed `/api/meal-log` write is the only meal evidence; a later confirmed CookBook save creates only private personal recipe content.
+```
+
+The endpoint is intentionally separate from `/api/meal-log`. This keeps image recognition reversible and user-confirmed, which matters because food photos often hide sauces, oils, onion, garlic, dairy, sweeteners, and portion details.
+
+---
+
+## 15.2.1 Meal Nutrition Estimate Endpoint
+
+Frontend bridge:
+
+```text
+POST /api/estimate-meal-nutrition
+```
+
+Flow:
+
+```text
+1. Authenticate the user in the frontend API bridge.
+2. If a catalog `recipe_id` is present and the recipe has Food.com nutrition, return calories, protein, and fat from the recipe nutrition array.
+3. Otherwise send the editable food name, portion, notes, and any photo-derived ingredient hints to Gemini.
+4. Return conservative JSON: calories, protein_g, fat_g, source, confidence, notes, and questions.
+5. Do not write meal logs, ingredient exposure records, risk scores, recipe interactions, or cookbook rows from this endpoint.
+6. Let the Diary show the returned values as editable draft nutrition. A later confirmed `/api/meal-log` write stores the final values on `meal_logs`.
+```
+
+Nutrition estimates are tracking aids. They are not medical, weight-loss, IBS safety, or diagnosis outputs.
+
+---
+
 ## 15.3 Health Report Endpoint
 
 Example:
@@ -1566,7 +1723,7 @@ CookBook form or chat chip: Add Recipe
 Flow:
 
 ```text
-1. User provides a recipe title and optionally a target cooklist, uploaded image, ingredients, and instructions.
+1. User provides a recipe title and optionally a target cooklist, uploaded image, ingredients, and instructions. In the CookBook page, the normal image field attaches a recipe image, while the separate `Add recipe from image` action may upload a photo and use Gemini's draft title/ingredients before editing and saving.
 2. If the target cooklist does not exist, create it; otherwise use the selected/mentioned cooklist.
 3. Insert a `cooklist_recipes` row with `recipe_source = 'personal'` and a generated text recipe id.
 4. Do not insert a `recipe_interactions` row for the personal recipe.
@@ -1627,7 +1784,41 @@ The chat recommendation response is a presentation layer over the existing Curat
 
 ---
 
-## 15.9 CookBook Sidebar Recommendation Flow
+## 15.9 General Chat RAG Context
+
+General Tamar chat uses a bounded structured retrieval context when the user is signed in and sends a valid Supabase session token to `/api/generate`.
+
+Retrieved context comes from existing app tables only:
+
+```text
+meal_logs
+health_reports
+user_ibs_checkins
+user_restrictions
+user_ingredient_risks
+user_ibs_ingredient_risks
+user_recommendations
+recipe_interactions
+recipes
+```
+
+The retrieved block is compact, recent, and private to the authenticated user. It is injected into Gemini's system instruction as context for explanation and personalization. It does not write data, does not create new recommendations, and does not change recommender scores.
+
+Rules:
+
+```text
+1. Use retrieved context only when relevant to the user's message.
+2. Keep all health wording in pattern-tracking language, not diagnosis.
+3. Do not expose raw ids, table names, prompts, or model internals to the user.
+4. Do not invent catalog recommendations. Recommendation requests remain owned by section 15.8.
+5. If context is missing or incomplete, say so briefly instead of fabricating user history.
+```
+
+This is the first Tamar RAG layer. It is intentionally structured retrieval over app data rather than an embedding/vector knowledge base. A later vetted IBS education corpus may add semantic retrieval, but the recommender remains the source of truth for ranked recipes.
+
+---
+
+## 15.10 CookBook Sidebar Recommendation Flow
 
 Example:
 

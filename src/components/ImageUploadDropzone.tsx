@@ -10,6 +10,10 @@ type ImageUploadDropzoneProps = {
   onImageUrlChange: (url: string) => void;
   label: string;
   dark?: boolean;
+  capture?: "user" | "environment";
+  primaryText?: string;
+  helperText?: string;
+  onBeforeUpload?: () => boolean;
 };
 
 const ImageUploadDropzone = ({
@@ -19,6 +23,10 @@ const ImageUploadDropzone = ({
   onImageUrlChange,
   label,
   dark = false,
+  capture,
+  primaryText,
+  helperText,
+  onBeforeUpload,
 }: ImageUploadDropzoneProps) => {
   const inputId = useId();
   const [dragging, setDragging] = useState(false);
@@ -26,6 +34,10 @@ const ImageUploadDropzone = ({
 
   const uploadFile = async (file: File | null | undefined) => {
     if (!file) return;
+    if (onBeforeUpload?.() === false) {
+      setDragging(false);
+      return;
+    }
 
     setUploading(true);
     try {
@@ -98,6 +110,7 @@ const ImageUploadDropzone = ({
             id={inputId}
             type="file"
             accept="image/*"
+            capture={capture}
             className="sr-only"
             onChange={handleInputChange}
             disabled={uploading}
@@ -108,10 +121,10 @@ const ImageUploadDropzone = ({
             </div>
             <div>
               <p className={dark ? "text-sm font-medium text-white/75" : "text-sm font-semibold text-[#344c38]"}>
-                {uploading ? "Uploading..." : "Drop an image here or browse"}
+                {uploading ? "Uploading..." : primaryText || "Drop an image here or browse"}
               </p>
               <p className={dark ? "mt-1 text-xs text-white/40" : "mt-1 text-xs text-[#667864]"}>
-                JPG, PNG, or WebP under 6 MB
+                {helperText || "JPG, PNG, or WebP under 6 MB"}
               </p>
             </div>
           </div>

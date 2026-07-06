@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Search, Lightbulb, User, Menu, LogOut, LogIn, Home, BookOpen, MessageSquare, BarChart3, CalendarDays, Clock3, HeartPulse, Leaf } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Search, Lightbulb, User, Menu, LogOut, LogIn, Home, BookOpen, MessageSquare, BarChart3, CalendarDays, Clock3, HeartPulse, Leaf, Utensils, TreePalm, Sprout, Droplets, type LucideIcon } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AuthDialog from "@/components/AuthDialog";
 import { useAuth } from "@/components/AuthProvider";
@@ -24,10 +24,38 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { fetchDefaultRecipes, RecipeItem } from "@/lib/recipes";
+import {
+  buildInsightCards,
+  fetchInsightActivity,
+  getInsightLocalActivity,
+  getInsightPageFromLocation,
+  getInsightsLastReadAt,
+  getUnreadInsightCount,
+  InsightCard,
+  markInsightsRead,
+  recordInsightPageVisit,
+} from "@/lib/insights";
+import { isCanopyPlusUser } from "@/lib/freemium";
+import TamarTreeBadge from "@/components/TamarTreeBadge";
 
 interface NavbarProps {
   forceSolid?: boolean;
 }
+
+const insightIcons: Record<InsightCard["id"], LucideIcon> = {
+  "start-log": Utensils,
+  "log-meal": Utensils,
+  "log-feeling": HeartPulse,
+  analysis: BarChart3,
+  cookbook: BookOpen,
+  "browse-recipes": Leaf,
+  "steady-diary": CalendarDays,
+  "tamar-water": Droplets,
+  "tamar-compost": Leaf,
+  "tamar-full-care": Sprout,
+  "tamar-danger": Sprout,
+  "tamar-dead": Sprout,
+};
 
 const Navbar = ({ forceSolid = false }: NavbarProps) => {
   const [scrolled, setScrolled] = useState(false);
@@ -37,9 +65,15 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRecipes, setSearchRecipes] = useState<RecipeItem[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [insightCards, setInsightCards] = useState<InsightCard[]>([]);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [unreadInsightCount, setUnreadInsightCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const userId = user?.id || null;
+  const isCanopyPlus = isCanopyPlusUser(user);
 
   const getTabParam = (tab: string) => `/app?tab=${tab}`;
 
@@ -116,6 +150,64 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
     setSearchOpen(false);
     setSearchQuery("");
     navigate(`/recipes/${recipeId}`);
+  };
+
+  const refreshInsights = useCallback(async () => {
+    if (!userId) {
+      setInsightCards([]);
+      setUnreadInsightCount(0);
+      setInsightsLoading(false);
+      return;
+    }
+
+    setInsightsLoading(true);
+    try {
+      const activity = await fetchInsightActivity(userId);
+      const nextCards = buildInsightCards({
+        remote: activity,
+        local: getInsightLocalActivity(userId),
+      });
+      setInsightCards(nextCards);
+      setUnreadInsightCount(getUnreadInsightCount(nextCards, getInsightsLastReadAt(userId)));
+    } catch (error) {
+      console.error("Failed to load insights:", error);
+      const fallbackCards = buildInsightCards({
+        local: getInsightLocalActivity(userId),
+      });
+      setInsightCards(fallbackCards);
+      setUnreadInsightCount(getUnreadInsightCount(fallbackCards, getInsightsLastReadAt(userId)));
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    refreshInsights();
+  }, [refreshInsights]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const page = getInsightPageFromLocation(location.pathname, location.search);
+    if (!page) return;
+
+    recordInsightPageVisit(userId, page);
+    refreshInsights();
+  }, [location.pathname, location.search, refreshInsights, userId]);
+
+  const handleInsightsOpenChange = (open: boolean) => {
+    setInsightsOpen(open);
+
+    if (open && userId) {
+      markInsightsRead(userId);
+      setUnreadInsightCount(0);
+      refreshInsights();
+    }
+  };
+
+  const openInsightPath = (path: string) => {
+    setInsightsOpen(false);
+    navigate(path);
   };
 
 
@@ -196,6 +288,16 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
         </div>
 
         <div className="flex items-center gap-4 md:gap-6">
+          {user && !isCanopyPlus && (
+            <button
+              type="button"
+              onClick={() => navigate("/pricing")}
+              className="hidden h-9 items-center gap-2 rounded-full border border-[#d7b86f]/50 bg-[#203629] px-3 text-xs font-black uppercase tracking-[0.08em] text-[#f7c873] shadow-md shadow-primary/15 transition hover:-translate-y-0.5 hover:bg-[#2f4f3d] sm:inline-flex"
+            >
+              <TreePalm className="h-4 w-4" />
+              Canopy+
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
@@ -205,16 +307,25 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
           >
             <Search className="w-5 h-5" />
           </button>
-          <Popover>
+          {userId && (
+            <TamarTreeBadge
+              userId={userId}
+              onOpenDiary={() => navigate(getTabParam("diary"))}
+              onOpenChat={() => navigate(getTabParam("chat"))}
+            />
+          )}
+          <Popover open={insightsOpen} onOpenChange={handleInsightsOpenChange}>
             <PopoverTrigger asChild>
               <button
                 type="button"
                 className="relative rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
-                aria-label="Open insights"
+                aria-label={unreadInsightCount > 0 ? `Open insights, ${unreadInsightCount} new` : "Open insights"}
               >
                 <Lightbulb className="w-5 h-5" />
-                {user && (
-                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-[#fbf7ec]" />
+                {user && unreadInsightCount > 0 && (
+                  <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-black leading-none text-white ring-2 ring-[#fbf7ec]">
+                    {unreadInsightCount > 9 ? "9+" : unreadInsightCount}
+                  </span>
                 )}
               </button>
             </PopoverTrigger>
@@ -222,48 +333,56 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               <div className="border-b border-primary/10 px-4 py-3">
                 <p className="text-sm font-bold text-[#1f3d2b]">Insights</p>
                 <p className="mt-1 text-xs text-[#667864]">
-                  {user ? "A few gentle ideas for your Tamar routine." : "Sign in to get personalized guidance."}
+                  {user
+                    ? insightsLoading && insightCards.length === 0
+                      ? "Checking your latest Tamar activity."
+                      : "A few practical nudges for your Tamar routine."
+                    : "Sign in to get personalized guidance."}
                 </p>
               </div>
               <div className="p-2">
-                {[
-                  {
-                    icon: HeartPulse,
-                    title: "Log how you feel",
-                    body: "A quick check-in helps Tamar connect meals with digestion.",
-                    path: getTabParam("diary"),
-                  },
-                  {
-                    icon: Leaf,
-                    title: "Review food patterns",
-                    body: "See what Tamar is learning from your recent entries.",
-                    path: getTabParam("analysis"),
-                  },
-                  {
-                    icon: BookOpen,
-                    title: "Revisit saved meals",
-                    body: "Your CookBook keeps recipes ready for calmer meal planning.",
-                    path: "/cookbook",
-                  },
-                ].map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.title}
-                      type="button"
-                      onClick={() => navigate(item.path)}
-                      className="flex w-full gap-3 rounded-lg px-3 py-3 text-left transition hover:bg-primary/8"
-                    >
-                      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="h-4 w-4" />
+                {!user ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInsightsOpen(false);
+                      setAuthOpen(true);
+                    }}
+                    className="flex w-full gap-3 rounded-lg px-3 py-3 text-left transition hover:bg-primary/8"
+                  >
+                    <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                      <LogIn className="h-4 w-4" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-[#1f3d2b]">Sign in for insights</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-[#667864]">
+                        Tamar can tailor nudges once it knows your meals, check-ins, and saved recipes.
                       </span>
-                      <span>
-                        <span className="block text-sm font-semibold text-[#1f3d2b]">{item.title}</span>
-                        <span className="mt-1 block text-xs leading-relaxed text-[#667864]">{item.body}</span>
-                      </span>
-                    </button>
-                  );
-                })}
+                    </span>
+                  </button>
+                ) : insightsLoading && insightCards.length === 0 ? (
+                  <div className="rounded-lg px-3 py-5 text-sm text-[#667864]">Checking your latest activity...</div>
+                ) : (
+                  insightCards.map((item) => {
+                    const Icon = insightIcons[item.id];
+                    return (
+                      <button
+                        key={`${item.id}-${item.title}`}
+                        type="button"
+                        onClick={() => openInsightPath(item.path)}
+                        className="flex w-full gap-3 rounded-lg px-3 py-3 text-left transition hover:bg-primary/8"
+                      >
+                        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-semibold text-[#1f3d2b]">{item.title}</span>
+                          <span className="mt-1 block text-xs leading-relaxed text-[#667864]">{item.body}</span>
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </PopoverContent>
           </Popover>
@@ -297,6 +416,15 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
               </div>
 
               <div className="flex-1 overflow-y-auto py-6 px-4 flex flex-col gap-2">
+                {user && !isCanopyPlus && (
+                  <button
+                    onClick={() => handleNavClick("/pricing")}
+                    className="mb-2 flex items-center gap-4 rounded-xl border border-[#d7b86f]/45 bg-[#203629] px-4 py-3 text-left font-bold text-[#f7c873] shadow-md shadow-primary/10 transition hover:bg-[#2f4f3d]"
+                  >
+                    <TreePalm className="h-5 w-5" />
+                    <span>Canopy+</span>
+                  </button>
+                )}
                 {navItems.map((item) => {
                   const active = isActive(item.path);
                   const Icon = item.icon;

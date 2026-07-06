@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { BookOpen, Check, ChevronRight, Leaf, Loader2, NotebookPen, Pencil, Play, Plus, Search, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookOpen, Camera, Check, ChevronRight, Leaf, Loader2, NotebookPen, Pencil, Play, Plus, Search, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,9 @@ import { getRecipeById, fetchRecipesByIds, RecipeItem } from "@/lib/recipes";
 import AuthDialog from "@/components/AuthDialog";
 import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 import ImageUploadDropzone from "@/components/ImageUploadDropzone";
+import { useCanopyAccess } from "@/hooks/useCanopyAccess";
+import { FoodImageAnalysis, analyzeFoodImage } from "@/lib/foodImageAnalysis";
+import { uploadUserImage } from "@/lib/imageUploads";
 import { supabase } from "@/lib/supabase";
 
 type CookbookRecommendation = {
@@ -59,6 +62,16 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const isMissingCookbookRecommendationColumns = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return (
+    code === "42703" ||
+    (typeof message === "string" &&
+      (message.includes("cookbook_recipe_ids") || message.includes("cookbook recommendation columns")))
+  );
+};
+
 const normalizeSearch = (value: string) =>
   value
     .toLowerCase()
@@ -67,9 +80,16 @@ const normalizeSearch = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const buildRecipeIngredientsFromPhoto = (analysis: FoodImageAnalysis) => {
+  const visible = analysis.visible_ingredients;
+  const possible = analysis.possible_hidden_ingredients.map((ingredient) => `Possible: ${ingredient}`);
+  return [...visible, ...possible].join("\n");
+};
+
 const CookBook = () => {
   const navigate = useNavigate();
   const { user, session, loading: authLoading } = useAuth();
+  const { canopyDialog, openImageUploadPrompt } = useCanopyAccess(user);
   const [cooklists, setCooklists] = useState<Cooklist[]>([]);
   const [cooklistRecipesById, setCooklistRecipesById] = useState<Record<number, CooklistMembership[]>>({});
   const [loading, setLoading] = useState(true);
@@ -82,6 +102,8 @@ const CookBook = () => {
   const [savingPersonalRecipe, setSavingPersonalRecipe] = useState(false);
   const [personalRecipeTitle, setPersonalRecipeTitle] = useState("");
   const [personalRecipeImageUrl, setPersonalRecipeImageUrl] = useState("");
+  const [personalRecipePhotoAnalysis, setPersonalRecipePhotoAnalysis] = useState<FoodImageAnalysis | null>(null);
+  const [analyzingPersonalRecipeImage, setAnalyzingPersonalRecipeImage] = useState(false);
   const [personalRecipeIngredients, setPersonalRecipeIngredients] = useState("");
   const [personalRecipeInstructions, setPersonalRecipeInstructions] = useState("");
   const [personalRecipeCooklistId, setPersonalRecipeCooklistId] = useState<number | null>(null);
@@ -101,6 +123,7 @@ const CookBook = () => {
   const [deletingCooklist, setDeletingCooklist] = useState(false);
   const [draggedRecipe, setDraggedRecipe] = useState<DraggedCooklistRecipe | null>(null);
   const [dragOverCooklistId, setDragOverCooklistId] = useState<number | null>(null);
+  const personalRecipeFromImageInputRef = useRef<HTMLInputElement>(null);
 
   const getPersonalRecipeDetails = (item: CooklistMembership): RecipeItem => ({
     id: 0,
@@ -210,7 +233,16 @@ const CookBook = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        if (isMissingCookbookRecommendationColumns(error)) {
+          console.info(
+            "CookBook stored recommendations are unavailable because the cookbook recommendation columns are missing. Apply supabase/migrations/20260707000000_add_cookbook_recommendation_columns.sql."
+          );
+          setCookbookRecommendations(fallbackRecommendations);
+          return;
+        }
+        throw error;
+      }
 
       const memberships = Object.values(groupedRecipes).flat();
       const ids = (data?.cookbook_recipe_ids || []) as string[];
@@ -237,7 +269,9 @@ const CookBook = () => {
 
       setCookbookRecommendations(storedRecommendations.length > 0 ? storedRecommendations.slice(0, 5) : fallbackRecommendations);
     } catch (error) {
-      console.error("Failed to load cookbook recommendations:", error);
+      if (!isMissingCookbookRecommendationColumns(error)) {
+        console.error("Failed to load cookbook recommendations:", error);
+      }
       setCookbookRecommendations(fallbackRecommendations);
     } finally {
       setRecommendationsLoading(false);
@@ -632,6 +666,7 @@ const CookBook = () => {
       }
       setPersonalRecipeTitle("");
       setPersonalRecipeImageUrl("");
+      setPersonalRecipePhotoAnalysis(null);
       setPersonalRecipeIngredients("");
       setPersonalRecipeInstructions("");
       setShowPersonalRecipeForm(false);
@@ -640,6 +675,52 @@ const CookBook = () => {
       toast.error("Failed to add personal recipe.");
     } finally {
       setSavingPersonalRecipe(false);
+    }
+  };
+
+  const applyPersonalRecipePhotoAnalysis = (analysis: FoodImageAnalysis, replace = false) => {
+    if (!analysis.is_food || !analysis.food_name) return;
+
+    const ingredients = buildRecipeIngredientsFromPhoto(analysis);
+    if (replace || !personalRecipeTitle.trim()) {
+      setPersonalRecipeTitle(analysis.food_name);
+    }
+    if (ingredients && (replace || !personalRecipeIngredients.trim())) {
+      setPersonalRecipeIngredients(ingredients);
+    }
+  };
+
+  const handlePersonalRecipeImageUrlChange = (imageUrl: string) => {
+    setPersonalRecipeImageUrl(imageUrl);
+    setPersonalRecipePhotoAnalysis(null);
+  };
+
+  const handlePersonalRecipeFromImageFileSelected = async (file: File | null | undefined) => {
+    if (!user || !file) return;
+    if (!openImageUploadPrompt()) {
+      if (personalRecipeFromImageInputRef.current) personalRecipeFromImageInputRef.current.value = "";
+      return;
+    }
+
+    setPersonalRecipePhotoAnalysis(null);
+    setAnalyzingPersonalRecipeImage(true);
+    try {
+      const imageUrl = await uploadUserImage({ userId: user.id, file, folder: "personal-recipes" });
+      setPersonalRecipeImageUrl(imageUrl);
+      const analysis = await analyzeFoodImage({ imageUrl, context: "personal_recipe" });
+      setPersonalRecipePhotoAnalysis(analysis);
+      if (analysis.is_food && analysis.food_name) {
+        applyPersonalRecipePhotoAnalysis(analysis);
+        toast.success("Recipe photo analyzed.");
+      } else {
+        toast.info("Image attached. Tamar could not confidently name the recipe.");
+      }
+    } catch (error) {
+      console.error("CookBook recipe image analysis error:", error);
+      toast.error(error instanceof Error ? error.message : "Could not analyze that recipe photo.");
+    } finally {
+      setAnalyzingPersonalRecipeImage(false);
+      if (personalRecipeFromImageInputRef.current) personalRecipeFromImageInputRef.current.value = "";
     }
   };
 
@@ -868,6 +949,33 @@ const CookBook = () => {
           <>
             {showPersonalRecipeForm && (
               <section className="mb-6 rounded-lg border border-primary/15 bg-white/90 p-4 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-[#24352a]">Add personal recipe</h2>
+                    <p className="mt-1 text-xs text-[#667864]">Use the button to draft from a photo, or fill the fields yourself.</p>
+                  </div>
+                  <input
+                    ref={personalRecipeFromImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="sr-only"
+                    onChange={(event) => handlePersonalRecipeFromImageFileSelected(event.target.files?.[0])}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (!openImageUploadPrompt()) return;
+                      personalRecipeFromImageInputRef.current?.click();
+                    }}
+                    disabled={analyzingPersonalRecipeImage || savingPersonalRecipe}
+                    className="h-9 gap-2 rounded-lg border-primary/20 text-primary"
+                  >
+                    {analyzingPersonalRecipeImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                    Add recipe from image
+                  </Button>
+                </div>
                 <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
                   <label className="grid gap-1.5">
                     <span className="text-xs font-bold text-[#667864]">Recipe name</span>
@@ -896,9 +1004,53 @@ const CookBook = () => {
                     userId={user.id}
                     folder="personal-recipes"
                     imageUrl={personalRecipeImageUrl}
-                    onImageUrlChange={setPersonalRecipeImageUrl}
-                    label="Image"
+                    onImageUrlChange={handlePersonalRecipeImageUrlChange}
+                    label="Recipe image"
+                    capture="environment"
+                    primaryText="Drop a recipe image here or browse"
+                    helperText="Attach a photo to this saved recipe"
+                    onBeforeUpload={openImageUploadPrompt}
                   />
+                  <div className="grid gap-2 rounded-lg border border-primary/15 bg-primary/[0.035] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#667864]">Photo suggestion</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-[#24352a]">
+                          {analyzingPersonalRecipeImage
+                            ? "Reading recipe photo"
+                            : personalRecipePhotoAnalysis?.is_food && personalRecipePhotoAnalysis.food_name
+                              ? personalRecipePhotoAnalysis.food_name
+                              : "No photo suggestion yet"}
+                        </p>
+                      </div>
+                      {analyzingPersonalRecipeImage ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                      ) : personalRecipePhotoAnalysis?.is_food && personalRecipePhotoAnalysis.food_name ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyPersonalRecipePhotoAnalysis(personalRecipePhotoAnalysis, true)}
+                          className="h-8 shrink-0 gap-1.5 rounded-lg border-primary/20 px-3 text-xs"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          Use
+                        </Button>
+                      ) : (
+                        <Camera className="h-4 w-4 shrink-0 text-primary" />
+                      )}
+                    </div>
+                    {personalRecipePhotoAnalysis?.visible_ingredients.length ? (
+                      <p className="text-xs leading-relaxed text-[#667864]">
+                        Visible: {personalRecipePhotoAnalysis.visible_ingredients.join(", ")}
+                      </p>
+                    ) : null}
+                    {personalRecipePhotoAnalysis?.questions.length ? (
+                      <p className="text-xs leading-relaxed text-[#667864]">
+                        {personalRecipePhotoAnalysis.questions[0]}
+                      </p>
+                    ) : null}
+                  </div>
                   <label className="grid gap-1.5">
                     <span className="text-xs font-bold text-[#667864]">Ingredients</span>
                     <textarea
@@ -932,7 +1084,7 @@ const CookBook = () => {
                   <Button
                     type="button"
                     onClick={handleAddPersonalRecipe}
-                    disabled={savingPersonalRecipe || !personalRecipeTitle.trim()}
+                    disabled={savingPersonalRecipe || analyzingPersonalRecipeImage || !personalRecipeTitle.trim()}
                     className="sm:w-auto"
                   >
                     {savingPersonalRecipe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -1171,6 +1323,9 @@ const CookBook = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Choose cooklists</DialogTitle>
+            <DialogDescription className="sr-only">
+              Select the cooklists where this recipe should be saved.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
@@ -1309,6 +1464,9 @@ const CookBook = () => {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{personalPreviewRecipe?.recipe_title || "Personal recipe"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Review this personal recipe's saved image, ingredients, and steps.
+            </DialogDescription>
           </DialogHeader>
           {personalPreviewRecipe && (
             <div className="space-y-4">
@@ -1340,6 +1498,7 @@ const CookBook = () => {
       </Dialog>
 
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
+      {canopyDialog}
     </div>
   );
 };

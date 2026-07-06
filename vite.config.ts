@@ -4,6 +4,14 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  buildChatRagContext,
+  buildTamarChatSystemInstruction,
+  ChatRagAuthError,
+  extractBearerToken,
+} from "./api/chat-rag-context";
+import { handleAnalyzeFoodImageRequest } from "./api/analyze-food-image";
+import { handleEstimateMealNutritionRequest } from "./api/estimate-meal-nutrition";
 
 const parseJsonBody = (req: any) =>
   new Promise<any>((resolve) => {
@@ -87,6 +95,67 @@ Conversation:
 ${messages.map((message) => `${message.role}: ${message.text}`).join("\n")}
 `;
 
+const localGeneratePlugin = (env: Record<string, string>) => ({
+  name: "local-generate-api",
+  configureServer(server: any) {
+    server.middlewares.use("/api/generate", async (req: any, res: any) => {
+      if (req.method !== "POST") {
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: "Method Not Allowed" }));
+        return;
+      }
+
+      const apiKey = process.env.GEMINI_TAMAR_API_KEY || env.GEMINI_TAMAR_API_KEY;
+      if (!apiKey) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: "GEMINI API is not defined." }));
+        return;
+      }
+
+      try {
+        const body = await parseJsonBody(req);
+        const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+        if (!prompt) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: "Prompt is required in the request body." }));
+          return;
+        }
+
+        const token = extractBearerToken(req.headers.authorization);
+        const ragContext = token
+          ? await buildChatRagContext(token, env).catch((error) => {
+              if (error instanceof ChatRagAuthError) throw error;
+              console.warn("Chat RAG context unavailable:", error);
+              return { text: "" };
+            })
+          : { text: "" };
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: "gemini-3.1-flash-lite",
+          systemInstruction: {
+            role: "system",
+            parts: [{ text: buildTamarChatSystemInstruction(ragContext.text) }],
+          },
+        });
+
+        const chat = model.startChat({
+          history: Array.isArray(body.history) ? body.history : [],
+        });
+
+        const result = await chat.sendMessage(prompt);
+
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ text: result.response.text() }));
+      } catch (error: any) {
+        res.statusCode = error instanceof ChatRagAuthError ? 401 : 500;
+        res.end(JSON.stringify({ error: error.message || "Failed to generate content." }));
+      }
+    });
+  },
+});
+
 const localIbsCheckInPlugin = (env: Record<string, string>) => ({
   name: "local-ibs-check-in",
   configureServer(server: any) {
@@ -136,6 +205,44 @@ const localIbsCheckInPlugin = (env: Record<string, string>) => ({
         res.statusCode = 500;
         res.end(JSON.stringify({ error: error.message || "Failed to run IBS check-in." }));
       }
+    });
+  },
+});
+
+const localFoodImageAnalysisPlugin = (env: Record<string, string>) => ({
+  name: "local-food-image-analysis",
+  configureServer(server: any) {
+    server.middlewares.use("/api/analyze-food-image", async (req: any, res: any) => {
+      const body = await parseJsonBody(req);
+      const result = await handleAnalyzeFoodImageRequest({
+        method: req.method,
+        authorization: req.headers.authorization,
+        body,
+        env: { ...env, ...process.env },
+      });
+
+      res.statusCode = result.status;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(result.body));
+    });
+  },
+});
+
+const localMealNutritionPlugin = (env: Record<string, string>) => ({
+  name: "local-meal-nutrition",
+  configureServer(server: any) {
+    server.middlewares.use("/api/estimate-meal-nutrition", async (req: any, res: any) => {
+      const body = await parseJsonBody(req);
+      const result = await handleEstimateMealNutritionRequest({
+        method: req.method,
+        authorization: req.headers.authorization,
+        body,
+        env: { ...env, ...process.env },
+      });
+
+      res.statusCode = result.status;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(result.body));
     });
   },
 });
@@ -272,6 +379,11 @@ const localDiaryPlugin = (env: Record<string, string>) => ({
               portion_unit: payload.portion_unit || null,
               image_url: typeof payload.image_url === "string" && payload.image_url.trim() ? payload.image_url.trim() : null,
               notes: payload.notes || null,
+              calories: payload.calories || null,
+              protein_g: payload.protein_g || null,
+              fat_g: payload.fat_g || null,
+              nutrition_source: payload.nutrition_source || null,
+              nutrition_confidence: payload.nutrition_confidence || null,
             }
           : {
               user_id: data.user.id,
@@ -281,6 +393,31 @@ const localDiaryPlugin = (env: Record<string, string>) => ({
               no_symptoms: payload.no_symptoms,
               notes: payload.notes || null,
             };
+
+        if (
+          kind === "meal-log" &&
+          fallbackPayload.recipe_id &&
+          !fallbackPayload.calories &&
+          !fallbackPayload.protein_g &&
+          !fallbackPayload.fat_g
+        ) {
+          const { data: recipe } = await supabase
+            .from("recipes")
+            .select("nutrition")
+            .eq("id", fallbackPayload.recipe_id)
+            .maybeSingle();
+          const nutrition = Array.isArray(recipe?.nutrition) ? recipe.nutrition : [];
+          const calories = Number(nutrition[0]);
+          const fat = Number(nutrition[1]);
+          const protein = Number(nutrition[4]);
+          fallbackPayload.calories = Number.isFinite(calories) && calories >= 0 ? calories : null;
+          fallbackPayload.fat_g = Number.isFinite(fat) && fat >= 0 ? fat : null;
+          fallbackPayload.protein_g = Number.isFinite(protein) && protein >= 0 ? protein : null;
+          if (fallbackPayload.calories || fallbackPayload.protein_g || fallbackPayload.fat_g) {
+            fallbackPayload.nutrition_source = "catalog_recipe";
+            fallbackPayload.nutrition_confidence = 0.9;
+          }
+        }
 
         const { data: inserted, error: insertError } = await supabase
           .from(table)
@@ -361,9 +498,56 @@ const FOOD_IMAGE_TERMS = [
   "corn",
 ];
 
+const NON_FOOD_IMAGE_URL_TERMS = [
+  ...NON_FOOD_IMAGE_TERMS,
+  "textbook",
+  "reading",
+  "school",
+  "study",
+];
+
+const BLOCKED_NON_FOOD_IMAGE_SIGNATURES = new Set([
+  "photo-1495446815901-a7297e633e8d",
+  "photo-1497633762265-9d179a990aa6",
+  "photo-1507842217343-583bb7270b66",
+  "photo-1512820790803-83ca734da794",
+  "photo-1516979187457-637abb4f9353",
+  "photo-1524995997946-a1c2e315a42f",
+  "photo-1528207776546-365bb710ee93",
+  "photo-1544716278-ca5e3f4abd8c",
+]);
+
+const escapeImageRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const getImageSignature = (imageUrl: string): string => {
+  const unsplashPhotoId = imageUrl.match(/photo-[a-z0-9-]+/i)?.[0];
+  if (unsplashPhotoId) return unsplashPhotoId.toLowerCase();
+
+  try {
+    const url = new URL(imageUrl);
+    return `${url.hostname}${url.pathname}`.toLowerCase();
+  } catch {
+    return imageUrl.split("?")[0].toLowerCase();
+  }
+};
+
+const hasNonFoodImageUrlTerm = (url: string): boolean => {
+  const normalizedUrl = decodeURIComponent(url).toLowerCase();
+  return NON_FOOD_IMAGE_URL_TERMS.some((term) =>
+    new RegExp(`(^|[^a-z0-9])${escapeImageRegExp(term)}([^a-z0-9]|$)`).test(normalizedUrl),
+  );
+};
+
+const isBlockedNonFoodImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  return hasNonFoodImageUrlTerm(url) || BLOCKED_NON_FOOD_IMAGE_SIGNATURES.has(getImageSignature(url));
+};
+
 const isLikelyFoodPhoto = (photo: any) => {
   const alt = String(photo?.alt || "").toLowerCase();
+  const imageUrls = [photo?.src?.large2x, photo?.src?.large, photo?.src?.medium].filter(Boolean);
   if (!alt) return false;
+  if (imageUrls.some(isBlockedNonFoodImageUrl)) return false;
   if (NON_FOOD_IMAGE_TERMS.some((term) => alt.includes(term))) return false;
   return FOOD_IMAGE_TERMS.some((term) => alt.includes(term));
 };
@@ -387,20 +571,23 @@ const searchPexelsImages = async (query: string, apiKey: string) => {
     .filter(Boolean);
 };
 
-const chooseDistinctImage = (recipeId: number, imageUrls: string[], usedImageUrls: Set<string>) => {
+const chooseDistinctImage = (recipeId: number, imageUrls: string[], usedImageSignatures: Set<string>) => {
   if (imageUrls.length === 0) return null;
 
   const startIndex = Math.abs(recipeId) % imageUrls.length;
   for (let offset = 0; offset < imageUrls.length; offset += 1) {
     const imageUrl = imageUrls[(startIndex + offset) % imageUrls.length];
-    if (!usedImageUrls.has(imageUrl)) {
-      usedImageUrls.add(imageUrl);
+    const signature = getImageSignature(imageUrl);
+    if (!isBlockedNonFoodImageUrl(imageUrl) && !usedImageSignatures.has(signature)) {
+      usedImageSignatures.add(signature);
       return imageUrl;
     }
   }
 
-  const fallbackUrl = imageUrls[startIndex];
-  usedImageUrls.add(fallbackUrl);
+  const fallbackUrl = imageUrls.find((url) => !isBlockedNonFoodImageUrl(url));
+  if (!fallbackUrl) return null;
+
+  usedImageSignatures.add(getImageSignature(fallbackUrl));
   return fallbackUrl;
 };
 
@@ -472,14 +659,17 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
       const autoImageCounts = new Map<string, number>();
       for (const item of existingImages || []) {
         if (item.source_tier === "pexels-auto" && item.image_url) {
-          autoImageCounts.set(item.image_url, (autoImageCounts.get(item.image_url) || 0) + 1);
+          const signature = getImageSignature(item.image_url);
+          autoImageCounts.set(signature, (autoImageCounts.get(signature) || 0) + 1);
         }
       }
 
       const refreshIds = recipeIds.filter((id: number) => {
         const existing = existingById.get(id);
         if (!existing) return true;
-        return existing.source_tier === "pexels-auto" && existing.image_url && (autoImageCounts.get(existing.image_url) || 0) > 1;
+        if (existing.source_tier !== "pexels-auto" || !existing.image_url) return false;
+        const signature = getImageSignature(existing.image_url);
+        return isBlockedNonFoodImageUrl(existing.image_url) || (autoImageCounts.get(signature) || 0) > 1;
       });
 
       if (refreshIds.length === 0) {
@@ -499,11 +689,12 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
         return;
       }
 
-      const usedImageUrls = new Set(
+      const usedImageSignatures = new Set(
         (existingImages || [])
           .filter((item: any) => !refreshIds.includes(Number(item.recipe_id)))
           .map((item: any) => item.image_url)
-          .filter(Boolean),
+          .filter(Boolean)
+          .map(getImageSignature),
       );
 
       const recipesById = new Map((recipes || []).map((recipe: any) => [Number(recipe.id), recipe]));
@@ -513,7 +704,7 @@ const localRecipeImageFillPlugin = (env: Record<string, string>) => ({
         if (!recipe) continue;
 
         const imageUrls = await searchPexelsImages(recipe.name, pexelsApiKey);
-        const imageUrl = imageUrls ? chooseDistinctImage(recipeId, imageUrls, usedImageUrls) : null;
+        const imageUrl = imageUrls ? chooseDistinctImage(recipeId, imageUrls, usedImageSignatures) : null;
         if (imageUrl) {
           rows.push({
             recipe_id: recipeId,
@@ -560,7 +751,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), localRecommendationRefreshPlugin(env), localDiaryPlugin(env), localRecipeImageFillPlugin(env), localIbsCheckInPlugin(env), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), localRecommendationRefreshPlugin(env), localDiaryPlugin(env), localRecipeImageFillPlugin(env), localGeneratePlugin(env), localIbsCheckInPlugin(env), localFoodImageAnalysisPlugin(env), localMealNutritionPlugin(env), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

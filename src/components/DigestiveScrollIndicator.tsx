@@ -73,7 +73,7 @@ const DigestiveScrollIndicator = () => {
 
   return (
     <aside
-      className={`digestive-scroll-indicator pointer-events-none fixed left-0 top-1/2 z-20 hidden -translate-y-1/2 transition-opacity duration-300 xl:block ${
+      className={`digestive-scroll-indicator pointer-events-none fixed left-2 top-1/2 z-20 hidden -translate-y-1/2 transition-opacity duration-300 xl:block ${
         canScroll ? "opacity-80" : "opacity-45"
       }`}
       aria-hidden="true"

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Loader2, Mail } from "lucide-react";
+import { Leaf, Loader2, Mail, TreePalm } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/AuthProvider";
+import { formatTrialDaysRemaining, getCanopyTrialStatus } from "@/lib/freemium";
 
 type AuthDialogProps = {
   open: boolean;
@@ -31,6 +33,7 @@ const getFriendlyAuthError = (error: unknown) => {
 };
 
 const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogProps) => {
+  const navigate = useNavigate();
   const { configured, signIn, signOut, signUp, signInWithProvider, user } = useAuth();
   const [mode, setMode] = useState<"signup" | "signin">(initialMode);
   const [fullName, setFullName] = useState("");
@@ -95,6 +98,14 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
     }
   };
 
+  const canopyStatus = getCanopyTrialStatus(user);
+  const PlanIcon = canopyStatus.isCanopyPlus ? TreePalm : Leaf;
+  const planHelper = canopyStatus.isCanopyPlus
+    ? "Macro tracking, camera uploads, and Analysis testing are active."
+    : canopyStatus.featureAccess
+      ? `${formatTrialDaysRemaining(canopyStatus.daysRemaining)} left in your 30-day Sapling trial.`
+      : "Your 30-day Sapling trial has ended.";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-primary/15 bg-[#fbf7ec] text-foreground sm:max-w-md">
@@ -121,6 +132,34 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
               <p className="text-sm text-[#667864]">Signed in as</p>
               <p className="font-semibold">{user.email}</p>
             </div>
+            <div className="rounded-md border border-primary/10 bg-white/65 p-4">
+              <p className="text-sm text-[#667864]">Plan</p>
+              <div className="mt-2 flex items-start gap-3">
+                <span className={canopyStatus.isCanopyPlus
+                  ? "grid h-9 w-9 place-items-center rounded-lg bg-[#203629] text-[#f7c873]"
+                  : "grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary"}
+                >
+                  <PlanIcon className="h-4 w-4" />
+                </span>
+                <span>
+                  <span className="block font-semibold">{canopyStatus.planLabel}</span>
+                  <span className="mt-1 block text-sm leading-relaxed text-[#667864]">{planHelper}</span>
+                </span>
+              </div>
+            </div>
+            {!canopyStatus.isCanopyPlus && (
+              <Button
+                type="button"
+                className="w-full bg-[#203629] text-[#fffaf0] hover:bg-[#2f4f3d]"
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate("/pricing");
+                }}
+              >
+                <TreePalm className="h-4 w-4" />
+                Upgrade to Canopy+
+              </Button>
+            )}
             <Button
               type="button"
               variant="secondary"

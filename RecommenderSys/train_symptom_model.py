@@ -74,7 +74,7 @@ def label_for_meal(meal: dict, reports_by_user: dict[str, list[dict]]) -> int | 
 def train_model() -> None:
     supabase = load_supabase_client()
 
-    meal_logs = fetch_rows(supabase, "meal_logs", "id, user_id, recipe_id, food_name, logged_at")
+    meal_logs = fetch_rows(supabase, "meal_logs", "id, user_id, recipe_id, food_name, logged_at, calories, protein_g, fat_g")
     health_reports = fetch_rows(supabase, "health_reports", "user_id, reported_at, severity, no_symptoms")
     recipes = fetch_rows(supabase, "recipes", "id, ingredients, nutrition, minutes")
 
@@ -111,11 +111,22 @@ def train_model() -> None:
             continue
 
         recipe = recipes_by_id.get(str(meal.get("recipe_id")))
+        meal_nutrition = [
+            float(meal.get("calories") or 0),
+            float(meal.get("fat_g") or 0),
+            0.0,
+            0.0,
+            float(meal.get("protein_g") or 0),
+            0.0,
+            0.0,
+        ]
         if recipe is None:
             recipe = {
                 "ingredients": [meal.get("food_name")],
-                "nutrition": [],
+                "nutrition": meal_nutrition if any(meal_nutrition) else [],
             }
+        elif any(meal_nutrition):
+            recipe = {**recipe, "nutrition": meal_nutrition}
         user_id = str(meal.get("user_id"))
         ingredient_risk: IngredientRiskResult = compute_recipe_ingredient_risk(
             recipe,

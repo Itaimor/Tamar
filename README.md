@@ -44,10 +44,14 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/pages/Home.tsx` | Main recipe homepage with hero, recommendation rows, onboarding/taste feedback, saved-state actions, and image-fill queueing. |
 | `src/pages/RecipeDetail.tsx` | Recipe detail view with ingredients, steps, and interaction logging. |
 | `src/pages/CookBook.tsx` | Cooklist-based cookbook view for saved recipes. |
+| `src/pages/Pricing.tsx` | Authenticated Canopy+ pricing page with monthly, six-month, and yearly plan options. Checkout is currently marked coming soon. |
 | `src/pages/Index.tsx` | Shell for secondary tools/screens such as chat, diary, and analysis. |
 | `src/components/AuthProvider.tsx` | Supabase auth session provider and profile synchronization. |
 | `src/components/AuthDialog.tsx` | Sign-in/sign-up UI. |
 | `src/components/Navbar.tsx` | Main navigation and authenticated user controls. |
+| `src/components/CanopyUpgradeDialog.tsx` | Shared Canopy+ upsell dialog and inline locked-feature panel for freemium gates. |
+| `src/components/TamarTreePanel.tsx` | Diary tree-care panel for the Tamar habit loop, with water/compost/growth/death/replant UI. |
+| `src/components/TamarTreeBadge.tsx` | Compact global Tamar tree status badge used from the navbar. |
 | `src/components/ImageWithSkeleton.tsx` | Shared image rendering with loading skeleton/fallback handling. |
 | `src/components/*Screen.tsx` | Tool/demo screens used inside the app shell. |
 | `src/components/ui/` | shadcn/Radix-style reusable UI primitives. Usually treat as design-system components. |
@@ -61,6 +65,9 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/lib/recipes.ts` | Recipe fetching, mapping, deterministic match display, image fallback/category logic, and recipe image selection. See [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md). |
 | `src/lib/recipeInteractions.ts` | Reads/writes recipe interactions, saved recipes, onboarding feedback counts, and cooklist membership helpers. |
 | `src/lib/diary.ts` | Reads and writes Diary meals/check-ins, expands chat check-in foods, and includes started/completed recipe activity. |
+| `src/lib/tamarTree.ts` | Derives and persists Tamar tree care state, streaks, cosmetic reward events, death/replant records, and tree nudges from existing meal/check-in logs. |
+| `src/lib/foodImageAnalysis.ts` | Client helper for authenticated Gemini food-photo analysis used by Chat, Diary, and CookBook draft flows before the user confirms saved content. |
+| `src/lib/freemium.ts` | Client-side Canopy+/Sapling plan helpers, trial countdown calculations, and throttled reminder storage. |
 | `src/lib/coldStart.ts` | Legacy/static cold-start recipe vector definitions and helper behavior. |
 | `src/lib/utils.ts` | Shared frontend utility helpers. |
 
@@ -71,8 +78,11 @@ Use this section as the starting map for the repository. For deeper module behav
 | `api/refresh-recommendations.ts` | Authenticated bridge from the frontend to the Python recommender service. |
 | `api/meal-log.ts` | Authenticated bridge for Diary meal logging; calls the recommender service when configured and otherwise stores the meal row. |
 | `api/health-report.ts` | Authenticated bridge for Diary symptom/check-in logging; calls the recommender service when configured and otherwise stores the check-in row. |
+| `api/analyze-food-image.ts` | Authenticated Gemini bridge for user-uploaded food photos. Validates the upload belongs to the signed-in user and returns conservative meal/recipe title and ingredient suggestions for confirmation. |
+| `api/estimate-meal-nutrition.ts` | Authenticated nutrition estimate bridge for Diary meal logs. Uses catalog recipe nutrition when available and Gemini estimates for free-text/photo-assisted meals. |
 | `api/fill-recipe-images.ts` | Authenticated image-cache filler. Searches Pexels, writes `recipe_images`, and avoids repeated cached images where possible. See [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md). |
-| `api/generate.ts` | AI generation endpoint. See [docs/create_api_key.md](docs/create_api_key.md) for key setup. |
+| `api/generate.ts` | AI generation endpoint with signed-in structured chat context retrieval. See [docs/create_api_key.md](docs/create_api_key.md) for key setup. |
+| `api/chat-rag-context.ts` | Shared helper that retrieves bounded Supabase context for general chat RAG without changing recommender ranking. |
 | `vite.config.ts` | Vite config plus local dev middleware that mirrors key API routes for local testing. |
 
 ### Recommender System
@@ -112,6 +122,8 @@ The recommender architecture source of truth is [docs/IBS_Recommender_Online_Lig
 | `supabase/migrations/20260706000000_add_meal_images_and_personal_cooklist_recipes.sql` | Adds optional meal-log images and personal recipe metadata for cooklist recipes. |
 | `supabase/migrations/20260706000001_create_user_uploads_bucket.sql` | Creates the Supabase Storage bucket and object policies for user-uploaded meal and personal recipe images. |
 | `supabase/migrations/20260707000000_add_cookbook_recommendation_columns.sql` | Adds stored cookbook-only recommendation arrays to `user_recommendations`. |
+| `supabase/migrations/20260708000000_add_meal_log_nutrition.sql` | Adds optional meal-log calories, protein, fat, source, and estimate confidence fields for nutrition tracking. |
+| `supabase/migrations/20260709000000_create_tamar_tree_tables.sql` | Adds user-owned Tamar tree run and reward-event tables for the logging habit loop. |
 
 Use the project Supabase skill and the design document before changing schema, RLS, recommendation storage, or API-facing tables.
 
@@ -127,6 +139,20 @@ Use the project Supabase skill and the design document before changing schema, R
 | Change auth behavior | `src/components/AuthProvider.tsx`, `src/components/AuthDialog.tsx`, `src/lib/supabase.ts`, and Supabase policies if data access changes |
 | Change UI pages/components | `src/pages/`, `src/components/`, and `src/components/ui/` |
 | Change deployment/local dev API behavior | `api/`, `vite.config.ts`, and [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md) |
+
+## Tamar Tree Habit Loop
+
+Tamar includes a motivational date-tree companion tied to the existing Diary flow. The full tree lives at the top of Diary, a compact tree badge lives in the navbar, and Analysis shows a read-only Tamar Record.
+
+- Meal logs water the tree.
+- How-you-feel check-ins compost the tree.
+- A local calendar day with both water and compost grows the tree at most once.
+- Food-only or feeling-only days keep the tree alive but do not increase level.
+- Seven consecutive local dates with no water and no compost kill the current tree run.
+- Replanting starts a new sapling while preserving best level, best streak, reward history, and past runs.
+- Rewards are deterministic cosmetic moments: early levels change frequently, later levels unlock small details every 2 levels, medium moments every 5 levels, larger world changes every 10 levels, and big zones at levels 100, 200, and 300.
+
+Tree state is an engagement overlay only. It reads meal/check-in activity and writes `user_tamar_tree_runs` plus `user_tamar_tree_reward_events`, but it must not affect recommendation ranking, health-risk scoring, ingredient attribution, or medical/pattern conclusions.
 
 ## Authentication and Database Setup
 
@@ -146,6 +172,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=...
 6. Add your local URL, usually `http://127.0.0.1:8080` or `http://localhost:8080`, to the allowed redirect URLs.
 
 Recipe interactions are stored in `recipe_interactions` so they can later become recommendation signals for the "Curated for You" section. Cookbook organization lives in `cooklists` and `cooklist_recipes`; adding a catalog recipe to the default Liked cooklist also records a `saved` interaction. Personal recipes can be stored in cooklists without creating catalog recommendation events. CookBook sidebar recommendations are stored separately on `user_recommendations` and are limited to recipes already in the user's cooklists.
+
+The freemium UI treats signed-in users as `Sapling` by default and gives them 30 days of access to Canopy+ features based on the Supabase auth user's `created_at` timestamp. Canopy+ status is read from `app_metadata` rather than user-editable metadata; supported flags include `canopy_plus`, `tamar_canopy`, or plan-like values such as `canopy_plus` on `tamar_plan`, `plan`, or `subscription_tier`. Current Canopy+ checkout buttons intentionally show a coming-soon payment message.
 
 ## Design Alignment
 

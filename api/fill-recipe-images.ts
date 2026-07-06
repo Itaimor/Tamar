@@ -49,9 +49,56 @@ const FOOD_IMAGE_TERMS = [
   "corn",
 ];
 
+const NON_FOOD_IMAGE_URL_TERMS = [
+  ...NON_FOOD_IMAGE_TERMS,
+  "textbook",
+  "reading",
+  "school",
+  "study",
+];
+
+const BLOCKED_NON_FOOD_IMAGE_SIGNATURES = new Set([
+  "photo-1495446815901-a7297e633e8d",
+  "photo-1497633762265-9d179a990aa6",
+  "photo-1507842217343-583bb7270b66",
+  "photo-1512820790803-83ca734da794",
+  "photo-1516979187457-637abb4f9353",
+  "photo-1524995997946-a1c2e315a42f",
+  "photo-1528207776546-365bb710ee93",
+  "photo-1544716278-ca5e3f4abd8c",
+]);
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const getImageSignature = (imageUrl: string): string => {
+  const unsplashPhotoId = imageUrl.match(/photo-[a-z0-9-]+/i)?.[0];
+  if (unsplashPhotoId) return unsplashPhotoId.toLowerCase();
+
+  try {
+    const url = new URL(imageUrl);
+    return `${url.hostname}${url.pathname}`.toLowerCase();
+  } catch {
+    return imageUrl.split("?")[0].toLowerCase();
+  }
+};
+
+const hasNonFoodImageUrlTerm = (url: string): boolean => {
+  const normalizedUrl = decodeURIComponent(url).toLowerCase();
+  return NON_FOOD_IMAGE_URL_TERMS.some((term) =>
+    new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}([^a-z0-9]|$)`).test(normalizedUrl),
+  );
+};
+
+const isBlockedNonFoodImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  return hasNonFoodImageUrlTerm(url) || BLOCKED_NON_FOOD_IMAGE_SIGNATURES.has(getImageSignature(url));
+};
+
 const isLikelyFoodPhoto = (photo: any) => {
   const alt = String(photo?.alt || "").toLowerCase();
+  const imageUrls = [photo?.src?.large2x, photo?.src?.large, photo?.src?.medium].filter(Boolean);
   if (!alt) return false;
+  if (imageUrls.some(isBlockedNonFoodImageUrl)) return false;
   if (NON_FOOD_IMAGE_TERMS.some((term) => alt.includes(term))) return false;
   return FOOD_IMAGE_TERMS.some((term) => alt.includes(term));
 };
@@ -75,20 +122,23 @@ const searchPexelsImages = async (query: string, apiKey: string) => {
     .filter(Boolean);
 };
 
-const chooseDistinctImage = (recipeId: number, imageUrls: string[], usedImageUrls: Set<string>) => {
+const chooseDistinctImage = (recipeId: number, imageUrls: string[], usedImageSignatures: Set<string>) => {
   if (imageUrls.length === 0) return null;
 
   const startIndex = Math.abs(recipeId) % imageUrls.length;
   for (let offset = 0; offset < imageUrls.length; offset += 1) {
     const imageUrl = imageUrls[(startIndex + offset) % imageUrls.length];
-    if (!usedImageUrls.has(imageUrl)) {
-      usedImageUrls.add(imageUrl);
+    const signature = getImageSignature(imageUrl);
+    if (!isBlockedNonFoodImageUrl(imageUrl) && !usedImageSignatures.has(signature)) {
+      usedImageSignatures.add(signature);
       return imageUrl;
     }
   }
 
-  const fallbackUrl = imageUrls[startIndex];
-  usedImageUrls.add(fallbackUrl);
+  const fallbackUrl = imageUrls.find((url) => !isBlockedNonFoodImageUrl(url));
+  if (!fallbackUrl) return null;
+
+  usedImageSignatures.add(getImageSignature(fallbackUrl));
   return fallbackUrl;
 };
 
@@ -143,14 +193,17 @@ export default async function handler(req: any, res: any) {
   const autoImageCounts = new Map<string, number>();
   for (const item of existingImages || []) {
     if (item.source_tier === "pexels-auto" && item.image_url) {
-      autoImageCounts.set(item.image_url, (autoImageCounts.get(item.image_url) || 0) + 1);
+      const signature = getImageSignature(item.image_url);
+      autoImageCounts.set(signature, (autoImageCounts.get(signature) || 0) + 1);
     }
   }
 
   const refreshIds = recipeIds.filter((id) => {
     const existing = existingById.get(id);
     if (!existing) return true;
-    return existing.source_tier === "pexels-auto" && existing.image_url && (autoImageCounts.get(existing.image_url) || 0) > 1;
+    if (existing.source_tier !== "pexels-auto" || !existing.image_url) return false;
+    const signature = getImageSignature(existing.image_url);
+    return isBlockedNonFoodImageUrl(existing.image_url) || (autoImageCounts.get(signature) || 0) > 1;
   });
 
   if (refreshIds.length === 0) {
@@ -166,11 +219,12 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: recipesError.message });
   }
 
-  const usedImageUrls = new Set(
+  const usedImageSignatures = new Set(
     (existingImages || [])
       .filter((item: any) => !refreshIds.includes(Number(item.recipe_id)))
       .map((item: any) => item.image_url)
-      .filter(Boolean),
+      .filter(Boolean)
+      .map(getImageSignature),
   );
 
   const recipesById = new Map((recipes || []).map((recipe: any) => [Number(recipe.id), recipe]));
@@ -180,7 +234,7 @@ export default async function handler(req: any, res: any) {
     if (!recipe) continue;
 
     const imageUrls = await searchPexelsImages(recipe.name, pexelsApiKey);
-    const imageUrl = imageUrls ? chooseDistinctImage(recipeId, imageUrls, usedImageUrls) : null;
+    const imageUrl = imageUrls ? chooseDistinctImage(recipeId, imageUrls, usedImageSignatures) : null;
     if (imageUrl) {
       rows.push({
         recipe_id: recipeId,

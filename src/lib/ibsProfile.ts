@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { createMealLog, getChatMealTime } from "@/lib/diary";
+import { syncTamarTreeAfterCare } from "@/lib/tamarTree";
 import {
   IbsCheckInResult,
   buildColdStartRiskRows,
@@ -153,6 +154,8 @@ export const applyIbsCheckInToProfile = async (userId: string, rawResult: unknow
     console.error("Error saving IBS check-in log:", checkinError);
     throw checkinError;
   }
+
+  await syncTamarTreeAfterCare(userId, "compost", now);
 
   const diaryMealCount = await saveChatFoodsToDiary(userId, result, now);
 

@@ -117,6 +117,7 @@
 }
 
 .wellness-tool-surface .text-cyan-200,
+.wellness-tool-surface .text-cyan-200\/80,
 .wellness-tool-surface .text-cyan-100,
 .wellness-tool-surface .text-emerald-100,
 .wellness-tool-surface .text-emerald-200 {
@@ -167,6 +168,35 @@
   color: #fffaf0;
 }
 
+.wellness-tool-surface .bg-cyan-300,
+.wellness-tool-surface .bg-cyan-300\/12,
+.wellness-tool-surface .bg-cyan-300\/\[0\.12\],
+.wellness-tool-surface .bg-cyan-200\/\[0\.08\],
+.wellness-tool-surface .bg-cyan-300\/10 {
+  background-color: rgba(111, 130, 105, 0.18);
+}
+
+.wellness-tool-surface .bg-emerald-300,
+.wellness-tool-surface .bg-emerald-300\/12,
+.wellness-tool-surface .bg-emerald-300\/\[0\.12\],
+.wellness-tool-surface .bg-emerald-300\/10 {
+  background-color: rgba(63, 125, 85, 0.18);
+}
+
+.wellness-tool-surface .bg-rose-300,
+.wellness-tool-surface .bg-rose-300\/12,
+.wellness-tool-surface .bg-rose-300\/\[0\.12\],
+.wellness-tool-surface .bg-rose-200\/10,
+.wellness-tool-surface .bg-rose-400 {
+  background-color: rgba(159, 109, 83, 0.2);
+}
+
+.wellness-tool-surface .bg-violet-300\/\[0\.12\],
+.wellness-tool-surface .bg-amber-300\/10,
+.wellness-tool-surface .bg-amber-300 {
+  background-color: rgba(138, 107, 63, 0.18);
+}
+
 .wellness-tool-surface .bg-rose-200 {
   background-color: #9f6d53;
   color: #fffaf0;
@@ -176,4 +206,39 @@
 .wellness-tool-surface .hover\:bg-rose-100:hover {
   background-color: #2f7a4b;
   color: #fffaf0;
+}
+
+.wellness-tool-surface .hover\:border-cyan-200\/45:hover,
+.wellness-tool-surface .border-cyan-200\/20,
+.wellness-tool-surface .border-cyan-300\/25 {
+  border-color: rgba(111, 130, 105, 0.34);
+}
+
+.wellness-tool-surface .hover\:bg-cyan-200\/\[0\.14\]:hover,
+.wellness-tool-surface .hover\:bg-cyan-200\/\[0\.08\]:hover {
+  background-color: rgba(111, 130, 105, 0.22);
+}
+
+.wellness-tool-surface .border-rose-200\/20,
+.wellness-tool-surface .border-rose-300\/25 {
+  border-color: rgba(159, 109, 83, 0.34);
+}
+
+.wellness-tool-surface .border-emerald-300\/25 {
+  border-color: rgba(63, 125, 85, 0.34);
+}
+
+.wellness-tool-surface .border-amber-300\/25 {
+  border-color: rgba(138, 107, 63, 0.34);
+}
+
+.wellness-tool-surface .focus\:border-cyan-200\/60:focus,
+.wellness-tool-surface .focus\:border-rose-200\/60:focus,
+.wellness-tool-surface .focus\:border-violet-200\/60:focus {
+  border-color: rgba(47, 122, 75, 0.5);
+}
+
+.wellness-tool-surface .accent-emerald-300,
+.wellness-tool-surface .accent-rose-300 {
+  accent-color: #6f8269;
 }

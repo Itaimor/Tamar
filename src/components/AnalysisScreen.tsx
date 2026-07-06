@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   Area,
   Bar,
   CartesianGrid,
   ComposedChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,6 +25,9 @@ import {
   Utensils,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { CanopyFeaturePanel } from "@/components/CanopyUpgradeDialog";
+import TamarRecordPanel from "@/components/TamarRecordPanel";
+import { useCanopyAccess } from "@/hooks/useCanopyAccess";
 import {
   AnalysisDashboard,
   IngredientSignal,
@@ -31,6 +36,19 @@ import {
 } from "@/lib/analysis";
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
+const chartMealColor = "#7f956f";
+const chartSymptomColor = "#a65f53";
+const nutritionColors = {
+  calories: "#f7c873",
+  protein: "#7dd3fc",
+  fat: "#c4b5fd",
+};
+type NutritionMetric = keyof typeof nutritionColors;
+const nutritionMetricLabels: Record<NutritionMetric, string> = {
+  calories: "Calories",
+  protein: "Protein",
+  fat: "Fat",
+};
 
 const barTone = (score: number) => {
   if (score >= 0.72) return "bg-rose-400";
@@ -144,8 +162,8 @@ const PatternChart = ({ dashboard }: { dashboard: AnalysisDashboard }) => {
         <ComposedChart data={chartData} margin={{ top: 12, right: 10, left: -18, bottom: 0 }}>
           <defs>
             <linearGradient id="analysisSymptomFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#fb7185" stopOpacity={0.34} />
-              <stop offset="100%" stopColor="#fb7185" stopOpacity={0.02} />
+              <stop offset="0%" stopColor={chartSymptomColor} stopOpacity={0.24} />
+              <stop offset="100%" stopColor={chartSymptomColor} stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
@@ -160,12 +178,12 @@ const PatternChart = ({ dashboard }: { dashboard: AnalysisDashboard }) => {
             }}
             labelStyle={{ color: "rgba(255,255,255,0.7)" }}
           />
-          <Bar dataKey="meals" name="Meals logged" fill="#67e8f9" radius={[4, 4, 0, 0]} barSize={18} />
+          <Bar dataKey="meals" name="Meals logged" fill={chartMealColor} radius={[4, 4, 0, 0]} barSize={18} />
           <Area
             type="monotone"
             dataKey="symptomLevel"
             name="Average symptom level"
-            stroke="#fb7185"
+            stroke={chartSymptomColor}
             fill="url(#analysisSymptomFill)"
             strokeWidth={2.2}
           />
@@ -175,11 +193,167 @@ const PatternChart = ({ dashboard }: { dashboard: AnalysisDashboard }) => {
   );
 };
 
+const NutritionChart = ({ dashboard }: { dashboard: AnalysisDashboard }) => {
+  const [visibleMetrics, setVisibleMetrics] = useState<Record<NutritionMetric, boolean>>({
+    calories: true,
+    protein: true,
+    fat: true,
+  });
+  const gramsVisible = visibleMetrics.protein || visibleMetrics.fat;
+  const hasNutrition = dashboard.totals.mealsWithNutrition > 0;
+
+  const toggleMetric = (metric: NutritionMetric) => {
+    setVisibleMetrics((current) => {
+      const next = { ...current, [metric]: !current[metric] };
+      return Object.values(next).some(Boolean) ? next : current;
+    });
+  };
+
+  return (
+    <section className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-white">
+            <Utensils size={18} className="text-cyan-200" />
+            <h2 className="text-base font-semibold">Nutrition over seven days</h2>
+          </div>
+          <p className="mt-1 text-sm text-white/50">Calories, protein, and fat from meals with saved nutrition.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(nutritionColors) as NutritionMetric[]).map((metric) => (
+            <button
+              key={metric}
+              type="button"
+              aria-pressed={visibleMetrics[metric]}
+              onClick={() => toggleMetric(metric)}
+              className={`inline-flex h-8 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition ${
+                visibleMetrics[metric]
+                  ? "border-white/20 bg-white/[0.08] text-white"
+                  : "border-white/10 bg-transparent text-white/42 hover:bg-white/[0.05] hover:text-white/70"
+              }`}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: nutritionColors[metric] }} />
+              {nutritionMetricLabels[metric]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+          <p className="text-xs text-white/45">Calories</p>
+          <p className="mt-1 text-xl font-semibold text-white">{Math.round(dashboard.totals.calories7Day)}</p>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+          <p className="text-xs text-white/45">Protein</p>
+          <p className="mt-1 text-xl font-semibold text-white">{Math.round(dashboard.totals.protein7Day)}g</p>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-black/10 p-3">
+          <p className="text-xs text-white/45">Fat</p>
+          <p className="mt-1 text-xl font-semibold text-white">{Math.round(dashboard.totals.fat7Day)}g</p>
+        </div>
+      </div>
+
+      {hasNutrition ? (
+        <div className="mt-5 h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={dashboard.dailyNutrition} margin={{ top: 12, right: 4, left: -12, bottom: 0 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.48)", fontSize: 11 }} axisLine={false} tickLine={false} />
+              {visibleMetrics.calories && (
+                <YAxis
+                  yAxisId="calories"
+                  orientation="left"
+                  tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+              )}
+              {gramsVisible && (
+                <YAxis
+                  yAxisId="grams"
+                  orientation="right"
+                  tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+              )}
+              <Tooltip
+                contentStyle={{
+                  background: "#203629",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 8,
+                  color: "white",
+                }}
+                formatter={(value, name) => {
+                  const label = String(name);
+                  const suffix = label === "Calories" ? "" : "g";
+                  return [`${Math.round(Number(value) * 10) / 10}${suffix}`, label];
+                }}
+                labelStyle={{ color: "rgba(255,255,255,0.7)" }}
+              />
+              {visibleMetrics.calories && (
+                <Line
+                  yAxisId="calories"
+                  type="monotone"
+                  dataKey="calories"
+                  name="Calories"
+                  stroke={nutritionColors.calories}
+                  strokeWidth={2.4}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              )}
+              {visibleMetrics.protein && (
+                <Line
+                  yAxisId="grams"
+                  type="monotone"
+                  dataKey="protein"
+                  name="Protein"
+                  stroke={nutritionColors.protein}
+                  strokeWidth={2.4}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              )}
+              {visibleMetrics.fat && (
+                <Line
+                  yAxisId="grams"
+                  type="monotone"
+                  dataKey="fat"
+                  name="Fat"
+                  stroke={nutritionColors.fat}
+                  strokeWidth={2.4}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="mt-5">
+          <EmptyPanel
+            title="No nutrition totals yet"
+            body="Add or estimate nutrition on a few meals, then this graph will show the last seven days."
+          />
+        </div>
+      )}
+    </section>
+  );
+};
+
 const AnalysisScreen = () => {
   const { user, loading: authLoading, configured } = useAuth();
   const [dashboard, setDashboard] = useState<AnalysisDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const {
+    canopyDialog,
+    hasCanopyFeatureAccess,
+    openAnalysisPrompt,
+    openPricing,
+  } = useCanopyAccess(user);
 
   useEffect(() => {
     let mounted = true;
@@ -211,6 +385,11 @@ const AnalysisScreen = () => {
       mounted = false;
     };
   }, [authLoading, configured, user]);
+
+  useEffect(() => {
+    if (authLoading || !configured || !user) return;
+    openAnalysisPrompt();
+  }, [authLoading, configured, openAnalysisPrompt, user]);
 
   const topScore = dashboard?.watchlist[0]?.score || 0;
   const topScoreLabel = topScore > 0 ? percent(topScore) : "New";
@@ -250,6 +429,7 @@ const AnalysisScreen = () => {
   if (!dashboard) return null;
 
   return (
+    <>
     <div className="space-y-6 pb-2">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -264,7 +444,7 @@ const AnalysisScreen = () => {
           <div
             className="grid h-16 w-16 place-items-center rounded-full"
             style={{
-              background: `conic-gradient(#fb7185 ${Math.round(topScore * 360)}deg, rgba(255,255,255,0.08) 0deg)`,
+              background: `conic-gradient(${chartSymptomColor} ${Math.round(topScore * 360)}deg, rgba(47,122,75,0.12) 0deg)`,
             }}
           >
             <div className="grid h-12 w-12 place-items-center rounded-full bg-[#203629]">
@@ -318,6 +498,8 @@ const AnalysisScreen = () => {
         />
       )}
 
+      <TamarRecordPanel userId={user.id} />
+
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <section className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -367,6 +549,17 @@ const AnalysisScreen = () => {
         </section>
       </div>
 
+      {hasCanopyFeatureAccess ? (
+        <NutritionChart dashboard={dashboard} />
+      ) : (
+        <CanopyFeaturePanel
+          icon={Utensils}
+          title="Macro tracking is in Canopy+"
+          body="Calories, protein, and fat are hidden after the 30-day Sapling trial. Join Canopy+ to keep macro tracking in Diary and Analysis."
+          onUpgrade={openPricing}
+        />
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
           <div className="flex items-center gap-2 text-white">
@@ -394,35 +587,56 @@ const AnalysisScreen = () => {
           </div>
           <p className="mt-1 text-sm text-white/50">Small experiments that can make the next recommendation refresh smarter.</p>
 
-          <div className="mt-5 grid gap-3">
-            {dashboard.nextSteps.length > 0 ? (
-              dashboard.nextSteps.map((step, index) => (
-                <motion.div
-                  key={`${step.title}-${index}`}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`rounded-lg border p-4 ${stepTone[step.tone]}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={17} className="mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-white">{step.title}</p>
-                      <p className="mt-1 text-sm leading-relaxed text-white/62">{step.body}</p>
+          {hasCanopyFeatureAccess ? (
+            <div className="mt-5 grid gap-3">
+              {dashboard.nextSteps.length > 0 ? (
+                dashboard.nextSteps.map((step, index) => (
+                  <motion.div
+                    key={`${step.title}-${index}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`rounded-lg border p-4 ${stepTone[step.tone]}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Sparkles size={17} className="mt-0.5 shrink-0" />
+                      <div>
+                        {step.recipeId ? (
+                          <Link
+                            to={`/recipes/${step.recipeId}`}
+                            className="text-sm font-semibold text-white underline decoration-white/25 underline-offset-4 transition hover:text-cyan-100"
+                          >
+                            {step.title}
+                          </Link>
+                        ) : (
+                          <p className="text-sm font-semibold text-white">{step.title}</p>
+                        )}
+                        <p className="mt-1 text-sm leading-relaxed text-white/62">{step.body}</p>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))
-            ) : (
-              <EmptyPanel
-                title="No tests needed yet"
-                body="Keep logging normally. Tamar will suggest a gentle next step when enough pattern data is available."
-              />
-            )}
-          </div>
+                  </motion.div>
+                ))
+              ) : (
+                <EmptyPanel
+                  title="No tests needed yet"
+                  body="Keep logging normally. Tamar will suggest a gentle next step when enough pattern data is available."
+                />
+              )}
+            </div>
+          ) : (
+            <CanopyFeaturePanel
+              icon={FlaskConical}
+              title="Testing suggestions are in Canopy+"
+              body="The What to test next feature is hidden after the 30-day Sapling trial. Join Canopy+ to keep using guided food experiments."
+              onUpgrade={openPricing}
+              className="mt-5"
+            />
+          )}
         </section>
       </div>
     </div>
+    {canopyDialog}
+    </>
   );
 };
 
