@@ -1,4 +1,4 @@
--- Non-NHANES recommender implementation tables.
+-- Recommender implementation tables.
 --
 -- This migration adds the database surface for:
 -- - normalized recipe ingredients and population IBS priors
@@ -6,7 +6,7 @@
 -- - meal logs, health reports, ingredient exposures, and personalized risks
 -- - precomputed preference candidates and online model prediction records
 --
--- NHANES similarity / propagation is intentionally not created here.
+-- Additional risk propagation tables are intentionally not created here.
 
 create table if not exists public.ingredients (
   id bigint generated always as identity primary key,

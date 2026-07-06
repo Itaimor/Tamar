@@ -112,6 +112,8 @@ In Supabase SQL Editor, run the SQL files in `supabase/migrations` in filename o
 20260706000000_add_meal_images_and_personal_cooklist_recipes.sql
 20260706000001_create_user_uploads_bucket.sql
 20260707000000_add_cookbook_recommendation_columns.sql
+20260708000000_add_meal_log_nutrition.sql
+20260709000000_create_tamar_tree_tables.sql
 ```
 
 You should end up with these important tables:
@@ -129,10 +131,14 @@ You should end up with these important tables:
 - `user_ibs_profiles`
 - `user_ibs_ingredient_risks`
 - `user_ibs_checkins`
+- `user_tamar_tree_runs`
+- `user_tamar_tree_reward_events`
 
 And this private Storage bucket:
 
 - `recommender-artifacts`
+
+The `meal_logs` table should also include the optional nutrition tracking columns added by `20260708000000_add_meal_log_nutrition.sql`: `calories`, `protein_g`, `fat_g`, `nutrition_source`, and `nutrition_confidence`.
 
 ## 6. Seed Or Import Recipe Data
 

@@ -109,7 +109,7 @@ The recommender architecture source of truth is [docs/IBS_Recommender_Online_Lig
 
 | Path | Purpose |
 | --- | --- |
-| `supabase/schema.sql` | Snapshot-style schema for important app tables and policies. |
+| `supabase/schema.sql` | Lightweight bootstrap snapshot for core auth, cooklist, recommendation, and image tables. For the full current app schema, run the migrations in filename order. |
 | `supabase/migrations/20260524000000_create_user_recommendations.sql` | Creates stored recommendation rows per user. |
 | `supabase/migrations/20260524000001_create_recipes.sql` | Creates `recipes` and historical interaction tables. |
 | `supabase/migrations/20260524000002_create_recipe_images.sql` | Creates `recipe_images` cache table. |
@@ -118,7 +118,7 @@ The recommender architecture source of truth is [docs/IBS_Recommender_Online_Lig
 | `supabase/migrations/20260524000005_allow_liked_recipe_interactions.sql` | Extends allowed recipe interaction types. |
 | `supabase/migrations/20260601000000_add_category_recommendation_columns.sql` | Adds category-specific recommendation columns. |
 | `supabase/migrations/20260602000000_add_recommendation_category_rows.sql` | Adds category recommendation row support. |
-| `supabase/migrations/20260702000000_create_non_nhanes_recommender_tables.sql` | Adds non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, risks, candidates, and model predictions. |
+| `supabase/migrations/20260702000000_create_non_nhanes_recommender_tables.sql` | Adds recommender tables for ingredients, restrictions, meal logs, health reports, exposures, risks, candidates, and model predictions. |
 | `supabase/migrations/20260705000000_create_cooklists.sql` | Adds user cooklists and cooklist recipe memberships with a default Liked list. |
 | `supabase/migrations/20260706000000_add_meal_images_and_personal_cooklist_recipes.sql` | Adds optional meal-log images and personal recipe metadata for cooklist recipes. |
 | `supabase/migrations/20260706000001_create_user_uploads_bucket.sql` | Creates the Supabase Storage bucket and object policies for user-uploaded meal and personal recipe images. |
@@ -160,7 +160,8 @@ Tree state is an engagement overlay only. It reads meal/check-in activity and wr
 This app uses Supabase for user accounts, Google/Facebook OAuth, and recipe interaction history.
 
 1. Create a Supabase project.
-2. Run `supabase/schema.sql` in the Supabase SQL editor.
+2. For the full current app, run the migrations in `supabase/migrations` in filename order. The complete local sequence is listed in [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md).
+   `supabase/schema.sql` is only a lightweight bootstrap snapshot and is not enough for current Diary, Analysis, nutrition, Tamar tree, image-upload, or recommender-service flows.
 3. Copy `.env.example` to `.env.local`.
 4. Fill in:
 
@@ -168,6 +169,8 @@ This app uses Supabase for user accounts, Google/Facebook OAuth, and recipe inte
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_PUBLISHABLE_KEY=...
 ```
+
+For AI chat, food-photo analysis, image filling, and recommender refreshes, also fill the server-side variables documented in `.env.example` and [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md).
 
 5. In Supabase Authentication, enable email/password, Google, and Facebook providers.
 6. Add your local URL, usually `http://127.0.0.1:8080` or `http://localhost:8080`, to the allowed redirect URLs.

@@ -27,7 +27,7 @@ Allergies and strict restrictions are handled before scoring as hard filters.
 
 ## 1.1 Implemented IBS And Recommender Phase
 
-The current app includes an IBS profile layer plus the first non-NHANES recommender backend implementation.
+The current app includes an IBS profile layer plus the first risk-aware recommender backend implementation.
 
 Implemented scope:
 
@@ -43,7 +43,7 @@ Implemented scope:
 - Allow the chat to answer recommendation requests by reading the same `user_recommendations.recommended_recipe_ids` row that powers Home's `Curated for You` section, refreshing through `/api/refresh-recommendations` when the user is signed in.
 - Add structured retrieval-augmented chat context for signed-in users by retrieving recent meals, symptom check-ins, restrictions, personalized ingredient signals, recent recipe activity, and current Curated for You recipes before Gemini answers general chat.
 - Add the `How I Feel` chat flow before `Analyze my Lunch`.
-- Add non-NHANES recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
+- Add recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
 - Store offline preference candidates in `public.user_candidate_recipes`.
 - Apply strict allergies/restrictions as online hard filters before scoring.
 - Rerank online recommendations with `final_score = preference_score - lambda * combined_risk_score`.
@@ -60,7 +60,6 @@ Implemented scope:
 
 Out of scope for this implemented phase:
 
-- Do not implement NHANES-based risk propagation yet.
 - Do not redesign chatbot/check-in interview logic.
 - Do not alter recipe image behavior.
 
@@ -444,35 +443,6 @@ This creates initial suspected risk scores before the system has enough personal
 
 ---
 
-## 2.3 Deferred NHANES Sensitivity Co-Occurrence Data
-
-NHANES is not implemented in the current recommender backend.
-
-It remains a deferred research path because the dataset may not contain the ingredient/sensitivity relationships needed for reliable risk propagation.
-
-If later validation shows that NHANES has useful co-occurrence signal, it can be added as an additional population dataset to infer related sensitivities.
-
-If a user is known to be sensitive to one food, ingredient, or food group, NHANES-style collaborative filtering can help estimate what other sensitivities may be likely based on patterns across similar people.
-
-Main question answered:
-
-```text
-Given one known sensitivity, what other sensitivities commonly appear in similar users?
-```
-
-Example:
-
-```text
-If users with sensitivity A often also report sensitivity B,
-then sensitivity B can receive a higher starting suspected risk.
-```
-
-If implemented later, this must not replace IBS-specific population risk evidence.
-
-It would add a second population signal based on sensitivity co-occurrence.
-
----
-
 # 3. User Input Types
 
 The system receives three main types of input.
@@ -702,16 +672,12 @@ If a chat-sourced food already has a matching `meal_logs` row near the same time
 
 # 4. Core Architecture
 
-The implemented non-NHANES system contains four active models/components:
+The implemented system contains four active models/components:
 
 1. **LightFM Preference Model**
 2. **IBS-Based Population Risk Priors**
 3. **Personalized Ingredient Risk Model**
 4. **XGBoost Symptom Risk Model**
-
-The NHANES-based risk propagation layer is intentionally deferred and should not be assumed available in scoring.
-
----
 
 # 5. LightFM Preference Model
 
@@ -857,7 +823,7 @@ IBS-specific evidence is used to estimate population-level relationships between
 
 The goal is to initialize suspected risks for users before they have enough personal data.
 
-NHANES sensitivity co-occurrence inference is deferred. Current implementation uses IBS-specific priors plus direct personal evidence only.
+The current implementation uses IBS-specific priors plus direct personal evidence.
 
 ---
 
@@ -911,22 +877,11 @@ personal evidence becomes more important than IBS-based population priors
 
 ---
 
-# 7. Deferred NHANES-Based Risk Propagation Layer
-
-NHANES propagation is not part of the current implementation.
-
-Reason:
-
-```text
-NHANES may not contain the ingredient-level sensitivity/co-occurrence signal
-needed for reliable IBS risk propagation.
-```
-
-Current scoring therefore excludes NHANES entirely:
+# 7. Ingredient Risk Blend
 
 ```text
 final_ingredient_risk =
-personal/population blend only
+personal/population blend
 ```
 
 Where:
@@ -934,10 +889,6 @@ Where:
 - direct personal evidence comes from `user_ingredient_risks` and `user_ibs_ingredient_risks`
 - IBS population priors come from `ibs_population_ingredient_priors` and fallback catalog heuristics
 - allergies and strict restrictions remain hard filters before risk scoring
-
-No `nhanes_item_similarity` table is created by the current migration.
-
-If NHANES is validated later, the old propagation ideas can be revisited as a separate design change. Until then, code should not call or depend on NHANES-derived relationships.
 
 ---
 
@@ -1363,9 +1314,7 @@ Direct personal evidence comes from meal logs, symptom reports, and no-symptom r
 
 ---
 
-### Step 4 - Skip Deferred NHANES Propagation
-
-The current implementation does not use NHANES propagation.
+### Step 4 - Blend With Priors
 
 For unseen or weak-evidence ingredients, the online scorer currently falls back to IBS population priors and conservative ingredient-keyword heuristics.
 
@@ -1410,6 +1359,56 @@ Example:
 ```text
 top 10 recommendations
 ```
+
+---
+
+### Step 9 - Store Home Recommendation Rows
+
+The implemented fast refresh does not only return one list. It upserts one
+`user_recommendations` row containing the main Home recommendation row plus
+the additional Home category rows:
+
+```text
+recommended_recipe_ids / match_scores
+trending_recipe_ids / trending_match_scores
+flavor_recipe_ids / flavor_match_scores
+healthy_recipe_ids / healthy_match_scores
+quick_recipe_ids / quick_match_scores
+```
+
+All Home rows use the same authenticated refresh request and the same
+health-safety layer. Allergies and strict restrictions are hard filters before
+any Home row is filled. Personalized ingredient risk, IBS population priors,
+symptom risk, `combined_risk_score`, and `final_score` are computed once over
+the candidate pool, then the category rows select from that risk-reranked pool.
+
+Current category logic:
+
+- `Curated for You`: the top risk-reranked personalized candidates.
+- `Trending in Your Area`: positive recent `recipe_interactions` over the last
+  seven days (`liked`, `saved`, `started`, `completed`), with the risk-reranked
+  personalized list as a fallback when recent popularity is sparse.
+- `Bursting with Flavor`: recipes ranked by cosine similarity to a bold-flavor
+  seed centroid in LightFM item-embedding space, then filtered by explicit
+  flavor ingredient keywords.
+- `Healthy & Mindful`: risk-reranked candidates filtered by nutrition thresholds
+  for calories and total fat.
+- `Quick & Satisfying`: risk-reranked candidates filtered by cooking time.
+
+The refresh walks rows in this order:
+
+```text
+curated -> trending -> flavor -> healthy -> quick
+```
+
+It greedily deduplicates across rows. Once a recipe has been assigned to an
+earlier Home row, it is skipped by later rows. Recipes the user already saved or
+liked are also excluded from Home rows, because Home is meant to discover
+catalog recipes outside the user's current cookbook.
+
+The `*_match_scores` arrays are display confidence values normalized from the
+row's selected scores. They must stay index-aligned with their sibling recipe id
+arrays and are not model-training labels.
 
 ---
 
@@ -1527,6 +1526,20 @@ Index:
 The `user_recommendations` row stores Home recommendation arrays and the CookBook sidebar arrays:
 
 ```text
+recommended_recipe_ids
+match_scores
+ingredient_risk_scores
+symptom_risk_scores
+combined_risk_scores
+final_scores
+trending_recipe_ids
+trending_match_scores
+flavor_recipe_ids
+flavor_match_scores
+healthy_recipe_ids
+healthy_match_scores
+quick_recipe_ids
+quick_match_scores
 cookbook_recipe_ids
 cookbook_recipe_sources
 cookbook_match_scores
@@ -1534,6 +1547,8 @@ cookbook_reasons
 ```
 
 The Home arrays (`recommended_recipe_ids`, category recipe ids, and their score arrays) are catalog recommendations from the broader recipe database and continue to exclude recipes the user already intentionally saved or liked. The cookbook arrays are different: their candidate pool is only the user's current `cooklist_recipes` rows.
+
+The first four risk/score arrays (`ingredient_risk_scores`, `symptom_risk_scores`, `combined_risk_scores`, and `final_scores`) describe the displayed `recommended_recipe_ids` list. Category rows store their own display match-score arrays, but they do not currently persist per-item ingredient/symptom/final-score diagnostics for each category.
 
 Catalog cookbook candidates reuse the online preference/risk path: fetch preference scores, apply strict restrictions, compute ingredient/symptom risk, and rerank by final score. Personal cookbook candidates are not LightFM/catalog items; they are mixed into the cookbook sidebar with a bounded heuristic score from recency, cooklist frequency, and ingredient-risk heuristics over their stored ingredient notes.
 
