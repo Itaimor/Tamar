@@ -51,11 +51,16 @@ const Index = () => {
               ? "border-primary/20 bg-[#203629] shadow-primary/15"
               : "wellness-tool-surface border-primary/15 bg-white/82 shadow-primary/10"
           }`}>
-            {activeTab === "chat" && <ChatScreen />}
-            <div className="flex-1 overflow-y-auto custom-scrollbar" data-digestive-scroll-container>
-              {activeTab === "analysis" && <div className="p-6"><AnalysisScreen /></div>}
-              {activeTab === "diary" && <div className="p-6"><HistoryScreen /></div>}
-            </div>
+            {activeTab === "chat" ? (
+              <div className="min-h-0 flex-1">
+                <ChatScreen />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto custom-scrollbar" data-digestive-scroll-container>
+                {activeTab === "analysis" && <div className="p-6"><AnalysisScreen /></div>}
+                {activeTab === "diary" && <div className="p-6"><HistoryScreen /></div>}
+              </div>
+            )}
           </div>
         </div>
       </main>

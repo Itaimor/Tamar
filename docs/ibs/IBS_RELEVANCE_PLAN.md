@@ -12,11 +12,15 @@ The implementation goal is to add a practical personal IBS ingredient-risk layer
 4. Convert symptom reports and recent meal information into ingredient-level risk evidence.
 5. Update the user's personal IBS ingredient table only when the chat flow completes with enough information.
 
-Ownership boundary:
+Original task boundary:
 
 - This task owns creation and maintenance of IBS ingredient tables and per-user IBS risk grades.
 - This task does not change recommendation ranking.
 - A teammate can later consume `user_ibs_ingredient_risks` from the recommender layer.
+
+Current recommender note:
+
+- The later recommender phase now consumes `user_ibs_ingredient_risks` and the longer-term risk tables as health signals during online reranking. The active scoring contract lives in [../IBS_Recommender_Online_LightFM_Design.md](../IBS_Recommender_Online_LightFM_Design.md).
 
 This is not medical diagnosis. UI copy must say Tamar is an AI assistant, not a doctor, and that users should consult a clinician/dietitian for medical decisions.
 
@@ -52,7 +56,7 @@ Decision:
 - Keep taste onboarding separate from IBS health onboarding.
 - Add IBS-specific onboarding/profile data for personal trigger risk.
 - Add chat-based symptom/meal logging as a first practical version of the design doc's `meal_logs`, `health_reports`, and `user_ingredient_risks`.
-- Do not alter recommendation scoring in this task.
+- The original IBS profile task did not alter recommendation scoring. Current recommendation scoring is covered by the main recommender design doc.
 
 ## Implemented Module Map
 
@@ -508,7 +512,7 @@ For first implementation, keep the in-progress check-in in React state only. If 
 
 ## Downstream Recommendation Usage
 
-This task should not rerank the recommender.
+The first IBS relevance task did not rerank the recommender by itself.
 
 This task should:
 
@@ -518,17 +522,19 @@ This task should:
 - show the user that Tamar is learning possible IBS triggers
 - possibly display "watch list" information in chat or future recipe detail UI
 
-Later, the recommender owner can consume the table. A possible downstream formula is:
+That downstream recommender phase is now active. The recommender consumes direct personal risk, IBS population priors, hard restrictions, and optional symptom-model output as described in [../IBS_Recommender_Online_LightFM_Design.md](../IBS_Recommender_Online_LightFM_Design.md).
+
+The active final-score shape is:
 
 ```text
-recipe_ibs_risk =
-average user grade for matched IBS ingredients in recipe
+combined_risk_score =
+personalized/population ingredient risk + optional symptom-model risk
 
 final_score =
-preference_score - lambda * recipe_ibs_risk
+preference_score - lambda * combined_risk_score
 ```
 
-If recommendation usage is implemented later, update `docs/IBS_Recommender_Online_LightFM_Design.md` in that teammate's change.
+Any future change to how IBS risk affects ranking should update `docs/IBS_Recommender_Online_LightFM_Design.md` in the same change.
 
 Current implementation status:
 
@@ -537,7 +543,7 @@ Current implementation status:
 - Supabase migration for personal IBS tables is implemented.
 - `How I Feel` chat check-in is implemented through a Gemini JSON interviewer.
 - Tamar code validates Gemini output and owns all ingredient/risk math.
-- Recommendation ranking remains unchanged.
+- Recommendation ranking now uses the broader risk-aware recommender flow documented in `docs/IBS_Recommender_Online_LightFM_Design.md`.
 
 Deployment TODO:
 

@@ -28,7 +28,7 @@ This document details the design, evolution, and implementation decisions for th
 ## 2. Evolution of Requirements (Changes along the way)
 
 1. **From NMF CF to Hybrid LightFM**:
-   * *Initial*: proposed using Non-Negative Matrix Factorization (NMF) on NHANES population-level eating data (in [train_nmf.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/train_nmf.py)) to model user preferences.
+   * *Initial*: proposed using Non-Negative Matrix Factorization (NMF) on population-level eating survey data (in [train_nmf.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/train_nmf.py)) to model user preferences.
    * *Current*: A hybrid **LightFM** model combining in-app implicit interactions, recipe attributes (ingredients/macros), and user features.
 2. **Hard Filters for Allergies**:
    * *Initial*: Treat allergies as high-risk penalties in the scoring function.
@@ -43,17 +43,17 @@ This document details the design, evolution, and implementation decisions for th
    * *Initial*: Predict symptom outcomes for a specific user-food pair using NMF collaborative filtering.
    * *Current*: Our latest experiments (symptom prediction model evaluation in [diet_symptom_analysis.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/diet_symptom_analysis.py), robustness audit in [diet_symptom_robustness.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/diet_symptom_robustness.py), and dietary clustering in [ibs_phenotype_clustering.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/ibs_phenotype_clustering.py)) proved that **this dataset cannot predict IBS for new users**. Pairwise dietary similarity does not map to symptom similarity ($r < 0.02$, not significant), and unsupervised dietary clusters do not map to clinical IBS phenotypes (dietary clusters explain $<1\%$ of symptom variance). As a result, we pivoted from group-level collaborative symptom prediction to **personalized Bayesian symptom attribution** combined with **ingredient-level clinical priors** (represented by [fodmap_mapping.csv](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/IBS_models/fodmap_mapping.csv)).
    * > [!WARNING]
-   * > **NHANES Population Dataset Rejected & Dropped**: The NHANES dataset failed all predictive validation protocols. It has been **completely excluded** from the codebase and will **not be in use** in the production recommender system. All NMF latent factors, user embeddings, and risk indexes derived from it have been deleted from the repository.
+   * > **Population Dataset Rejected & Dropped**: The tested population survey dataset failed all predictive validation protocols. It has been **completely excluded** from the codebase and will **not be in use** in the production recommender system. All NMF latent factors, user embeddings, and risk indexes derived from it have been deleted from the repository.
 
 ---
 
 ## 3. Development Process & Iterations
 
 1. **Iteration 1: Collaborative Filtering & NMF Risk Prediction**
-   * *What was attempted*: Fit NMF models on aggregated NHANES food intake data to extract dietary factors and correlate them with bowel symptoms using logistic regression (implemented in [train_nmf.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/train_nmf.py) and [run_phase2.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/run_phase2.py)).
-   * *What did not work*: The model appeared to perform well in warm-user evaluation, but this was a design artifact of NHANES recording symptoms once per user (constant vector). For cold/unseen users, the model collapsed back to the population average (RMSE $\approx 0.966$), showing **zero predictive capability**.
+   * *What was attempted*: Fit NMF models on aggregated food intake survey data to extract dietary factors and correlate them with bowel symptoms using logistic regression (implemented in [train_nmf.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/train_nmf.py) and [run_phase2.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/run_phase2.py)).
+   * *What did not work*: The model appeared to perform well in warm-user evaluation, but this was a design artifact of the survey source recording symptoms once per user (constant vector). For cold/unseen users, the model collapsed back to the population average (RMSE $\approx 0.966$), showing **zero predictive capability**.
    * *Plot (Model Evaluation Comparison)*:
-     ![NHANES CF Evaluation Comparison](assets/protocol_comparison.png)
+     ![Collaborative filtering evaluation comparison](assets/protocol_comparison.png)
 2. **Iteration 2: Robustness Audit of Dietary Feature Spaces**
    * *What was attempted*: Evaluated 7 alternative dietary representations (raw grams, percentages, binary consumption, food groups, TF-IDF, FODMAP exposure) across classifiers (Logistic Regression, Random Forest, Gradient Boosting) in [diet_symptom_robustness.py](file:///c:/Users/itai5/Desktop/CS/3rd/Tamar/Tamar/RecommenderSys/diet_symptom_robustness.py).
    * *What did not work*: No model could beat the majority baseline. Diarrhea/constipation ROC-AUC remained at 0.50–0.56 (equivalent to random guessing), and severity score $R^2$ collapsed to $\le 0$.
@@ -114,7 +114,7 @@ The system is split into scheduled offline tasks and lightweight, fast online AP
 
 ### Offline Model Metrics
 * **Preference Models**: `NDCG@10` (Target: $>0.30$), `MAP@10`, and `Catalog Coverage`.
-* **Symptom Risk Models**: RMSE and ROC-AUC of the binary symptom classifier (used to reject the NHANES collaborative model when it failed to exceed the majority class baseline).
+* **Symptom Risk Models**: RMSE and ROC-AUC of the binary symptom classifier (used to reject the population-level collaborative model when it failed to exceed the majority class baseline).
 
 ### Online Product Metrics
 * **Clinical Success**: Rate of logged symptom reports per meal consumed (expected to decline over weeks of use).

@@ -1,6 +1,6 @@
 ---
 name: tamar-design-alignment
-description: "Use when changing, reviewing, or orienting within the Tamar project, especially work that may affect repository structure, recommendation architecture, LightFM preference modeling, interaction weights, NHANES risk propagation, IBS population priors, personalized ingredient risk, symptom attribution, XGBoost risk prediction, final scoring, recommendation APIs, meal/symptom logging, Supabase schema or migrations, recipe image behavior, or related UI flows. Ensures code and docs stay aligned with the README repo map and revised implementation design."
+description: "Use when changing, reviewing, or orienting within the Tamar project, especially work that may affect repository structure, recommendation architecture, LightFM preference modeling, interaction weights, IBS population priors, personalized ingredient risk, symptom attribution, XGBoost risk prediction, final scoring, recommendation APIs, meal/symptom logging, Supabase schema or migrations, recipe image behavior, or related UI flows. Ensures code and docs stay aligned with the README repo map and revised implementation design."
 ---
 
 # Tamar Design Alignment
@@ -44,7 +44,6 @@ Check design alignment especially for:
 - `recipe_interactions` event types
 - hard filters for allergies and strict restrictions
 - IBS-based population priors
-- NHANES item-item similarity and risk propagation
 - personalized ingredient risk, confidence, and symptom attribution
 - XGBoost feature construction and symptom-risk prediction
 - `combined_risk_score`, `final_ingredient_risk`, and final ranking formulas
@@ -57,7 +56,7 @@ Check design alignment especially for:
 - LightFM predicts preference and generates candidates.
 - Allergies and strict restrictions are hard filters before scoring.
 - Personalized ingredient risk is based on direct user meal/symptom evidence.
-- NHANES is a risk propagation layer only; it creates suspected risks for related unseen or weak-evidence items.
+- IBS population priors initialize suspected risk for weak-evidence items.
 - XGBoost predicts recipe/context symptom risk; it does not replace ingredient risk.
 - Final ranking penalizes preference by combined health risk.
 
