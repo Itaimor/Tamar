@@ -21,8 +21,22 @@ const truthyPlanValues = new Set(["canopy", "canopy+", "canopy_plus", "premium",
 const normalizeMetadataValue = (value: unknown) =>
   typeof value === "string" ? value.trim().toLowerCase().replace(/\s+/g, "_") : value;
 
+export const isAdminUser = (user: User | null | undefined): boolean => {
+  if (!user) return false;
+  const metadata = user.app_metadata || {};
+  return metadata.role === "admin"
+};
+
 export const isCanopyPlusUser = (user: User | null | undefined) => {
   const metadata = user?.app_metadata || {};
+
+  // Admin local storage override for testing plan states
+  if (isAdminUser(user) && typeof window !== "undefined" && user?.id) {
+    const override = window.localStorage.getItem(`tamar:admin:plan:${user.id}`);
+    if (override === "Sapling") return false;
+    if (override === "Canopy+") return true;
+  }
+
   const values = [
     metadata.tamar_plan,
     metadata.plan,

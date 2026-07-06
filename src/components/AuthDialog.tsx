@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/AuthProvider";
-import { formatTrialDaysRemaining, getCanopyTrialStatus } from "@/lib/freemium";
+import { formatTrialDaysRemaining, getCanopyTrialStatus, isAdminUser } from "@/lib/freemium";
 
 type AuthDialogProps = {
   open: boolean;
@@ -99,6 +99,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
   };
 
   const canopyStatus = getCanopyTrialStatus(user);
+  console.log("AuthDialog - User app_metadata:", user?.app_metadata);
   const PlanIcon = canopyStatus.isCanopyPlus ? TreePalm : Leaf;
   const planHelper = canopyStatus.isCanopyPlus
     ? "Macro tracking, camera uploads, and Analysis testing are active."
@@ -132,8 +133,34 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
               <p className="text-sm text-[#667864]">Signed in as</p>
               <p className="font-semibold">{user.email}</p>
             </div>
-            <div className="rounded-md border border-primary/10 bg-white/65 p-4">
-              <p className="text-sm text-[#667864]">Plan</p>
+            <div 
+              className={`rounded-md border border-primary/10 bg-white/65 p-4 ${
+                isAdminUser(user)
+                  ? "cursor-pointer hover:bg-primary/5 transition-all hover:border-primary/25 relative group"
+                  : ""
+              }`}
+              onClick={
+                isAdminUser(user)
+                  ? () => {
+                      const current = canopyStatus.planLabel;
+                      const next = current === "Canopy+" ? "Sapling" : "Canopy+";
+                      window.localStorage.setItem(`tamar:admin:plan:${user.id}`, next);
+                      toast.success(`Admin override: plan switched to ${next}. Reloading...`);
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 800);
+                    }
+                  : undefined
+              }
+            >
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-[#667864]">Plan</p>
+                {isAdminUser(user) && (
+                  <span className="text-[10px] font-semibold bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase tracking-wider group-hover:bg-primary/20 transition-colors">
+                    Admin: Click to Switch Plan
+                  </span>
+                )}
+              </div>
               <div className="mt-2 flex items-start gap-3">
                 <span className={canopyStatus.isCanopyPlus
                   ? "grid h-9 w-9 place-items-center rounded-lg bg-[#203629] text-[#f7c873]"
