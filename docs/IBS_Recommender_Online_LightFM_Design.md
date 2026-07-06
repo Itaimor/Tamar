@@ -172,7 +172,107 @@ Current Analysis sections:
 - **Tamar Record**: current tree level, streaks, best run, reward count, and replant history from tree gamification tables. This is motivational progress only.
 - **What to test next**: lightweight suggestions such as logging a good-day check-in, testing one ingredient with/without a similar meal, using an easier food as a meal anchor, or trying a recipe whose name/ingredients/description are content-similar to foods that have looked easier while avoiding the strongest watchlist ingredients.
 
-Content-based Analysis suggestions are not a second production recommender. They use local recipe text similarity over already-generated recommendation candidates to choose an experiment card and link to the recipe detail page when possible.
+Content-based Analysis suggestions are not a second production recommender. They use a local vector-space recipe similarity algorithm over already-generated recommendation candidates to choose an experiment card and link to the recipe detail page when possible.
+
+### 1.3.1 Analysis Content-Based Recipe Experiment Algorithm
+
+The `What to test next` recipe experiment is a recommender-systems feature inside Analysis. It is intentionally explanation-oriented and bounded by the production recommendation output.
+
+Purpose:
+
+```text
+Given foods that have looked easier for the user lately, suggest one already-recommended recipe
+that is text-similar to those easier foods while avoiding the user's strongest watchlist ingredients.
+```
+
+This algorithm is implemented in `src/lib/analysis.ts` as `buildContentBasedRecipeSuggestion`.
+
+Candidate pool:
+
+```text
+candidate_recipes =
+  recipes referenced by the current user's user_recommendations arrays
+```
+
+It does not search the full recipe catalog and does not create a separate production ranking. Home and Chat recommendations remain owned by the LightFM/risk-reranking pipeline.
+
+User profile vector:
+
+```text
+profile_tokens =
+  weighted tokens from foods that seem easier
+  + lower-weight tokens from recent meal names
+```
+
+Recipe vector:
+
+```text
+recipe_tokens =
+  2.0 * tokens(recipe title)
+  + 2.5 * tokens(recipe ingredients)
+  + 0.75 * tokens(recipe description)
+```
+
+Tokenization:
+
+1. Normalize text to lowercase.
+2. Replace punctuation with spaces.
+3. Split on whitespace and hyphens.
+4. Drop short tokens and common stop words such as `and`, `the`, `recipe`, `fresh`, `quick`, `cup`, and `tbsp`.
+5. Accumulate weighted term counts in a sparse token map.
+
+Similarity score:
+
+```text
+similarity(profile, recipe) =
+  cosine(profile_token_vector, recipe_token_vector)
+```
+
+Watchlist penalty:
+
+```text
+watch_penalty =
+  max(watchlist_ingredient_score * 0.85)
+  for watchlist ingredients found in the recipe text
+
+final_analysis_score =
+  similarity * (1 - watch_penalty)
+```
+
+Filtering and tie-breaking:
+
+1. Exclude recipes the user has already logged as recipe-backed meals.
+2. Exclude recipes with zero text similarity.
+3. Sort by `final_analysis_score`.
+4. Break ties by raw similarity, then recipe name.
+5. Show the top recipe as a lightweight experiment suggestion.
+
+The result is displayed as a plain-language experiment, for example:
+
+```text
+Try Chicken Rice Bowl as a familiar-feeling test.
+```
+
+The UI should not expose raw vector scores, cosine similarity, or algorithm terms to the user.
+
+TF-IDF note:
+
+The current implementation is a weighted term-frequency cosine similarity model. It is TF-style content-based recommendation, but it is not strict TF-IDF because it does not yet compute inverse document frequency across the candidate corpus. If the course write-up or future implementation requires true TF-IDF, add:
+
+```text
+tfidf(token, document) =
+  tf(token, document) * log((N + 1) / (df(token) + 1))
+```
+
+where `N` is the number of candidate recipe documents and `df(token)` is the number of candidate recipe documents containing the token. The rest of the design can remain the same: use cosine similarity over TF-IDF vectors, then apply the watchlist penalty and candidate filters.
+
+Design boundaries:
+
+- This algorithm reads Analysis data and current recommendation candidates.
+- It may create only explanation UI.
+- It must not write health conclusions.
+- It must not update ingredient risk.
+- It must not change Home ranking, Chat recommendation ranking, `user_recommendations`, LightFM training data, XGBoost labels/features, or final risk-reranking.
 
 The navbar Insights popover is a lightweight navigation layer over the same user activity. It may prompt the user to log a stale meal, add a how-you-feel note, care for a Tamar tree that needs water/compost, replant a dead Tamar, revisit Analysis, or return to saved CookBook meals based on recent meal/check-in timestamps, tree state, and local page-visit recency. Opening the popover marks those navigation nudges as seen for the signed-in user and clears the notification badge; it does not write health conclusions or change recommendation scores.
 
@@ -1920,7 +2020,7 @@ immediate
 
 # 17. Evaluation
 
-Evaluate preference and health separately.
+Evaluate preference, health, and explanation-oriented experiment suggestions separately.
 
 ---
 
@@ -1972,6 +2072,38 @@ It should recommend foods that are both liked and lower-risk.
 
 ---
 
+## 17.4 Analysis Content-Based Experiment Metrics
+
+The Analysis `What to test next` recipe card is evaluated as an explanation-oriented content-based suggestion, not as the main production recommender.
+
+Offline checks:
+
+```text
+Candidate-pool validity
+Already-logged recipe exclusion rate
+Watchlist-ingredient penalty correctness
+Similarity sanity checks
+Duplicate suggestion rate
+Recipe-link validity
+```
+
+Candidate-pool validity verifies that suggested recipes come only from the user's existing recommendation candidate arrays. This keeps the algorithm subordinate to the LightFM/risk-reranking pipeline.
+
+Similarity sanity checks compare the chosen recipe against easier-food and recent-meal tokens. For the current weighted term-frequency implementation, the selected recipe should have positive cosine similarity with the user's Analysis profile. If future work upgrades this to TF-IDF, the same checks should be run over TF-IDF vectors.
+
+User-facing product checks:
+
+```text
+Click-through on experiment recipe cards
+Whether users log the suggested experiment recipe
+Whether users complete a follow-up how-you-feel note
+Whether the suggestion copy is understandable and non-diagnostic
+```
+
+This feature should not be judged by global Precision@K alone because it intentionally suggests a small, explainable food experiment rather than optimizing the full recipe feed.
+
+---
+
 # 18. Final Architecture Summary
 
 ```text
@@ -2004,9 +2136,17 @@ Combined Risk Score
 Preference Score - lambda * Risk Score
     ->
 Final Ranked Recommendations
-```
 
-NHANES propagation is deferred and not part of the active scoring path.
+Final Ranked Recommendations
+    ->
+Bounded Analysis Candidate Pool
+    ->
+Weighted Token / TF-Style Content Similarity
+    ->
+Watchlist Ingredient Penalty
+    ->
+What To Test Next Recipe Experiment
+```
 
 This architecture is fast online because expensive model training and candidate generation happen offline, while the live system only performs filtering, risk scoring, and reranking on a small candidate set.
 

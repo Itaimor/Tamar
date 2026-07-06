@@ -13,6 +13,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | Recommender architecture, risk scoring, model roles, and algorithm design | [docs/IBS_Recommender_Online_LightFM_Design.md](docs/IBS_Recommender_Online_LightFM_Design.md) |
 | IBS product relevance plan and implementation notes | [docs/ibs/IBS_RELEVANCE_PLAN.md](docs/ibs/IBS_RELEVANCE_PLAN.md) |
 | Local setup for the website plus Python recommender service | [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md) |
+| Website QA plan for manual, phone, freemium, and Tamar tree testing | [docs/QA_PLAN.md](docs/QA_PLAN.md) |
 | Recipe image strategy, image cache, category fallbacks, and Pexels behavior | [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md) |
 | Contribution and design-alignment rules | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Project purpose and AI collaboration context | [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) |
