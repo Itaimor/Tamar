@@ -73,6 +73,9 @@ const AppShell = () => {
   }, [coldStartGuideKey]);
 
   const closeColdStartGuide = (status: "started" | "skipped") => {
+    // Only the app tour/tutorial itself is skippable here. The taste-feedback
+    // questionnaire on Home is mandatory on cold start and is intentionally not
+    // affected by this — it no longer broadcasts a skip-all event.
     if (coldStartGuideKey) {
       try {
         window.localStorage.setItem(coldStartGuideKey, status);
@@ -82,10 +85,6 @@ const AppShell = () => {
     }
 
     setIsColdStartGuideOpen(false);
-
-    if (status === "skipped") {
-      window.dispatchEvent(new CustomEvent("tamar:cold-start-skip-all"));
-    }
   };
 
   useEffect(() => {

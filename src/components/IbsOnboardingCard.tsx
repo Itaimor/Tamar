@@ -6,6 +6,7 @@ import {
   IBS_COLD_START_QUESTIONS,
 } from "@/lib/ibsRisk";
 import { saveIbsColdStartProfile } from "@/lib/ibsProfile";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type IbsOnboardingCardProps = {
   userId: string;
@@ -61,20 +62,28 @@ const IbsOnboardingCard = ({ userId, onCompleted }: IbsOnboardingCardProps) => {
   if (!currentQuestion) return null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-0 mb-12">
-      <div className="bg-white/82 border border-primary/15 rounded-xl overflow-hidden p-5 md:p-6 shadow-xl shadow-primary/10 backdrop-blur-md">
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent
+        hideClose
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="max-w-2xl w-[calc(100vw-2rem)] p-5 md:p-6 rounded-xl border border-primary/15 bg-white/95 shadow-2xl shadow-primary/20 backdrop-blur-md"
+      >
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-primary text-xs uppercase tracking-widest font-extrabold mb-3">
               <Activity className="w-4 h-4" />
               <span>IBS Personalization</span>
             </div>
-            <h4 className="text-xl md:text-2xl font-bold text-[#1f3d2b] leading-tight">
-              Build your personal IBS ingredient table
-            </h4>
-            <p className="text-[#667864] text-xs md:text-sm mt-2 max-w-2xl">
-              Tamar learns possible trigger patterns from your answers. This is not medical advice and does not diagnose IBS.
-            </p>
+            <DialogHeader className="text-left space-y-2">
+              <DialogTitle className="text-xl md:text-2xl font-bold text-[#1f3d2b] leading-tight">
+                Build your personal IBS ingredient table
+              </DialogTitle>
+              <DialogDescription className="text-[#667864] text-xs md:text-sm max-w-2xl">
+                Tamar learns possible trigger patterns from your answers. This is not medical advice and does not diagnose IBS.
+              </DialogDescription>
+            </DialogHeader>
           </div>
           <div className="h-11 w-11 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5 text-primary" />
@@ -133,8 +142,8 @@ const IbsOnboardingCard = ({ userId, onCompleted }: IbsOnboardingCardProps) => {
             {saveError}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

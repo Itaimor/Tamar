@@ -91,22 +91,24 @@ const RecipeDetail = () => {
         </main>
       ) : (
         <main className="pt-24 pb-20">
-          <section className="relative min-h-[52vh] flex items-end">
-            <ImageWithSkeleton
-              src={recipe.image}
-              alt={recipe.title}
-              className="absolute inset-0 w-full h-full object-cover"
-              skeletonClassName="bg-secondary rounded-none animate-pulse"
-            />
-            {(recipe.image === "/images/empty_plate.png" || !recipe.image) && (
-              <div className="absolute inset-0 flex items-center justify-center bg-primary/10">
-                <span className="text-6xl font-extrabold text-primary bg-white/80 px-6 py-3 rounded-xl border border-primary/20 shadow-2xl tracking-wider">
-                  #{recipe.id}
-                </span>
-              </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#fbf7ec] via-[#fbf7ec]/78 to-[#fbf7ec]/18" />
-            <div className="relative z-10 w-full px-4 md:px-12 pb-10 max-w-5xl">
+          <section className="px-4 md:px-12 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(280px,420px)_1fr] gap-8 items-start">
+            <div className="relative aspect-[4/3] lg:aspect-square w-full rounded-lg overflow-hidden border border-primary/15 shadow-sm">
+              <ImageWithSkeleton
+                src={recipe.image}
+                alt={recipe.title}
+                className="absolute inset-0 w-full h-full object-cover"
+                skeletonClassName="bg-secondary rounded-none animate-pulse"
+              />
+              {(recipe.image === "/images/empty_plate.png" || !recipe.image) && (
+                <div className="absolute inset-0 flex items-center justify-center bg-primary/10">
+                  <span className="text-6xl font-extrabold text-primary bg-white/80 px-6 py-3 rounded-xl border border-primary/20 shadow-2xl tracking-wider">
+                    #{recipe.id}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={() => navigate(-1)}
@@ -115,7 +117,7 @@ const RecipeDetail = () => {
                 <ArrowLeft className="w-4 h-4" />
                 Back
               </button>
-              <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight mb-4 text-[#1f3d2b]">
+              <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight mb-4 text-[#1f3d2b]">
                 {recipe.title}
               </h2>
               <div className="flex flex-wrap items-center gap-3 text-sm text-[#536451] mb-7">

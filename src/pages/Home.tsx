@@ -39,7 +39,6 @@ type SavedRecipeRow = {
 };
 
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
-const getColdStartGuideKey = (userId: string) => `tamar:coldStartGuide:${userId}`;
 
 const getFirstNSentences = (text: string, n: number): string => {
   if (!text) return "";
@@ -68,14 +67,6 @@ const Home = () => {
   const [onboardingRecipes, setOnboardingRecipes] = useState<RecipeItem[]>([]);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
   const [isIbsOnboardingCompleted, setIsIbsOnboardingCompleted] = useState(true);
-  const [isColdStartSetupSkipped, setIsColdStartSetupSkipped] = useState(() => {
-    if (!user) return false;
-    try {
-      return window.localStorage.getItem(getColdStartGuideKey(user.id)) === "skipped";
-    } catch {
-      return false;
-    }
-  });
   const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
   const [feedback, setFeedback] = useState<Record<number, number>>({});
   const [recommendationRefreshKey, setRecommendationRefreshKey] = useState(0);
@@ -147,40 +138,7 @@ const Home = () => {
   }, [user]);
 
   useEffect(() => {
-    if (!user) {
-      setIsColdStartSetupSkipped(false);
-      return;
-    }
-
-    const readSkippedState = () => {
-      try {
-        setIsColdStartSetupSkipped(window.localStorage.getItem(getColdStartGuideKey(user.id)) === "skipped");
-      } catch {
-        setIsColdStartSetupSkipped(false);
-      }
-    };
-
-    const handleSkipAll = () => {
-      setIsColdStartSetupSkipped(true);
-      setIsOnboardingCompleted(true);
-      setIsIbsOnboardingCompleted(true);
-      setOnboardingRecipes([]);
-      setCurrentMedoidIdx(0);
-      setFeedback({});
-    };
-
-    readSkippedState();
-    window.addEventListener("tamar:cold-start-skip-all", handleSkipAll);
-    return () => window.removeEventListener("tamar:cold-start-skip-all", handleSkipAll);
-  }, [user]);
-
-  useEffect(() => {
     const loadIbsOnboardingStatus = async () => {
-      if (isColdStartSetupSkipped) {
-        setIsIbsOnboardingCompleted(true);
-        return;
-      }
-
       if (!user || !supabase) {
         setIsIbsOnboardingCompleted(true);
         return;
@@ -196,14 +154,16 @@ const Home = () => {
     };
 
     loadIbsOnboardingStatus();
-  }, [isColdStartSetupSkipped, user]);
+  }, [user]);
 
   useEffect(() => {
     const loadRecommendations = async () => {
       if (user && supabase) {
         try {
           const tasteFeedbackCount = await fetchTasteFeedbackCount(user.id);
-          if (tasteFeedbackCount === 0 && !isColdStartSetupSkipped) {
+          if (tasteFeedbackCount === 0) {
+            // The taste-feedback questionnaire is mandatory on cold start: it always
+            // shows here regardless of whether the user skipped the app tour/tutorial.
             const starters = await loadTasteOnboardingRecipes();
             const defaultRecs = await fetchDefaultRecipes(6);
             setOnboardingRecipes(starters);
@@ -212,16 +172,6 @@ const Home = () => {
             setCurrentMedoidIdx(0);
             setFeedback({});
             setIsOnboardingCompleted(false);
-            return;
-          }
-
-          if (tasteFeedbackCount === 0 && isColdStartSetupSkipped) {
-            setOnboardingRecipes([]);
-            setIsOnboardingCompleted(true);
-            const defaultRecs = await fetchDefaultRecipes(6);
-            setCuratedRecipes(defaultRecs);
-            updateHeroCache(defaultRecs);
-            queueRecipeImages(defaultRecs);
             return;
           }
 
@@ -366,7 +316,7 @@ const Home = () => {
       }
     };
     loadGentleIngredients();
-  }, [isColdStartSetupSkipped, user, session?.access_token, recommendationRefreshKey]);
+  }, [user, session?.access_token, recommendationRefreshKey]);
 
   useEffect(() => {
     const loadOtherSections = async () => {
@@ -497,35 +447,7 @@ const Home = () => {
     }
   };
 
-  const handleSkipOnboarding = async () => {
-    if (user) {
-      try {
-        window.localStorage.setItem(getColdStartGuideKey(user.id), "skipped");
-      } catch {
-        // Storage is optional; skipping should still affect this session.
-      }
-    }
-
-    setIsColdStartSetupSkipped(true);
-    setIsOnboardingCompleted(true);
-    setIsIbsOnboardingCompleted(true);
-    setOnboardingRecipes([]);
-    setCurrentMedoidIdx(0);
-    setFeedback({});
-    setRecommendationRefreshKey((key) => key + 1);
-    toast.info("Setup skipped. Using general recommendations.");
-  };
-
   const handleResetOnboarding = async () => {
-    if (user) {
-      try {
-        window.localStorage.setItem(getColdStartGuideKey(user.id), "started");
-      } catch {
-        // The retrain action still works even when local storage is unavailable.
-      }
-    }
-
-    setIsColdStartSetupSkipped(false);
     const starters = await loadTasteOnboardingRecipes();
     setOnboardingRecipes(starters);
     setIsOnboardingCompleted(false);
@@ -724,87 +646,94 @@ const Home = () => {
           />
         )}
 
-        {!isOnboardingCompleted && onboardingRecipes.length > 0 && (
-          <div className="max-w-xl mx-auto px-4 md:px-0 mb-12">
-            <div className="bg-white/82 border border-primary/15 rounded-xl overflow-hidden p-6 shadow-xl shadow-primary/10 relative backdrop-blur-md">
-              <div className="flex items-center gap-2 mb-4 text-primary text-xs uppercase tracking-widest font-extrabold">
-                <Leaf className="w-4 h-4 text-primary animate-pulse" />
-                <span>Personalize Your Wellness</span>
-              </div>
-              <h4 className="text-xl font-bold mb-1 text-[#1f3d2b]">Help Tamar learn what feels good</h4>
-              <p className="text-[#667864] text-xs mb-6">Swipe or tap Like/Dislike to shape recipes around taste, comfort, and digestion.</p>
+        <Dialog
+          open={isIbsOnboardingCompleted && !isOnboardingCompleted && onboardingRecipes.length > 0}
+          onOpenChange={() => {}}
+        >
+          <DialogContent
+            hideClose
+            onEscapeKeyDown={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
+            className="max-w-md w-[calc(100vw-2rem)] p-6 rounded-xl border border-primary/15 bg-white/95 shadow-2xl shadow-primary/20 backdrop-blur-md"
+          >
+            {onboardingRecipes.length > 0 && (
+              <>
+                <DialogHeader className="space-y-1 text-left">
+                  <div className="flex items-center gap-2 text-primary text-xs uppercase tracking-widest font-extrabold">
+                    <Leaf className="w-4 h-4 text-primary animate-pulse" />
+                    <span>Personalize Your Wellness</span>
+                  </div>
+                  <DialogTitle className="text-xl font-bold text-[#1f3d2b]">Help Tamar learn what feels good</DialogTitle>
+                  <DialogDescription className="text-[#667864] text-xs">
+                    Tap Like or Dislike on each recipe to shape recommendations around taste, comfort, and digestion.
+                  </DialogDescription>
+                </DialogHeader>
 
-              <div className="relative aspect-video rounded-xl overflow-hidden mb-6 group border border-primary/10 bg-secondary">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={currentMedoidIdx}
-                    initial={{ opacity: 0, x: 50, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: -50, scale: 0.95 }}
-                    transition={{ duration: 0.25 }}
-                    className="absolute inset-0"
+                <div className="relative aspect-video rounded-xl overflow-hidden mt-4 mb-6 group border border-primary/10 bg-secondary">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentMedoidIdx}
+                      initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -50, scale: 0.95 }}
+                      transition={{ duration: 0.25 }}
+                      className="absolute inset-0"
+                    >
+                      <ImageWithSkeleton
+                        src={onboardingRecipes[currentMedoidIdx].image}
+                        alt={onboardingRecipes[currentMedoidIdx].title}
+                        className="w-full h-full object-cover"
+                        skeletonClassName="bg-secondary"
+                      />
+                      {onboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
+                        <div className="absolute inset-0 bg-primary/15 pointer-events-none" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#1f3d2b]/85 via-[#1f3d2b]/12 to-transparent" />
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
+                          Taste match {currentMedoidIdx + 1} of {onboardingRecipes.length}
+                        </span>
+                        <h5 className="text-lg font-bold text-white leading-tight">{onboardingRecipes[currentMedoidIdx].title}</h5>
+                        <p className="text-white/75 text-xs mt-0.5">Cook Time: {onboardingRecipes[currentMedoidIdx].time}</p>
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSwipe(false)}
+                    disabled={onboardingBusy}
+                    className="flex-1 py-3 px-4 rounded-xl border border-[#c98f7b]/35 hover:border-[#b87361] bg-[#f7e9df] text-[#9f5f4f] hover:bg-[#f1dccf] font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
                   >
-                    <ImageWithSkeleton
-                      src={onboardingRecipes[currentMedoidIdx].image}
-                      alt={onboardingRecipes[currentMedoidIdx].title}
-                      className="w-full h-full object-cover"
-                      skeletonClassName="bg-secondary"
-                    />
-                    {onboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
-                      <div className="absolute inset-0 bg-primary/15 pointer-events-none" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#1f3d2b]/85 via-[#1f3d2b]/12 to-transparent" />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
-                        Taste match {currentMedoidIdx + 1} of {onboardingRecipes.length}
-                      </span>
-                      <h5 className="text-lg font-bold text-white leading-tight">{onboardingRecipes[currentMedoidIdx].title}</h5>
-                      <p className="text-white/75 text-xs mt-0.5">Cook Time: {onboardingRecipes[currentMedoidIdx].time}</p>
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
+                    <X className="w-4 h-4" /> Dislike
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwipe(true)}
+                    disabled={onboardingBusy}
+                    className="flex-1 py-3 px-4 rounded-xl border border-primary/25 hover:border-primary/45 bg-primary/10 text-primary hover:bg-primary/15 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  >
+                    <Heart className="w-4 h-4 fill-current" /> Like
+                  </button>
+                </div>
 
-              <div className="flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleSwipe(false)}
-                  disabled={onboardingBusy}
-                  className="flex-1 py-3 px-4 rounded-xl border border-[#c98f7b]/35 hover:border-[#b87361] bg-[#f7e9df] text-[#9f5f4f] hover:bg-[#f1dccf] font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
-                >
-                  <X className="w-4 h-4" /> Dislike
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSkipOnboarding}
-                  disabled={onboardingBusy}
-                  className="py-3 px-4 rounded-xl border border-primary/15 hover:border-primary/30 text-[#667864] hover:text-primary text-xs font-semibold transition-all cursor-pointer"
-                >
-                  Skip
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSwipe(true)}
-                  disabled={onboardingBusy}
-                  className="flex-1 py-3 px-4 rounded-xl border border-primary/25 hover:border-primary/45 bg-primary/10 text-primary hover:bg-primary/15 font-bold transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
-                >
-                  <Heart className="w-4 h-4 fill-current" /> Like
-                </button>
-              </div>
-              
-              <div className="flex justify-center gap-1.5 mt-6">
-                {onboardingRecipes.map((_, idx) => (
-                  <div 
-                    key={idx} 
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      idx === currentMedoidIdx ? "w-6 bg-primary" : "w-1.5 bg-primary/20"
-                    }`} 
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+                <div className="flex justify-center gap-1.5 mt-6">
+                  {onboardingRecipes.map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        idx === currentMedoidIdx ? "w-6 bg-primary" : "w-1.5 bg-primary/20"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {sections.map((section, idx) => (
           <div key={idx} className="pl-4 md:pl-12 xl:pl-20 group/row">
