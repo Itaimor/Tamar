@@ -175,7 +175,6 @@ const Home = () => {
             return;
           }
 
-<<<<<<< HEAD
           if (session?.access_token) {
             const refreshResponse = await fetch("/api/refresh-recommendations", {
               method: "POST",
@@ -192,19 +191,6 @@ const Home = () => {
             }
           }
 
-=======
-          if (tasteFeedbackCount === 0 && isColdStartSetupSkipped) {
-            setOnboardingRecipes([]);
-            setIsOnboardingCompleted(true);
-            const defaultRecs = await fetchDefaultRecipes(6);
-            setCuratedRecipes(defaultRecs);
-            updateHeroCache(defaultRecs);
-            queueRecipeImages(defaultRecs);
-            return;
-          }
-
-          // 1. Fetch cached recommendations from Supabase first
->>>>>>> 438c2837ab3584aff780030a4b92f82752cd6d84
           const { data, error } = await supabase
             .from("user_recommendations")
             .select(
@@ -701,7 +687,7 @@ const Home = () => {
       <div className="pb-24 -mt-16 md:-mt-24 relative z-10 space-y-12">
         
         {/* Active Learning Cold Start Onboarding */}
-        {user && !isIbsOnboardingCompleted && (
+        {user && isOnboardingCompleted && !isIbsOnboardingCompleted && (
           <IbsOnboardingCard
             userId={user.id}
             onCompleted={() => setIsIbsOnboardingCompleted(true)}
@@ -709,7 +695,7 @@ const Home = () => {
         )}
 
         <Dialog
-          open={isIbsOnboardingCompleted && !isOnboardingCompleted && onboardingRecipes.length > 0}
+          open={!isOnboardingCompleted && onboardingRecipes.length > 0}
           onOpenChange={() => {}}
         >
           <DialogContent

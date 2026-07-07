@@ -1905,6 +1905,11 @@ Those fallback recipes are not model-generated recommendations and should not
 be treated as preference labels unless the user explicitly likes or dismisses
 one in the setup flow.
 
+The first-run Home sequence is ordered: the taste/preference cold start appears
+first, and the IBS/risk cold start appears after the user finishes the taste
+cards. This keeps the preference model from being blocked by the risk
+questionnaire while still collecting risk priors before normal exploration.
+
 The fallback catalog fetch must sample from randomized recipe offsets instead
 of always reading the first rows from `recipes`. The taste setup cards should
 also prefer diverse recipe-title keys before filling the requested count. This
