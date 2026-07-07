@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Leaf, Loader2, Mail, TreePalm } from "lucide-react";
+import { Leaf, Loader2, Mail, TreePalm, Trash2, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/AuthProvider";
 import { formatTrialDaysRemaining, getCanopyTrialStatus, isAdminUser } from "@/lib/freemium";
+import { supabase } from "@/lib/supabase";
 
 type AuthDialogProps = {
   open: boolean;
@@ -40,6 +41,7 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -95,6 +97,45 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
       toast.error(error instanceof Error ? error.message : "Could not sign out.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleResetUserMemory = async () => {
+    if (!user || !supabase) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("reset_user_memory");
+      if (error) throw error;
+
+      // Clear client-side keys
+      const userId = user.id;
+      window.localStorage.removeItem(`tamar:coldStartGuide:${userId}`);
+      window.localStorage.removeItem(`tamar:insights:lastReadAt:${userId}`);
+      
+      // Remove other dynamic keys
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && (
+          key.startsWith(`tamar:insights:pageVisit:${userId}:`) ||
+          key.startsWith(`tamar:freemium-reminder:${userId}:`)
+        )) {
+          window.localStorage.removeItem(key);
+          i--;
+        }
+      }
+
+      toast.success("User memory deleted. Reloading application...");
+      onOpenChange(false);
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      console.error("Failed to reset user memory:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to reset user memory.");
+    } finally {
+      setBusy(false);
+      setConfirmReset(false);
     }
   };
 
@@ -187,6 +228,55 @@ const AuthDialog = ({ open, onOpenChange, initialMode = "signup" }: AuthDialogPr
                 Upgrade to Canopy+
               </Button>
             )}
+
+            {isAdminUser(user) && (
+              <div className="rounded-md border border-destructive/20 bg-destructive/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <p className="text-sm font-bold">Admin Controls</p>
+                </div>
+                {!confirmReset ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="w-full bg-destructive text-[#fffaf0] hover:bg-destructive/90 flex items-center justify-center gap-2"
+                    onClick={() => setConfirmReset(true)}
+                    disabled={busy}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Reset My User (Delete Memory)
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Are you sure? This will wipe all meal logs, health reports, symptom risks, candidate recipes, preferences, and check-ins for your account. This action is irreversible.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="flex-1 bg-destructive text-[#fffaf0] hover:bg-destructive/90 text-xs py-1.5 h-auto"
+                        onClick={handleResetUserMemory}
+                        disabled={busy}
+                      >
+                        {busy && <Loader2 className="animate-spin mr-1 h-3 w-3" />}
+                        Yes, delete memory
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="flex-1 text-xs py-1.5 h-auto"
+                        onClick={() => setConfirmReset(false)}
+                        disabled={busy}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <Button
               type="button"
               variant="secondary"
