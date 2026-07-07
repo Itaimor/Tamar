@@ -1897,6 +1897,20 @@ Flow:
 
 The chat recommendation response is a presentation layer over the existing Curated for You output. It must not create a separate ranking algorithm or call Gemini to invent catalog recommendations. Eating a recommended recipe still requires the chat-guided feedback flow in section 15.7 before writing meal or health evidence.
 
+### Cold-start recipe fallbacks
+
+When a signed-in user has no taste feedback yet, Home shows a small taste
+setup card and general recipe rows until personalized recommendations exist.
+Those fallback recipes are not model-generated recommendations and should not
+be treated as preference labels unless the user explicitly likes or dismisses
+one in the setup flow.
+
+The fallback catalog fetch must sample from randomized recipe offsets instead
+of always reading the first rows from `recipes`. The taste setup cards should
+also prefer diverse recipe-title keys before filling the requested count. This
+prevents catalog import ordering from causing the first-run setup to show only
+near-duplicate recipes, such as several variants of the same dish.
+
 ---
 
 ## 15.9 General Chat RAG Context

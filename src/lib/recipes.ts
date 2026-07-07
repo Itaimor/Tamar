@@ -372,6 +372,94 @@ const mapRecipeRows = (items: any[]): RecipeItem[] => {
   return items.map((item) => mapRecipeRow(item, false, usedImageSignatures));
 };
 
+const shuffleItems = <T,>(items: T[]): T[] => {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+};
+
+const getRecipeDiversityKey = (recipe: RecipeItem): string => {
+  const normalized = recipe.title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = normalized.split(" ").filter(Boolean);
+  return words.slice(0, 3).join(" ") || String(recipe.id);
+};
+
+const preferDiverseRecipeTitles = (recipes: RecipeItem[], limit: number): RecipeItem[] => {
+  const selected: RecipeItem[] = [];
+  const seenKeys = new Set<string>();
+
+  recipes.forEach((recipe) => {
+    if (selected.length >= limit) return;
+    const key = getRecipeDiversityKey(recipe);
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    selected.push(recipe);
+  });
+
+  if (selected.length >= limit) return selected;
+
+  recipes.forEach((recipe) => {
+    if (selected.length >= limit) return;
+    if (selected.some((item) => item.id === recipe.id)) return;
+    selected.push(recipe);
+  });
+
+  return selected;
+};
+
+const fetchRandomRecipeRows = async (limit: number, minimumPoolSize = limit * 4): Promise<any[] | null> => {
+  if (!supabase) return null;
+
+  try {
+    const { count, error: countError } = await supabase
+      .from("recipes")
+      .select("id", { count: "exact", head: true })
+      .not("name", "is", null);
+
+    if (countError || !count || count <= 0) return null;
+
+    const targetPoolSize = Math.max(limit, minimumPoolSize);
+    const pageSize = Math.min(Math.max(targetPoolSize, limit), 100);
+    const maxOffset = Math.max(count - pageSize, 0);
+    const offsets = Array.from(
+      new Set(
+        Array.from({ length: Math.min(4, Math.ceil(targetPoolSize / Math.max(limit, 1)) + 1) }, () =>
+          Math.floor(Math.random() * (maxOffset + 1)),
+        ),
+      ),
+    );
+
+    const batches = await Promise.all(
+      offsets.map((offset) =>
+        supabase
+          .from("recipes")
+          .select(RECIPE_SELECT)
+          .not("name", "is", null)
+          .order("id", { ascending: true })
+          .range(offset, Math.min(offset + pageSize - 1, count - 1)),
+      ),
+    );
+
+    const rowsById = new Map<string, any>();
+    batches.forEach(({ data, error }) => {
+      if (error || !data) return;
+      data.forEach((row) => rowsById.set(String(row.id), row));
+    });
+
+    return shuffleItems(Array.from(rowsById.values()));
+  } catch (err) {
+    console.error("Failed to fetch randomized recipes from Supabase:", err);
+    return null;
+  }
+};
+
 export const ensureUniqueRecipeRowImages = (items: RecipeItem[]): RecipeItem[] => {
   const usedImageSignatures = new Set<string>();
 
@@ -504,10 +592,18 @@ export const fetchRecipesByIds = async (recipeIds: (string | number)[]): Promise
 export const fetchDefaultRecipes = async (limit: number = 12): Promise<RecipeItem[]> => {
   if (supabase) {
     try {
+      const randomizedRows = await fetchRandomRecipeRows(limit, Math.max(limit * 2, 30));
+      if (randomizedRows && randomizedRows.length > 0) {
+        return mapRecipeRows(randomizedRows).slice(0, limit);
+      }
+
+      const randomStart = Math.floor(Math.random() * 500);
       const { data, error } = await supabase
         .from("recipes")
         .select(RECIPE_SELECT)
-        .limit(limit);
+        .not("name", "is", null)
+        .order("id", { ascending: true })
+        .range(randomStart, randomStart + limit - 1);
 
       if (data && !error) {
         return mapRecipeRows(data);
@@ -525,21 +621,27 @@ export const fetchDefaultRecipes = async (limit: number = 12): Promise<RecipeIte
 export const fetchColdStartRecipes = async (limit: number = 5): Promise<RecipeItem[]> => {
   if (supabase) {
     try {
+      const randomizedRows = await fetchRandomRecipeRows(limit, Math.max(limit * 12, 60));
+      if (randomizedRows && randomizedRows.length > 0) {
+        const mapped = mapRecipeRows(randomizedRows)
+          .filter((recipe) => recipe.title.trim().length > 0 && !/^\d+$/.test(recipe.title.trim()));
+
+        return preferDiverseRecipeTitles(mapped, limit);
+      }
+
+      const randomStart = Math.floor(Math.random() * 500);
       const { data, error } = await supabase
         .from("recipes")
         .select(RECIPE_SELECT)
         .not("name", "is", null)
-        .limit(Math.max(limit * 4, 20));
+        .order("id", { ascending: true })
+        .range(randomStart, randomStart + Math.max(limit * 4, 20) - 1);
 
       if (data && !error) {
         const mapped = mapRecipeRows(data)
           .filter((recipe) => recipe.title.trim().length > 0 && !/^\d+$/.test(recipe.title.trim()));
 
-        if (mapped.length >= limit) {
-          return mapped.slice(0, limit);
-        }
-
-        return mapped;
+        return preferDiverseRecipeTitles(mapped, limit);
       }
     } catch (err) {
       console.error("Failed to fetch cold-start recipes from Supabase:", err);
