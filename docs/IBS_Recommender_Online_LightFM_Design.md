@@ -32,8 +32,8 @@ The current app includes an IBS profile layer plus the first risk-aware recommen
 Implemented scope:
 
 - Maintain a code-side IBS ingredient catalog and aliases in `src/lib/ibsIngredients.ts`.
-- Show a first-run step-by-step website tour that spotlights Home, CookBook, Chat, Analysis, Diary, search, and quick food logging before optional personalization setup.
-- Allow users to skip the first-run tutorial/setup without saving synthetic recipe dislikes or IBS questionnaire answers; skipped users continue with general recommendations until they explicitly retrain taste.
+- Show a first-run step-by-step website tour that spotlights Home, CookBook, Chat, Analysis, Diary, search, and quick food logging before personalization setup dialogs appear.
+- Allow users to skip the first-run tutorial without saving synthetic recipe dislikes or IBS questionnaire answers; the taste and IBS cold-start dialogs are deferred until the tutorial is closed so modal overlays never compete.
 - Ask a visible IBS cold-start questionnaire in `src/components/IbsOnboardingCard.tsx`.
 - Persist personal IBS ingredient grades in `public.user_ibs_ingredient_risks`.
 - Persist IBS onboarding/check-in state in `public.user_ibs_profiles`.

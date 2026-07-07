@@ -38,6 +38,10 @@ type SavedRecipeRow = {
   recipe_id: string | number;
 };
 
+type HomeProps = {
+  deferColdStartSetup?: boolean;
+};
+
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
 
 const getFirstNSentences = (text: string, n: number): string => {
@@ -54,7 +58,7 @@ const getFirstNSentences = (text: string, n: number): string => {
   return text;
 };
 
-const Home = () => {
+const Home = ({ deferColdStartSetup = false }: HomeProps) => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -687,7 +691,7 @@ const Home = () => {
       <div className="pb-24 -mt-16 md:-mt-24 relative z-10 space-y-12">
         
         {/* Active Learning Cold Start Onboarding */}
-        {user && isOnboardingCompleted && !isIbsOnboardingCompleted && (
+        {user && !deferColdStartSetup && isOnboardingCompleted && !isIbsOnboardingCompleted && (
           <IbsOnboardingCard
             userId={user.id}
             onCompleted={() => setIsIbsOnboardingCompleted(true)}
@@ -695,7 +699,7 @@ const Home = () => {
         )}
 
         <Dialog
-          open={!isOnboardingCompleted && onboardingRecipes.length > 0}
+          open={!deferColdStartSetup && !isOnboardingCompleted && onboardingRecipes.length > 0}
           onOpenChange={() => {}}
         >
           <DialogContent

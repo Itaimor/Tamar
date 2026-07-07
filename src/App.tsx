@@ -127,7 +127,7 @@ const AppShell = () => {
         }`}
       >
         <Routes>
-          <Route path="/" element={<AuthGate><Home /></AuthGate>} />
+          <Route path="/" element={<AuthGate><Home deferColdStartSetup={isColdStartGuideOpen} /></AuthGate>} />
           <Route path="/cookbook" element={<AuthGate><CookBook /></AuthGate>} />
           <Route path="/pricing" element={<AuthGate><Pricing /></AuthGate>} />
           <Route path="/recipes/:recipeId" element={<AuthGate><RecipeDetail /></AuthGate>} />
