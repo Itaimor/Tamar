@@ -59,6 +59,8 @@ CANDIDATE_FETCH_LIMIT = int(os.getenv("RECOMMENDER_CANDIDATE_FETCH_LIMIT", "500"
 MODEL_PREDICTION_WRITE_LIMIT = int(os.getenv("RECOMMENDER_MODEL_PREDICTION_WRITE_LIMIT", "120"))
 COOKBOOK_RECOMMENDATION_LIMIT = int(os.getenv("RECOMMENDER_COOKBOOK_LIMIT", "5"))
 
+_RECIPES_META_CACHE: dict = {"data": None, "loaded_at": None}
+
 
 def artifact_cache_ttl_seconds() -> int:
     return int(os.getenv("RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS", "600"))
@@ -103,13 +105,44 @@ def load_cf_artifact(artifact_path: Path = ARTIFACT_PATH) -> dict:
     item_biases = artifact["item_biases"].astype(float)
     global_mean = float(artifact["global_mean"][0])
 
-    return {
+    result = {
         "recipe_ids": recipe_ids,
         "item_factors": item_factors,
         "item_biases": item_biases,
         "global_mean": global_mean,
         "recipe_index": {recipe_id: idx for idx, recipe_id in enumerate(recipe_ids)},
     }
+
+    # Load precomputed flavor centroid if present
+    if "flavor_centroid" in artifact:
+        result["flavor_centroid"] = artifact["flavor_centroid"].astype(float)
+
+    # Load recipe metadata if present and populate in-memory cache
+    if "meta_recipe_ids" in artifact:
+        try:
+            meta_ids = artifact["meta_recipe_ids"].astype(str)
+            meta_minutes = artifact["meta_minutes"]
+            meta_nutrition = artifact["meta_nutrition"]
+            meta_ingredients = artifact["meta_ingredients"]
+
+            recipes_meta = {}
+            for i, rid in enumerate(meta_ids):
+                ing_str = meta_ingredients[i]
+                ingredients = ing_str.split("|") if isinstance(ing_str, str) else []
+                recipes_meta[rid] = {
+                    "id": int(rid) if rid.isdigit() else rid,
+                    "minutes": int(meta_minutes[i]),
+                    "nutrition": [float(n) for n in meta_nutrition[i]],
+                    "ingredients": ingredients
+                }
+
+            _RECIPES_META_CACHE["data"] = recipes_meta
+            _RECIPES_META_CACHE["loaded_at"] = datetime.now(timezone.utc)
+            print(f"[Info] Loaded {len(recipes_meta):,} recipe metadata items from local CF artifact.")
+        except Exception as exc:
+            print(f"[Warning] Failed to parse metadata from CF artifact: {exc}")
+
+    return result
 
 
 def fetch_user_interactions(supabase: Client, user_id: str) -> pd.DataFrame:
@@ -264,19 +297,18 @@ TRENDING_POSITIVE_TYPES = ["liked", "saved", "started", "completed"]
 # Module-level cache for the recipes-metadata pull. The recipes table has
 # ~100k rows and we only need the small projection (id, minutes, nutrition).
 # TTL matches the artifact cache by default; override with an env var.
-_RECIPES_META_CACHE: dict = {"data": None, "loaded_at": None}
 
 
 def recipes_meta_cache_ttl_seconds() -> int:
     return int(os.getenv("RECOMMENDER_RECIPES_META_TTL_SECONDS", "600"))
 
 
-def fetch_recipes_metadata(supabase: Client, force: bool = False) -> dict[str, dict]:
-    """Return {recipe_id_str: {id, minutes, nutrition}} for every row in `recipes`.
+def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: set[str] | None = None) -> dict[str, dict]:
+    """Return {recipe_id_str: {id, minutes, nutrition}} for recipes.
 
-    Used by category predicates that need recipe attributes (`is_quick`,
-    `is_healthy`). Result is cached at module scope to amortize the ~100k-row
-    fetch across many user refreshes.
+    If the metadata was already populated from the artifact, returns the cache.
+    Otherwise, if needed_ids is provided, queries Supabase only for those IDs (fallback).
+    If needed_ids is not provided, does paginated query over all recipes (legacy fallback).
     """
     now = datetime.now(timezone.utc)
     cached_at = _RECIPES_META_CACHE["loaded_at"]
@@ -284,10 +316,35 @@ def fetch_recipes_metadata(supabase: Client, force: bool = False) -> dict[str, d
         not force
         and cached_at is not None
         and _RECIPES_META_CACHE["data"] is not None
-        and (now - cached_at).total_seconds() < recipes_meta_cache_ttl_seconds()
     ):
         return _RECIPES_META_CACHE["data"]
 
+    # If needed_ids is provided and cache is not loaded, fetch only the needed recipes
+    if needed_ids:
+        data = dict(_RECIPES_META_CACHE["data"]) if _RECIPES_META_CACHE["data"] is not None else {}
+        ids_to_fetch = [rid for rid in needed_ids if rid not in data]
+        if ids_to_fetch:
+            print(f"[Info] Querying metadata for {len(ids_to_fetch)} specific recipe IDs from Supabase (fallback)...")
+            chunk_size = 200
+            fetched_rows = []
+            for i in range(0, len(ids_to_fetch), chunk_size):
+                chunk = ids_to_fetch[i : i + chunk_size]
+                try:
+                    response = (
+                        supabase.table("recipes")
+                        .select("id, minutes, nutrition, ingredients")
+                        .in_("id", chunk)
+                        .execute()
+                    )
+                    fetched_rows.extend(response.data or [])
+                except Exception as exc:
+                    print(f"[Warning] Failed to fetch metadata chunk: {exc}")
+            
+            for row in fetched_rows:
+                data[str(row["id"])] = row
+        return data
+
+    print("[Warning] Fetching all 100k recipes' metadata from Supabase (legacy fallback)...")
     rows: list[dict] = []
     page_size = int(os.getenv("SUPABASE_FETCH_PAGE_SIZE", "1000"))
     start = 0
@@ -680,6 +737,19 @@ def get_flavor_artifact(
     ):
         return _FLAVOR_CENTROID_CACHE["centroid"], _FLAVOR_CENTROID_CACHE["scores"]
 
+    # If precomputed flavor centroid is in the artifact, use it directly!
+    precomputed_centroid = artifact.get("flavor_centroid")
+    if precomputed_centroid is not None:
+        centroid = precomputed_centroid.astype(float)
+        scores = compute_flavor_scores(centroid, artifact["item_factors"], artifact["recipe_ids"])
+        _FLAVOR_CENTROID_CACHE["centroid"] = centroid
+        _FLAVOR_CENTROID_CACHE["scores"] = scores
+        _FLAVOR_CENTROID_CACHE["computed_at"] = now
+        _FLAVOR_CENTROID_CACHE["n_seeds"] = 0
+        print("[Info] Loaded precomputed flavor centroid from artifact.")
+        return centroid, scores
+
+    # Fallback to computing on-the-fly if not in artifact
     seed_ids = identify_flavor_seed_ids(recipes_meta, FLAVOR_SEED_KEYWORDS)
     centroid = compute_flavor_centroid(seed_ids, artifact["recipe_index"], artifact["item_factors"])
     scores: dict[str, float] = {}
@@ -714,6 +784,7 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     user_ratings = process_interactions_to_ratings(raw_interactions)
     user_vector = build_user_vector(user_ratings, artifact)
     excluded_recipe_ids = get_excluded_recipe_ids(raw_interactions)
+    cookbook_rows = fetch_cookbook_memberships(supabase, user_id)
 
     recipe_ids = artifact["recipe_ids"]
     item_factors = artifact["item_factors"]
@@ -744,7 +815,13 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     # Both fetches tolerate empty results — categories simply come up short
     # in that case; the upsert still goes through and the row is consistent.
     try:
-        recipes_meta = fetch_recipes_metadata(supabase)
+        # Collect needed recipe IDs to minimize DB fetch if cache is empty
+        needed_ids = {rid for rid, _ in candidate_pairs}
+        for row in cookbook_rows:
+            rid = row.get("recipe_id")
+            if rid:
+                needed_ids.add(str(rid))
+        recipes_meta = fetch_recipes_metadata(supabase, needed_ids=needed_ids)
     except Exception as exc:
         print(f"[Warning] Failed to fetch recipes metadata for category predicates: {exc}")
         recipes_meta = {}
@@ -770,7 +847,6 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     personal_signals = fetch_user_ingredient_risks(supabase, user_id)
     population_signals = fetch_population_priors(supabase)
     recent_context = fetch_recent_user_context(supabase, user_id)
-    cookbook_rows = fetch_cookbook_memberships(supabase, user_id)
     risk_ranked_candidates = rerank_candidates(
         candidates=candidate_pairs,
         recipes_meta=recipes_meta,

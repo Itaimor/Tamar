@@ -36,6 +36,7 @@ except ImportError:
 from src.matrix_factorization import MatrixFactorizationCF
 from recommender_common import (
     ARTIFACT_PATH,
+    FLAVOR_SEED_KEYWORDS,
     RECIPE_CATALOG,
     get_artifact_bucket,
     get_artifact_storage_path,
@@ -59,20 +60,35 @@ def fetch_all_rows(
     order_by: str = "id",
     page_size: int | None = None,
 ) -> list[dict]:
-    """Fetch all rows from a Supabase table using range pagination."""
+    """Fetch all rows from a Supabase table using range pagination with retry logic."""
+    import time
     page_size = page_size or int(os.getenv("SUPABASE_FETCH_PAGE_SIZE", "1000"))
     rows: list[dict] = []
     start = 0
 
     while True:
         end = start + page_size - 1
-        response = (
-            supabase.table(table_name)
-            .select(columns)
-            .order(order_by)
-            .range(start, end)
-            .execute()
-        )
+        
+        max_retries = 5
+        retry_delay = 1.0
+        response = None
+        
+        for attempt in range(max_retries):
+            try:
+                response = (
+                    supabase.table(table_name)
+                    .select(columns)
+                    .order(order_by)
+                    .range(start, end)
+                    .execute()
+                )
+                break
+            except Exception as exc:
+                print(f"[Warning] Supabase fetch failed (attempt {attempt + 1}/{max_retries}) for {table_name}: {exc}")
+                if attempt == max_retries - 1:
+                    raise exc
+                time.sleep(retry_delay)
+                retry_delay *= 2.0
 
         page = response.data or []
         rows.extend(page)
@@ -81,7 +97,11 @@ def fetch_all_rows(
             break
 
         start += page_size
-        print(f"  fetched {len(rows):,} rows from {table_name}...")
+        if len(rows) % 10000 == 0:
+            print(f"  fetched {len(rows):,} rows from {table_name}...")
+
+    if len(rows) > 0 and len(rows) % 10000 != 0:
+        print(f"  fetched {len(rows):,} total rows from {table_name}.")
 
     return rows
 
@@ -291,13 +311,85 @@ def lightfm_predictions_for_user(
     return predictions
 
 
+def postprocess_artifact_with_metadata(artifact_path: Path, recipes_data: list[dict]) -> None:
+    if not artifact_path.exists():
+        print(f"[Warning] Artifact not found for postprocessing: {artifact_path}")
+        return
+
+    print("Post-processing CF artifact with recipe metadata and flavor centroid...")
+    
+    # 1. Load the existing npz file
+    artifact = dict(np.load(artifact_path, allow_pickle=True))
+    
+    # Ensure recipe_ids, item_factors exist in the artifact
+    if "recipe_ids" not in artifact or "item_factors" not in artifact:
+        print("[Warning] Missing recipe_ids or item_factors in artifact. Skipping post-processing.")
+        return
+        
+    recipe_ids_in_artifact = artifact["recipe_ids"].astype(str)
+    item_factors = artifact["item_factors"].astype(float)
+    recipe_index = {rid: idx for idx, rid in enumerate(recipe_ids_in_artifact)}
+    
+    # 2. Build metadata arrays matching the catalog in recipes_data
+    meta_recipe_ids = []
+    meta_minutes = []
+    meta_nutrition = []
+    meta_ingredients = []
+    
+    for row in recipes_data:
+        rid = str(row["id"])
+        meta_recipe_ids.append(rid)
+        meta_minutes.append(int(row.get("minutes") or 0))
+        # nutrition is double precision[] (typically 7 floats)
+        nut = row.get("nutrition") or []
+        if len(nut) < 7:
+            nut = nut + [0.0] * (7 - len(nut))
+        meta_nutrition.append([float(n) for n in nut[:7]])
+        # ingredients list of strings -> serialize to pipe-separated string
+        ings = row.get("ingredients") or []
+        meta_ingredients.append("|".join(str(ing) for ing in ings))
+        
+    # 3. Compute flavor centroid
+    seed_ids = []
+    for row in recipes_data:
+        ingredients = row.get("ingredients") or []
+        text = " ".join(str(item).lower() for item in ingredients)
+        if any(kw in text for kw in FLAVOR_SEED_KEYWORDS):
+            seed_ids.append(str(row["id"]))
+            
+    vectors = []
+    for sid in seed_ids:
+        idx = recipe_index.get(sid)
+        if idx is not None:
+            vectors.append(item_factors[idx])
+            
+    if vectors:
+        flavor_centroid = np.mean(np.array(vectors), axis=0)
+        print(f"  computed flavor centroid from {len(vectors)} matching seed recipes (out of {len(seed_ids)} seeds).")
+    else:
+        # Fallback to zero vector if no seeds match
+        flavor_centroid = np.zeros(item_factors.shape[1])
+        print("  [Warning] No seed recipes matched the artifact. Flavor centroid initialized to zero.")
+        
+    # 4. Add the new arrays to the artifact dictionary
+    artifact["meta_recipe_ids"] = np.array(meta_recipe_ids, dtype=object)
+    artifact["meta_minutes"] = np.array(meta_minutes, dtype=np.int32)
+    artifact["meta_nutrition"] = np.array(meta_nutrition, dtype=np.float32)
+    artifact["meta_ingredients"] = np.array(meta_ingredients, dtype=object)
+    artifact["flavor_centroid"] = flavor_centroid
+    
+    # 5. Save back to the npz file
+    np.savez_compressed(artifact_path, **artifact)
+    print(f"Successfully saved metadata and flavor centroid to artifact ({artifact_path})")
+
+
 def compute_recommendations():
     supabase = load_supabase_client()
     
     # 1. Fetch dynamic recipe catalog from Supabase
     print("Fetching recipe catalog from Supabase...")
     try:
-        recipes_data = fetch_all_rows(supabase, "recipes", "id")
+        recipes_data = fetch_all_rows(supabase, "recipes", "id, minutes, nutrition, ingredients")
         recipe_catalog = [str(r["id"]) for r in recipes_data]
         print(f"Loaded {len(recipe_catalog):,} recipes from Supabase.")
     except Exception as e:
@@ -408,6 +500,7 @@ def compute_recommendations():
         preference_model.save_item_factor_artifact(ARTIFACT_PATH)
         print(f"Saved trained CF item factors to {ARTIFACT_PATH}")
 
+    postprocess_artifact_with_metadata(ARTIFACT_PATH, recipes_data)
     upload_artifact_to_storage(supabase, ARTIFACT_PATH)
     
     print(f"Generating recommendations for {len(active_users)} active users...")

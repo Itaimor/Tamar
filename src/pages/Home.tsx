@@ -175,6 +175,7 @@ const Home = () => {
             return;
           }
 
+<<<<<<< HEAD
           if (session?.access_token) {
             const refreshResponse = await fetch("/api/refresh-recommendations", {
               method: "POST",
@@ -191,6 +192,19 @@ const Home = () => {
             }
           }
 
+=======
+          if (tasteFeedbackCount === 0 && isColdStartSetupSkipped) {
+            setOnboardingRecipes([]);
+            setIsOnboardingCompleted(true);
+            const defaultRecs = await fetchDefaultRecipes(6);
+            setCuratedRecipes(defaultRecs);
+            updateHeroCache(defaultRecs);
+            queueRecipeImages(defaultRecs);
+            return;
+          }
+
+          // 1. Fetch cached recommendations from Supabase first
+>>>>>>> 438c2837ab3584aff780030a4b92f82752cd6d84
           const { data, error } = await supabase
             .from("user_recommendations")
             .select(
@@ -204,65 +218,113 @@ const Home = () => {
             .eq("user_id", user.id)
             .maybeSingle();
 
-          if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
-            const recIds = data.recommended_recipe_ids as string[];
-            const loaded = await fetchRecipesByIds(recIds);
-            console.info("Loaded CF recommendations", {
-              userId: user.id,
-              recIds,
-              updatedAt: data.updated_at,
-            });
-
-            // Attach the personalized match-score band (0.78-0.98 from the
-            // recommender) onto each recipe for display in the row card.
-            const withMatchScores = (
-              recipes: RecipeItem[],
-              scores: number[] | null | undefined,
-            ): RecipeItem[] =>
-              recipes.map((recipe, index) => {
-                const score =
-                  scores && scores[index] !== undefined ? scores[index] : 0.95;
-                return { ...recipe, match: `${Math.round(score * 100)}%` };
+          const renderRecommendations = async (recData: any) => {
+            if (recData && recData.recommended_recipe_ids && recData.recommended_recipe_ids.length > 0) {
+              const recIds = recData.recommended_recipe_ids as string[];
+              const loaded = await fetchRecipesByIds(recIds);
+              console.info("Loaded CF recommendations", {
+                userId: user.id,
+                recIds,
+                updatedAt: recData.updated_at,
               });
 
-            // Pull each category's recipe rows in parallel. Empty/null arrays
-            // yield empty lists and leave the existing placeholder set by
-            // loadOtherSections in place. Flavor used to fall here while the
-            // algo was undecided; with Route A active it is populated now.
-            const loadCategoryRow = async (
-              ids: string[] | null | undefined,
-              scores: number[] | null | undefined,
-            ): Promise<RecipeItem[]> => {
-              if (!ids || ids.length === 0) return [];
-              const items = await fetchRecipesByIds(ids);
-              return withMatchScores(items, scores);
-            };
+              // Attach the personalized match-score band (0.78-0.98 from the
+              // recommender) onto each recipe for display in the row card.
+              const withMatchScores = (
+                recipes: RecipeItem[],
+                scores: number[] | null | undefined,
+              ): RecipeItem[] =>
+                recipes.map((recipe, index) => {
+                  const score =
+                    scores && scores[index] !== undefined ? scores[index] : 0.95;
+                  return { ...recipe, match: `${Math.round(score * 100)}%` };
+                });
 
-            const [trending, flavor, healthy, quick] = await Promise.all([
-              loadCategoryRow(
-                data.trending_recipe_ids as string[] | null,
-                data.trending_match_scores as number[] | null,
-              ),
-              loadCategoryRow(
-                data.flavor_recipe_ids as string[] | null,
-                data.flavor_match_scores as number[] | null,
-              ),
-              loadCategoryRow(
-                data.healthy_recipe_ids as string[] | null,
-                data.healthy_match_scores as number[] | null,
-              ),
-              loadCategoryRow(
-                data.quick_recipe_ids as string[] | null,
-                data.quick_match_scores as number[] | null,
-              ),
-            ]);
+              // Pull each category's recipe rows in parallel. Empty/null arrays
+              // yield empty lists and leave the existing placeholder set by
+              // loadOtherSections in place.
+              const loadCategoryRow = async (
+                ids: string[] | null | undefined,
+                scores: number[] | null | undefined,
+              ): Promise<RecipeItem[]> => {
+                if (!ids || ids.length === 0) return [];
+                const items = await fetchRecipesByIds(ids);
+                return withMatchScores(items, scores);
+              };
 
-            setCuratedRecipes(withMatchScores(loaded, data.match_scores));
-            if (trending.length > 0) setTrendingRecipes(trending);
-            if (flavor.length > 0) setFlavorRecipes(flavor);
-            if (healthy.length > 0) setHealthyRecipes(healthy);
-            if (quick.length > 0) setQuickRecipes(quick);
-            setIsOnboardingCompleted(true);
+              const [trending, flavor, healthy, quick] = await Promise.all([
+                loadCategoryRow(
+                  recData.trending_recipe_ids as string[] | null,
+                  recData.trending_match_scores as number[] | null,
+                ),
+                loadCategoryRow(
+                  recData.flavor_recipe_ids as string[] | null,
+                  recData.flavor_match_scores as number[] | null,
+                ),
+                loadCategoryRow(
+                  recData.healthy_recipe_ids as string[] | null,
+                  recData.healthy_match_scores as number[] | null,
+                ),
+                loadCategoryRow(
+                  recData.quick_recipe_ids as string[] | null,
+                  recData.quick_match_scores as number[] | null,
+                ),
+              ]);
+
+              setCuratedRecipes(withMatchScores(loaded, recData.match_scores));
+              if (trending.length > 0) setTrendingRecipes(trending);
+              if (flavor.length > 0) setFlavorRecipes(flavor);
+              if (healthy.length > 0) setHealthyRecipes(healthy);
+              if (quick.length > 0) setQuickRecipes(quick);
+              setIsOnboardingCompleted(true);
+            }
+          };
+
+          // If we have cached recommendations, render them immediately
+          if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
+            await renderRecommendations(data);
+          }
+
+          // 2. Trigger the refresh in the background (non-blocking)
+          if (session?.access_token) {
+            fetch("/api/refresh-recommendations", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ user_id: user.id }),
+            })
+              .then(async (refreshResponse) => {
+                if (!refreshResponse.ok) {
+                  const message = await refreshResponse.text();
+                  console.error("Recommendation refresh failed:", refreshResponse.status, message);
+                } else {
+                  // If it succeeded, fetch the updated recommendations and update the UI state
+                  const { data: updatedData } = await supabase
+                    .from("user_recommendations")
+                    .select(
+                      "recommended_recipe_ids, match_scores, " +
+                        "trending_recipe_ids, trending_match_scores, " +
+                        "flavor_recipe_ids, flavor_match_scores, " +
+                        "healthy_recipe_ids, healthy_match_scores, " +
+                        "quick_recipe_ids, quick_match_scores, " +
+                        "updated_at"
+                    )
+                    .eq("user_id", user.id)
+                    .maybeSingle();
+
+                  if (updatedData) {
+                    await renderRecommendations(updatedData);
+                  }
+                }
+              })
+              .catch((err) => {
+                console.error("Background recommendation refresh failed:", err);
+              });
+          }
+
+          if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
             return;
           }
         } catch (error) {

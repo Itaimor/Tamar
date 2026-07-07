@@ -210,45 +210,12 @@ const CookBook = () => {
     const fallbackRecommendations = buildLocalCookbookRecommendations(groupedRecipes, catalogRecipes);
     setCookbookRecommendations(fallbackRecommendations);
 
-    setRecommendationsLoading(true);
-    try {
-      if (session?.access_token) {
-        const refreshResponse = await fetch("/api/refresh-recommendations", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ user_id: user.id }),
-        });
-
-        if (!refreshResponse.ok) {
-          console.error("Cookbook recommendation refresh failed:", refreshResponse.status, await refreshResponse.text());
-        }
-      }
-
-      const { data, error } = await supabase
-        .from("user_recommendations")
-        .select("cookbook_recipe_ids,cookbook_recipe_sources,cookbook_match_scores,cookbook_reasons")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        if (isMissingCookbookRecommendationColumns(error)) {
-          console.info(
-            "CookBook stored recommendations are unavailable because the cookbook recommendation columns are missing. Apply supabase/migrations/20260707000000_add_cookbook_recommendation_columns.sql."
-          );
-          setCookbookRecommendations(fallbackRecommendations);
-          return;
-        }
-        throw error;
-      }
-
+    const renderCookbookRecommendations = async (recData: any) => {
       const memberships = Object.values(groupedRecipes).flat();
-      const ids = (data?.cookbook_recipe_ids || []) as string[];
-      const sources = (data?.cookbook_recipe_sources || []) as string[];
-      const scores = (data?.cookbook_match_scores || []) as number[];
-      const reasons = (data?.cookbook_reasons || []) as string[];
+      const ids = (recData?.cookbook_recipe_ids || []) as string[];
+      const sources = (recData?.cookbook_recipe_sources || []) as string[];
+      const scores = (recData?.cookbook_match_scores || []) as number[];
+      const reasons = (recData?.cookbook_reasons || []) as string[];
 
       const storedRecommendations = ids
         .map((recipeId, index): CookbookRecommendation | null => {
@@ -268,12 +235,69 @@ const CookBook = () => {
         .filter((item): item is CookbookRecommendation => Boolean(item));
 
       setCookbookRecommendations(storedRecommendations.length > 0 ? storedRecommendations.slice(0, 5) : fallbackRecommendations);
+    };
+
+    setRecommendationsLoading(true);
+    try {
+      // 1. Fetch cached cookbook recommendations from Supabase first
+      const { data, error } = await supabase
+        .from("user_recommendations")
+        .select("cookbook_recipe_ids,cookbook_recipe_sources,cookbook_match_scores,cookbook_reasons")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        if (isMissingCookbookRecommendationColumns(error)) {
+          console.info(
+            "CookBook stored recommendations are unavailable because the cookbook recommendation columns are missing. Apply supabase/migrations/20260707000000_add_cookbook_recommendation_columns.sql."
+          );
+          setCookbookRecommendations(fallbackRecommendations);
+          setRecommendationsLoading(false);
+          return;
+        }
+        throw error;
+      }
+
+      if (data && data.cookbook_recipe_ids && data.cookbook_recipe_ids.length > 0) {
+        await renderCookbookRecommendations(data);
+      }
+      setRecommendationsLoading(false);
+
+      // 2. Trigger the refresh in the background (non-blocking)
+      if (session?.access_token) {
+        fetch("/api/refresh-recommendations", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        })
+          .then(async (refreshResponse) => {
+            if (!refreshResponse.ok) {
+              console.error("Cookbook recommendation refresh failed:", refreshResponse.status, await refreshResponse.text());
+            } else {
+              // Re-fetch and update recommendations silently
+              const { data: updatedData } = await supabase
+                .from("user_recommendations")
+                .select("cookbook_recipe_ids,cookbook_recipe_sources,cookbook_match_scores,cookbook_reasons")
+                .eq("user_id", user.id)
+                .maybeSingle();
+
+              if (updatedData) {
+                await renderCookbookRecommendations(updatedData);
+              }
+            }
+          })
+          .catch((err) => {
+            console.error("Background cookbook recommendation refresh failed:", err);
+          });
+      }
     } catch (error) {
       if (!isMissingCookbookRecommendationColumns(error)) {
         console.error("Failed to load cookbook recommendations:", error);
       }
       setCookbookRecommendations(fallbackRecommendations);
-    } finally {
       setRecommendationsLoading(false);
     }
   };
