@@ -2,6 +2,48 @@
 
 IBS-friendly recipe recommendation project for a university recommender systems course.
 
+![Tamar logo](images/logo.jpg)
+
+Tamar helps users discover recipes that match both taste preferences and IBS-related comfort patterns. The app combines collaborative filtering, diary-based symptom tracking, ingredient-risk modeling, cookbook organization, and Gemini-assisted food logging into one recipe recommendation workflow.
+
+## Documentation
+
+You can find the course-facing documentation in the following files:
+
+- [Installation Guide](install.md)
+- [Project Summary](summary.md)
+- [Modules Description](modules.md)
+
+The deeper engineering documentation remains under [docs/](docs/), especially the recommender design, local setup, QA, and recipe image plans.
+
+## About
+
+This project is developed for the *Recommender Systems Workshop* at Tel Aviv University.
+More information can be found on the [Workshop Website](https://courses.cs.tau.ac.il/recsys/).
+
+## Authors
+
+- Yael Kelman - yaelsagi@mail.tau.ac.il
+- Ram Kedem - ramkedem@mail.tau.ac.il
+- Itay Mor - itai@edventureil.com
+- Yehonatan Barel - yehonatanb3@mail.tau.ac.il
+
+## Screenshots
+
+| Account and onboarding | Food logging and cookbook |
+| --- | --- |
+| <img src="images/1_new_account.jpg" alt="New account screen" width="360"> | <img src="images/5_logging_meal.jpg" alt="Logging a meal" width="360"> |
+| <img src="images/2_sign_in.jpg" alt="Sign in screen" width="360"> | <img src="images/6_coocklist.jpg" alt="Cooklist screen" width="360"> |
+| <img src="images/3_preference_calibration.jpg" alt="Preference calibration screen" width="360"> | <img src="images/7_timeline.jpg" alt="Diary timeline" width="360"> |
+| <img src="images/4_trigger_questionnaire.jpg" alt="Trigger questionnaire screen" width="360"> | <img src="images/12_chat_interface.jpg" alt="Chat interface" width="360"> |
+
+| Analysis, premium, and recommendation views |
+| --- |
+| <img src="images/8_strongest_signal.jpg" alt="Strongest signal analysis" width="520"> |
+| <img src="images/9_canopy.jpg" alt="Canopy plan screen" width="520"> |
+| <img src="images/10_weekly_summary.jpg" alt="Weekly summary screen" width="520"> |
+| <img src="images/11_oasis.jpg" alt="Oasis recommendation screen" width="520"> |
+
 ## Repo Structure
 
 Use this section as the starting map for the repository. For deeper module behavior, follow the linked docs instead of guessing from filenames alone.
@@ -10,6 +52,9 @@ Use this section as the starting map for the repository. For deeper module behav
 
 | Area | Source |
 | --- | --- |
+| Course-facing installation guide | [install.md](install.md) |
+| Course-facing project summary | [summary.md](summary.md) |
+| Course-facing module descriptions | [modules.md](modules.md) |
 | Recommender architecture, risk scoring, model roles, and algorithm design | [docs/IBS_Recommender_Online_LightFM_Design.md](docs/IBS_Recommender_Online_LightFM_Design.md) |
 | IBS product relevance plan and implementation notes | [docs/ibs/IBS_RELEVANCE_PLAN.md](docs/ibs/IBS_RELEVANCE_PLAN.md) |
 | Local setup for the website plus Python recommender service | [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md) |
@@ -29,6 +74,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `RecommenderSys/` | Python recommender system, data seeding, model training, fast recommendation refresh, and recommender service. |
 | `supabase/` | Supabase schema and migrations for auth-adjacent app data, recipes, interactions, images, recommendations, and artifact storage. |
 | `docs/` | Human-readable design, setup, image, and project context documentation. |
+| `images/` | Course submission logo and application screenshots used by this README. |
 | `public/` | Static browser assets served directly by Vite. |
 | `.agents/skills/` | Project-local Codex skills that tell AI agents how to stay aligned with Tamar-specific design and database expectations. |
 | `.github/` | GitHub workflow and pull request metadata. |
