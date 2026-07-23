@@ -31,6 +31,7 @@ import { supabase } from "@/lib/supabase";
 import {
   fetchActiveHardRestrictions,
   filterRecipesForHardRestrictions,
+  HARD_RESTRICTIONS_UPDATED_EVENT,
   HardRestriction,
 } from "@/lib/recommendationSafety";
 import IbsOnboardingCard from "@/components/IbsOnboardingCard";
@@ -494,6 +495,24 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
     return () => {
       cancelled = true;
     };
+  }, [user]);
+
+  useEffect(() => {
+    const reloadForRestrictionChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!user || detail?.userId !== user.id) return;
+      setRecommendationRefreshKey((key) => key + 1);
+    };
+
+    window.addEventListener(
+      HARD_RESTRICTIONS_UPDATED_EVENT,
+      reloadForRestrictionChange,
+    );
+    return () =>
+      window.removeEventListener(
+        HARD_RESTRICTIONS_UPDATED_EVENT,
+        reloadForRestrictionChange,
+      );
   }, [user]);
 
   const activeHardRestrictions =

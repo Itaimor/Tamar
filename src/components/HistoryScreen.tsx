@@ -62,6 +62,7 @@ import {
 import { uploadUserImage } from "@/lib/imageUploads";
 import { useCanopyAccess } from "@/hooks/useCanopyAccess";
 import TamarTreePanel from "@/components/TamarTreePanel";
+import ForbiddenFoodsPanel from "@/components/ForbiddenFoodsPanel";
 
 const symptomOptions = [
   { value: "digestive_discomfort", label: "Digestive discomfort" },
@@ -1048,6 +1049,8 @@ const HistoryScreen = () => {
       </div>
 
       <TamarTreePanel userId={user.id} />
+
+      <ForbiddenFoodsPanel userId={user.id} editable />
 
       <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.85fr)]">
         <form onSubmit={submitMeal} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.035] p-5">

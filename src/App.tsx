@@ -23,6 +23,17 @@ import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
+const AuthScopedChatSessionProvider = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  const chatScope = loading ? "loading" : user?.id || "signed-out";
+
+  return (
+    <ChatSessionProvider key={chatScope}>
+      {children}
+    </ChatSessionProvider>
+  );
+};
+
 const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
 
@@ -167,9 +178,9 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <ChatSessionProvider>
+          <AuthScopedChatSessionProvider>
             <AppShell />
-          </ChatSessionProvider>
+          </AuthScopedChatSessionProvider>
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>

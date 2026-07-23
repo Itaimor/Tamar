@@ -4,7 +4,9 @@ IBS-friendly recipe recommendation project for a university recommender systems 
 
 ![Tamar logo](images/logo.jpg)
 
-Tamar helps users discover recipes that match both taste preferences and IBS-related comfort patterns. The app combines collaborative filtering, diary-based symptom tracking, ingredient-risk modeling, cookbook organization, and Gemini-assisted food logging into one recipe recommendation workflow.
+Tamar helps users discover recipes that match both taste preferences and IBS-related comfort patterns. The app combines collaborative filtering, diary-based symptom tracking, ingredient-risk modeling, strict food-safety filters, cookbook organization, and Gemini-assisted chat and food logging into one recipe recommendation workflow.
+
+To try Tamar without configuring local services or API keys, use the hosted online version shared by the project team. Its Gemini and database credentials are configured securely on the server. Running the full app locally is intended for development and requires your own Supabase project and Gemini API key.
 
 ## Documentation
 
@@ -76,7 +78,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/` | React/Vite frontend app. Contains pages, components, client-side Supabase helpers, recipe display logic, and UI state. |
 | `api/` | Serverless-style TypeScript API handlers used by deployment and mirrored locally by Vite middleware where needed. |
 | `RecommenderSys/` | Python recommender system, data seeding, model training, fast recommendation refresh, and recommender service. |
-| `supabase/` | Supabase schema and migrations for auth-adjacent app data, recipes, interactions, images, recommendations, and artifact storage. |
+| `supabase/` | Versioned database migrations and a lightweight schema snapshot for app data, recommendation and safety flows, user uploads, and model artifact storage. |
 | `docs/` | Human-readable design, setup, image, and project context documentation. |
 | `images/` | Course submission logo and application screenshots used by this README. |
 | `public/` | Static browser assets served directly by Vite. |
@@ -101,6 +103,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/components/AuthDialog.tsx` | Sign-in/sign-up UI. |
 | `src/components/Navbar.tsx` | Main navigation and authenticated user controls. |
 | `src/components/CanopyUpgradeDialog.tsx` | Shared Canopy+ upsell dialog and inline locked-feature panel for freemium gates. |
+| `src/components/ForbiddenFoodsPanel.tsx` | Shared UI for viewing and managing the user's strict food restrictions. |
 | `src/components/TamarTreePanel.tsx` | Diary tree-care panel for the Tamar habit loop, with water/compost/growth/death/replant UI. |
 | `src/components/TamarTreeBadge.tsx` | Compact global Tamar tree status badge used from the navbar. |
 | `src/components/ImageWithSkeleton.tsx` | Shared image rendering with loading skeleton/fallback handling. |
@@ -119,6 +122,9 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/lib/chatFoodLogging.ts` | Conservatively validates free-text Chat food logs and recognizes explicit guided-flow cancellation before Diary writes. |
 | `src/lib/tamarTree.ts` | Derives and persists Tamar tree care state, streaks, cosmetic reward events, death/replant records, and tree nudges from existing meal/check-in logs. |
 | `src/lib/foodImageAnalysis.ts` | Client helper for authenticated Gemini food-photo analysis used by Chat, Diary, and CookBook draft flows before the user confirms saved content. |
+| `src/lib/chatHistory.ts` | Provides recent per-account chat continuity in the browser. |
+| `src/lib/recommendationSafety.ts` | Shared helpers for managing and applying hard food restrictions. |
+| `src/lib/chatRestrictions.ts` | Connects explicit chat allergy statements to the shared restriction flow. |
 | `src/lib/freemium.ts` | Client-side Canopy+/Sapling plan helpers, trial countdown calculations, and throttled reminder storage. |
 | `src/lib/coldStart.ts` | Legacy/static cold-start recipe vector definitions and helper behavior. |
 | `src/lib/utils.ts` | Shared frontend utility helpers. |
@@ -161,22 +167,8 @@ The recommender architecture source of truth is [docs/IBS_Recommender_Online_Lig
 
 | Path | Purpose |
 | --- | --- |
-| `supabase/schema.sql` | Lightweight bootstrap snapshot for core auth, cooklist, recommendation, and image tables. For the full current app schema, run the migrations in filename order. |
-| `supabase/migrations/20260524000000_create_user_recommendations.sql` | Creates stored recommendation rows per user. |
-| `supabase/migrations/20260524000001_create_recipes.sql` | Creates `recipes` and historical interaction tables. |
-| `supabase/migrations/20260524000002_create_recipe_images.sql` | Creates `recipe_images` cache table. |
-| `supabase/migrations/20260524000003_add_historical_interactions_unique_key.sql` | Deduplicates and constrains historical interactions. |
-| `supabase/migrations/20260524000004_create_recommender_artifacts_bucket.sql` | Creates private storage for recommender artifacts. |
-| `supabase/migrations/20260524000005_allow_liked_recipe_interactions.sql` | Extends allowed recipe interaction types. |
-| `supabase/migrations/20260601000000_add_category_recommendation_columns.sql` | Adds category-specific recommendation columns. |
-| `supabase/migrations/20260602000000_add_recommendation_category_rows.sql` | Adds category recommendation row support. |
-| `supabase/migrations/20260702000000_create_non_nhanes_recommender_tables.sql` | Adds recommender tables for ingredients, restrictions, meal logs, health reports, exposures, risks, candidates, and model predictions. |
-| `supabase/migrations/20260705000000_create_cooklists.sql` | Adds user cooklists and cooklist recipe memberships with a default Liked list. |
-| `supabase/migrations/20260706000000_add_meal_images_and_personal_cooklist_recipes.sql` | Adds optional meal-log images and personal recipe metadata for cooklist recipes. |
-| `supabase/migrations/20260706000001_create_user_uploads_bucket.sql` | Creates the Supabase Storage bucket and object policies for user-uploaded meal and personal recipe images. |
-| `supabase/migrations/20260707000000_add_cookbook_recommendation_columns.sql` | Adds stored cookbook-only recommendation arrays to `user_recommendations`. |
-| `supabase/migrations/20260708000000_add_meal_log_nutrition.sql` | Adds optional meal-log calories, protein, fat, source, and estimate confidence fields for nutrition tracking. |
-| `supabase/migrations/20260709000000_create_tamar_tree_tables.sql` | Adds user-owned Tamar tree run and reward-event tables for the logging habit loop. |
+| `supabase/migrations/` | Source of truth for the full database. Apply the timestamped migrations in filename order to create recipe, interaction, restriction, diary, recommendation, cookbook, Tamar tree, Storage, and supporting app data. |
+| `supabase/schema.sql` | Lightweight bootstrap snapshot for a subset of core tables. It does not replace the migration sequence for the current app. |
 
 Use the project Supabase skill and the design document before changing schema, RLS, recommendation storage, or API-facing tables.
 
@@ -209,7 +201,7 @@ Tree state is an engagement overlay only. It reads meal/check-in activity and wr
 
 ## Authentication and Database Setup
 
-This app uses Supabase for user accounts, Google/Facebook OAuth, and recipe interaction history.
+This app uses Supabase for authentication, application data, recommendation state, and private Storage.
 
 1. Create a Supabase project.
 2. For the full current app, run the migrations in `supabase/migrations` in filename order. The complete local sequence is listed in [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md).
@@ -228,6 +220,8 @@ For AI chat, food-photo analysis, image filling, and recommender refreshes, also
 6. Add your local URL, usually `http://127.0.0.1:8080` or `http://localhost:8080`, to the allowed redirect URLs.
 
 Recipe interactions are stored in `recipe_interactions` so they can later become recommendation signals for the "Curated for You" section. Cookbook organization lives in `cooklists` and `cooklist_recipes`; adding a catalog recipe to the default Liked cooklist also records a `saved` interaction. Personal recipes can be stored in cooklists without creating catalog recommendation events. CookBook sidebar recommendations are stored separately on `user_recommendations` and are limited to recipes already in the user's cooklists.
+
+Strict allergies, sensitivities, forbidden ingredients, and diet restrictions are user-owned safety constraints applied across recommendation surfaces. Recent chat history is kept per account in the same browser so it can survive a refresh without becoming recommender evidence.
 
 The freemium UI treats signed-in users as `Sapling` by default and gives them 30 days of access to Canopy+ features based on the Supabase auth user's `created_at` timestamp. Canopy+ status is read from `app_metadata` rather than user-editable metadata; supported flags include `canopy_plus`, `tamar_canopy`, or plan-like values such as `canopy_plus` on `tamar_plan`, `plan`, or `subscription_tier`. Current Canopy+ checkout buttons intentionally show a coming-soon payment message.
 

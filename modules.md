@@ -55,22 +55,24 @@
 ## Diary, Analysis, and Tamar Tree
 
 - Technology: React components, Supabase data helpers, Recharts, and deterministic tree-state logic.
-- Responsibilities: Let users log meals and feelings, review personal history, inspect pattern summaries, see possible trigger/easier foods, receive bounded recipe experiment suggestions, and maintain the Tamar tree habit loop.
+- Responsibilities: Let users log meals and feelings, add or remove strict forbidden foods, review personal history, inspect pattern summaries and current safety filters, see possible trigger/easier foods, receive bounded recipe experiment suggestions, and maintain the Tamar tree habit loop.
 - Interactions:
   - Diary writes meal logs and health reports through API bridges.
-  - Analysis reads meal, symptom, risk, recommendation, and recipe data without writing health conclusions.
+  - Diary manages the signed-in user's RLS-protected `user_restrictions`; Analysis presents the same rows read-only.
+  - Analysis reads meal, symptom, restriction, risk, recommendation, and recipe data without writing health conclusions.
   - Tamar tree reads food/check-in activity and writes only gamification state.
-- Source code: [src/lib/diary.ts](src/lib/diary.ts), [src/lib/analysis.ts](src/lib/analysis.ts), [src/lib/tamarTree.ts](src/lib/tamarTree.ts), [src/components/AnalysisScreen.tsx](src/components/AnalysisScreen.tsx), [src/components/TamarTreePanel.tsx](src/components/TamarTreePanel.tsx)
+- Source code: [src/lib/diary.ts](src/lib/diary.ts), [src/lib/analysis.ts](src/lib/analysis.ts), [src/lib/recommendationSafety.ts](src/lib/recommendationSafety.ts), [src/lib/tamarTree.ts](src/lib/tamarTree.ts), [src/components/AnalysisScreen.tsx](src/components/AnalysisScreen.tsx), [src/components/ForbiddenFoodsPanel.tsx](src/components/ForbiddenFoodsPanel.tsx), [src/components/TamarTreePanel.tsx](src/components/TamarTreePanel.tsx)
 
 ## Chat, Image Analysis, and Nutrition Estimates
 
-- Technology: Google Gemini, TypeScript API handlers, Supabase Storage, and structured app-data retrieval.
-- Responsibilities: Provide Tamar chat, retrieve bounded private context for signed-in users, analyze food photos as editable drafts, estimate nutrition values, and guide recipe feedback after a user confirms they ate a recommendation.
+- Technology: Google Gemini, TypeScript API handlers, per-account browser storage, Supabase Storage, and structured app-data retrieval.
+- Responsibilities: Provide Tamar chat, retain a bounded recent transcript across refreshes on the same device, retrieve bounded private context for signed-in users, analyze food photos as editable drafts, estimate nutrition values, and guide recipe feedback after a user confirms they ate a recommendation.
 - Interactions:
   - Chat recommendation requests present the same `user_recommendations` output used by Home.
+  - Chat transcript storage is scoped by authenticated user id and keeps at most 80 visible messages.
   - Food-photo analysis returns suggestions but does not write durable learning evidence by itself.
   - Nutrition estimates are editable tracking values, not medical conclusions.
-- Source code: [src/components/ChatScreen.tsx](src/components/ChatScreen.tsx), [api/generate.ts](api/generate.ts), [api/chat-rag-context.ts](api/chat-rag-context.ts), [api/analyze-food-image.ts](api/analyze-food-image.ts), [api/estimate-meal-nutrition.ts](api/estimate-meal-nutrition.ts)
+- Source code: [src/components/ChatScreen.tsx](src/components/ChatScreen.tsx), [src/components/ChatSessionProvider.tsx](src/components/ChatSessionProvider.tsx), [src/lib/chatHistory.ts](src/lib/chatHistory.ts), [api/generate.ts](api/generate.ts), [api/chat-rag-context.ts](api/chat-rag-context.ts), [api/analyze-food-image.ts](api/analyze-food-image.ts), [api/estimate-meal-nutrition.ts](api/estimate-meal-nutrition.ts)
 
 ## Data Ingestion and Storage
 

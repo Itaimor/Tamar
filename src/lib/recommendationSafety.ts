@@ -1,12 +1,36 @@
 import { supabase } from "@/lib/supabase";
 
 export type HardRestriction = {
+  id?: number | null;
+  user_id?: string | null;
   ingredient_name?: string | null;
   normalized_name?: string | null;
   restriction_type?: string | null;
   severity?: string | null;
   is_strict?: boolean | string | null;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
+
+export type HardRestrictionType =
+  | "allergy"
+  | "strict_sensitivity"
+  | "forbidden_ingredient"
+  | "diet_violation";
+
+export const HARD_RESTRICTION_TYPE_OPTIONS: ReadonlyArray<{
+  value: HardRestrictionType;
+  label: string;
+}> = [
+  { value: "forbidden_ingredient", label: "Forbidden food" },
+  { value: "allergy", label: "Allergy" },
+  { value: "strict_sensitivity", label: "Strict sensitivity" },
+  { value: "diet_violation", label: "Diet restriction" },
+];
+
+export const HARD_RESTRICTIONS_UPDATED_EVENT =
+  "tamar:hard-restrictions-updated";
 
 export type RecipeWithIngredients = {
   ingredients?: readonly string[] | string | null;
@@ -233,8 +257,11 @@ export const fetchActiveHardRestrictions = async (
 
   const { data, error } = await supabase
     .from("user_restrictions")
-    .select("ingredient_name,normalized_name,restriction_type,severity,is_strict")
-    .eq("user_id", userId);
+    .select(
+      "id,user_id,ingredient_name,normalized_name,restriction_type,severity,is_strict,notes,created_at,updated_at",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(
@@ -243,4 +270,79 @@ export const fetchActiveHardRestrictions = async (
   }
 
   return selectActiveHardRestrictions((data || []) as HardRestriction[]);
+};
+
+export const upsertHardRestrictions = async ({
+  userId,
+  ingredientNames,
+  restrictionType,
+  notes,
+}: {
+  userId: string;
+  ingredientNames: readonly string[];
+  restrictionType: HardRestrictionType;
+  notes?: string | null;
+}): Promise<string[]> => {
+  if (!supabase) {
+    throw new Error("Hard-restriction storage is unavailable.");
+  }
+
+  const normalizedNames = [
+    ...new Set(ingredientNames.map(normalizeIngredientName).filter(Boolean)),
+  ];
+  if (normalizedNames.length === 0) return [];
+
+  const updatedAt = new Date().toISOString();
+  const { error } = await supabase.from("user_restrictions").upsert(
+    normalizedNames.map((name) => ({
+      user_id: userId,
+      ingredient_name: name,
+      normalized_name: name,
+      restriction_type: restrictionType,
+      severity: "strict",
+      is_strict: true,
+      notes: notes?.trim() || null,
+      updated_at: updatedAt,
+    })),
+    { onConflict: "user_id,normalized_name,restriction_type" },
+  );
+
+  if (error) {
+    throw new Error(error.message || "The forbidden food could not be saved.");
+  }
+
+  return normalizedNames;
+};
+
+export const deleteHardRestriction = async (
+  userId: string,
+  restrictionId: number,
+): Promise<void> => {
+  if (!supabase) {
+    throw new Error("Hard-restriction storage is unavailable.");
+  }
+
+  const { data, error } = await supabase
+    .from("user_restrictions")
+    .delete()
+    .eq("id", restrictionId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "The forbidden food could not be removed.");
+  }
+  if (!data) {
+    throw new Error("Forbidden food not found.");
+  }
+};
+
+export const notifyHardRestrictionsUpdated = (userId: string) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(HARD_RESTRICTIONS_UPDATED_EVENT, {
+      detail: { userId },
+    }),
+  );
 };

@@ -9,6 +9,11 @@ import { useChatSession } from "@/components/ChatSessionProvider";
 import type { IbsTranscriptMessage, RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { useCanopyAccess } from "@/hooks/useCanopyAccess";
 import { classifyChatFoodEntry, isCancelChatFlowIntent } from "@/lib/chatFoodLogging";
+import {
+  extractExplicitAllergyNames,
+  notifyHardRestrictionsUpdated,
+  saveChatAllergies,
+} from "@/lib/chatRestrictions";
 import { createHealthReport, createMealLog } from "@/lib/diary";
 import {
   FoodImageAnalysis,
@@ -25,6 +30,10 @@ import {
   setRecipeCooklists,
 } from "@/lib/recipeInteractions";
 import { fetchDefaultRecipes, fetchRecipesByIds, type RecipeItem } from "@/lib/recipes";
+import {
+  fetchActiveHardRestrictions,
+  filterRecipesForHardRestrictions,
+} from "@/lib/recommendationSafety";
 import { supabase } from "@/lib/supabase";
 import {
   applyIbsCheckInToProfile,
@@ -116,8 +125,15 @@ const withMatchScores = (
     return score ? { ...recipe, match: `${Math.round(score * 100)}%` } : recipe;
   });
 
-const formatRecommendationMessage = (recipes: RecipeItem[], personalized: boolean) => {
+const formatRecommendationMessage = (
+  recipes: RecipeItem[],
+  personalized: boolean,
+  hasHardRestrictions = false,
+) => {
   if (recipes.length === 0) {
+    if (hasHardRestrictions) {
+      return "I could not find a recipe that I can verify as safe against your strict restrictions right now. I will not show an unverified fallback.";
+    }
     return "I could not find recipe recommendations yet. Try the Home page first so Tamar can load recipes, then ask me again.";
   }
 
@@ -285,6 +301,10 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setIsLoading(true);
 
     try {
+      const hardRestrictions = user
+        ? await fetchActiveHardRestrictions(user.id)
+        : [];
+
       if (user && session?.access_token) {
         await fetch("/api/refresh-recommendations", {
           method: "POST",
@@ -307,22 +327,106 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
 
         if (!error && data?.recommended_recipe_ids?.length > 0) {
           const recipes = await fetchRecipesByIds(data.recommended_recipe_ids as string[]);
+          const safeRecipes = filterRecipesForHardRestrictions(
+            withMatchScores(recipes, data.match_scores),
+            hardRestrictions,
+          );
           setMessages((prev) => [
             ...prev,
-            { role: "ai", text: formatRecommendationMessage(withMatchScores(recipes, data.match_scores), true) },
+            {
+              role: "ai",
+              text: formatRecommendationMessage(
+                safeRecipes,
+                true,
+                hardRestrictions.length > 0,
+              ),
+            },
           ]);
           return;
         }
       }
 
-      const fallbackRecipes = await fetchDefaultRecipes(5);
+      const fallbackRecipes = filterRecipesForHardRestrictions(
+        await fetchDefaultRecipes(user ? 20 : 5),
+        hardRestrictions,
+      ).slice(0, 5);
       setMessages((prev) => [
         ...prev,
-        { role: "ai", text: formatRecommendationMessage(fallbackRecipes, false) },
+        {
+          role: "ai",
+          text: formatRecommendationMessage(
+            fallbackRecipes,
+            false,
+            hardRestrictions.length > 0,
+          ),
+        },
       ]);
     } catch (error) {
       console.error("Chat recommendation error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: "I could not verify your current allergy and strict-restriction filters, so I will not show unverified recommendations right now. Please try again.",
+        },
+      ]);
       toast.error("I could not load recommendations right now.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExplicitAllergyMessage = async (
+    text: string,
+    allergyNames: string[],
+  ) => {
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputValue("");
+    setIbsTranscript(null);
+    setIsAwaitingPersonalRecipe(false);
+    setIsAwaitingFoodLog(false);
+    setRecipeFeedback(null);
+    setPendingCookbookAdd(null);
+    setPendingImageUrl("");
+    setPendingFoodImageAnalysis(null);
+
+    if (!user) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: "Please sign in so I can save that allergy and apply it to your recommendations. I have not saved it yet.",
+        },
+      ]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const savedNames = await saveChatAllergies(user.id, allergyNames);
+      notifyHardRestrictionsUpdated(user.id);
+      const label =
+        savedNames.length === 1
+          ? savedNames[0]
+          : savedNames.slice(0, -1).join(", ") + ` and ${savedNames.at(-1)}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: `Saved ${label} as ${savedNames.length === 1 ? "a strict allergy" : "strict allergies"}. I will exclude recipes containing ${savedNames.length === 1 ? "it" : "them"} from Home, CookBook, and chat recommendations.`,
+        },
+      ]);
+      toast.success("Allergy saved and recommendation filters updated.");
+    } catch (error) {
+      console.error("Chat allergy save error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: "I could not save that allergy, so I have not changed your recommendations. Please try again.",
+        },
+      ]);
+      toast.error("The allergy was not saved.");
     } finally {
       setIsLoading(false);
     }
@@ -809,6 +913,12 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
           ? "Food logging canceled. Nothing was added to your Diary."
           : "Okay, I stopped the current flow. I will not save anything else from it.",
       );
+      return;
+    }
+
+    const explicitAllergyNames = extractExplicitAllergyNames(text);
+    if (explicitAllergyNames.length > 0) {
+      await handleExplicitAllergyMessage(text, explicitAllergyNames);
       return;
     }
 

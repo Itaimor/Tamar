@@ -1,11 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  loadChatHistory,
+  saveChatHistory,
+  trimChatMessages,
+} from "@/lib/chatHistory";
+import type { ChatMessage } from "@/lib/chatHistory";
 
-export type ChatMessage = {
-  role: "ai" | "user";
-  text: string;
-};
+export type { ChatMessage } from "@/lib/chatHistory";
 
 export type IbsTranscriptMessage = {
   role: "assistant" | "user";
@@ -20,24 +23,6 @@ export type RecipeFeedbackRecipe = {
 export type RecipeFeedbackState = {
   recipe: RecipeFeedbackRecipe;
   step: "confirm" | "liked" | "feeling";
-};
-
-export const initialChatMessages: ChatMessage[] = [
-  {
-    role: "ai",
-    text: "Hello! I'm Tamar, your digestive health companion. How can I help you today? You can log a meal, ask about symptoms, or request an analysis of your recent history.",
-  },
-];
-
-const MAX_VISIBLE_CHAT_MESSAGES = 80;
-
-const trimChatMessages = (nextMessages: ChatMessage[]) => {
-  if (nextMessages.length <= MAX_VISIBLE_CHAT_MESSAGES) return nextMessages;
-
-  return [
-    initialChatMessages[0],
-    ...nextMessages.slice(-(MAX_VISIBLE_CHAT_MESSAGES - 1)),
-  ];
 };
 
 type ChatSessionContextValue = {
@@ -57,7 +42,7 @@ const ChatSessionContext = createContext<ChatSessionContextValue | undefined>(un
 
 export const ChatSessionProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
-  const [messages, setRawMessages] = useState<ChatMessage[]>(initialChatMessages);
+  const [messages, setRawMessages] = useState<ChatMessage[]>(() => loadChatHistory(user?.id));
   const [isLoading, setIsLoading] = useState(false);
   const [ibsTranscript, setIbsTranscript] = useState<IbsTranscriptMessage[] | null>(null);
   const [isAwaitingFoodLog, setIsAwaitingFoodLog] = useState(false);
@@ -71,12 +56,8 @@ export const ChatSessionProvider = ({ children }: { children: React.ReactNode })
   }, []);
 
   useEffect(() => {
-    setRawMessages(initialChatMessages);
-    setIsLoading(false);
-    setIbsTranscript(null);
-    setIsAwaitingFoodLog(false);
-    setRecipeFeedback(null);
-  }, [user?.id]);
+    saveChatHistory(user?.id, messages);
+  }, [messages, user?.id]);
 
   const value = useMemo(
     () => ({

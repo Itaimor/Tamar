@@ -68,7 +68,7 @@ Use this as the master all-features checklist. Testers should mark every row as 
 | CookBook catalog recipes | Saved recipe display, catalog detail navigation, started interaction, cooklist membership picker, unsave behavior. |
 | CookBook personal recipes | Manual personal recipe, selected cooklist, image attachment, Add recipe from image, photo suggestion, preview modal, no catalog interaction insertion. |
 | CookBook recommendations | Stored cookbook recommendation arrays, local fallback, personal recipe ranking, desktop sidebar, mobile placement. |
-| Chat surface | Full chat page, docked chat, chips, message history, typing state, camera attach availability, long message wrapping. |
+| Chat surface | Full chat page, docked chat, chips, per-account refresh-restored message history, typing state, camera attach availability, long message wrapping. |
 | Chat recommendations | Recommend Me chip, natural-language recommendation request, personalized row usage, fallback recommendations, no invented catalog ranking. |
 | Chat food logging | Text meal log, image-assisted meal log, unrecognized image, add-to-CookBook prompt, cooklist creation, Diary visibility. |
 | Chat personal recipe | Add Recipe chip, labeled text parsing, cooklist target, image as recipe image, CookBook visibility, no meal log. |
@@ -79,7 +79,8 @@ Use this as the master all-features checklist. Testers should mark every row as 
 | Diary image flows | Normal meal image attachment, Add meal from image, draft suggestion, Use button, remove image, upload failure, premium gate. |
 | Diary nutrition | Manual calories/protein/fat, Auto calculate, catalog source, Gemini estimate source, edit nutrition, expired Sapling lock. |
 | Diary check-ins | Symptom type, severity slider, no-symptom toggle, notes, save, timeline display, tree compost. |
-| Analysis | Empty state, loading, error, stats, foods to watch, easier foods, strongest signal, recent pattern chart, nutrition chart, content-based testing suggestions. |
+| Diary forbidden foods | Add allergy/sensitivity/forbidden ingredient/diet restriction, normalize plurals, prevent duplicates, remove with confirmation, recommendation refresh. |
+| Analysis | Empty state, loading, error, stats, read-only forbidden foods, foods to watch, easier foods, strongest signal, recent pattern chart, nutrition chart, content-based testing suggestions. |
 | Tamar Record | Current tree state, best run, best streak, reward count, replant history, read-only behavior. |
 | Sapling and Canopy+ | Active Sapling, expired Sapling, Canopy+ metadata, reminder throttling, premium lock panels, Pricing page, payment-coming-soon dialog. |
 | Tamar tree | Water, compost, same-day growth once, streak, death after seven missed days, replant, milestones at 7/30/100/200/300, reward toasts. |
@@ -539,6 +540,10 @@ Route: `/app?tab=chat`; docked chat from floating button or recipe card.
 - [ ] Chips include Recommend Me, Log Food, Add Recipe, How I Feel, and Analyze my Lunch.
 - [ ] Messages scroll to latest.
 - [ ] Long messages wrap without clipping.
+- [ ] Refresh restores the signed-in user's recent chat transcript on the same browser.
+- [ ] Signing into a different account on the same browser does not show the previous account's transcript.
+- [ ] Chat history remains bounded to the latest 80 visible messages.
+- [ ] If browser storage is unavailable or invalid, Chat opens with the normal greeting and remains usable.
 - [ ] Docked chat can be closed.
 - [ ] Full chat page does not also show a docked chat.
 
@@ -646,6 +651,17 @@ Route: `/app?tab=diary`
 - [ ] Save check-in triggers Tamar tree compost state.
 - [ ] Copy frames this as tracking, not diagnosis.
 
+### Forbidden Foods
+
+- [ ] Add `Potatoes` as a forbidden food and verify it is displayed as `Potato`.
+- [ ] Add an allergy, strict sensitivity, and diet restriction and verify each reason label.
+- [ ] Adding the same normalized food and reason twice does not create a duplicate.
+- [ ] Removing a forbidden food requires confirmation.
+- [ ] After removal, the item disappears from Diary and Analysis.
+- [ ] Adding or removing an item refreshes open Home/CookBook restriction snapshots.
+- [ ] A recipe containing an active forbidden food does not appear in Home or Chat fallbacks.
+- [ ] A restriction-query failure shows a verification error, not an empty-list claim.
+
 ### Recent Diary
 
 - [ ] Recent diary groups entries by day.
@@ -672,6 +688,7 @@ Route: `/app?tab=analysis`
 
 - [ ] Header says this is a pattern view, not a diagnosis.
 - [ ] Stats show meals logged, how-you-felt notes, rougher notes, and easier notes.
+- [ ] Forbidden foods shows the same active restrictions as Diary and has no edit controls.
 - [ ] Foods to watch use friendly labels such as Strong signal, Worth watching, or Early clue.
 - [ ] Foods that seem easier use friendly labels such as Usually goes well.
 - [ ] No section says a user is definitely sensitive/allergic/intolerant unless explicit restriction data exists.

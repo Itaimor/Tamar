@@ -29,13 +29,90 @@ const getTreeScale = (level: number) => {
 
 const backgroundForZone = (state: TamarTreeState) => {
   if (state.status === "dead") return "from-[#efe5d3] via-[#c5b293] to-[#8a6b3f]";
-  if (state.zone === "ufo") return "from-[#e8ecd9] via-[#c7d5bb] to-[#6f8269]";
+  if (state.zone === "ufo") return "from-[#061522] via-[#12424a] to-[#53785f]";
   if (state.zone === "space") return "from-[#e9ead8] via-[#b9c9ac] to-[#536451]";
   if (state.zone === "clouds") return "from-[#f8f2e5] via-[#d5e8df] to-[#9baa8d]";
   if (state.zone === "canopy") return "from-[#f8f2e5] via-[#d9dfbf] to-[#6f8269]";
   if (state.zone === "oasis") return "from-[#fbf7ec] via-[#d7d3a5] to-[#8a6b3f]";
   return "from-[#fbf7ec] via-[#d8dcb9] to-[#9baa8d]";
 };
+
+const ufoStars = [
+  { left: "6%", top: "16%", size: 3, delay: 0.1 },
+  { left: "14%", top: "38%", size: 2, delay: 1.2 },
+  { left: "23%", top: "9%", size: 4, delay: 0.5 },
+  { left: "34%", top: "27%", size: 2, delay: 1.8 },
+  { left: "45%", top: "11%", size: 3, delay: 0.8 },
+  { left: "55%", top: "33%", size: 2, delay: 2.1 },
+  { left: "63%", top: "8%", size: 3, delay: 1.4 },
+  { left: "77%", top: "27%", size: 2, delay: 0.3 },
+  { left: "89%", top: "13%", size: 4, delay: 1.7 },
+  { left: "94%", top: "39%", size: 2, delay: 0.9 },
+];
+
+const AlienUfoScene = () => (
+  <div className="pointer-events-none absolute inset-0" aria-hidden="true" data-testid="alien-ufo-scene">
+    <div className="absolute -left-8 -top-10 h-44 w-44 rounded-full bg-[#74f7db]/10 blur-3xl" />
+    {ufoStars.map((star, index) => (
+      <motion.span
+        key={`${star.left}-${star.top}`}
+        className="absolute rounded-full bg-[#d9fff5] shadow-[0_0_7px_rgba(174,255,235,0.95)]"
+        style={{ left: star.left, top: star.top, width: star.size, height: star.size }}
+        animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.35, 0.8] }}
+        transition={{ duration: 2.4, delay: star.delay, repeat: Infinity, ease: "easeInOut" }}
+      />
+    ))}
+
+    <motion.div
+      className="absolute left-7 top-7 h-14 w-14 rounded-full border border-[#b9ffd9]/35 bg-gradient-to-br from-[#c9ffe5]/70 via-[#58bfa7]/45 to-[#173c4b]/80 shadow-[0_0_28px_rgba(108,244,209,0.25)]"
+      animate={{ rotate: 360 }}
+      transition={{ duration: 38, repeat: Infinity, ease: "linear" }}
+    >
+      <span className="absolute -inset-x-4 top-6 h-2 rotate-[-14deg] rounded-full border border-[#b9ffd9]/35 bg-[#7ce9ce]/15" />
+      <span className="absolute left-3 top-2 h-2 w-2 rounded-full bg-white/25" />
+    </motion.div>
+
+    <motion.div
+      className="absolute right-[6%] top-5 h-20 w-36"
+      animate={{ y: [0, -5, 0], rotate: [-1, 1, -1] }}
+      transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+    >
+      <div className="absolute left-1/2 top-0 h-10 w-16 -translate-x-1/2 overflow-hidden rounded-t-[2rem] border border-[#bcfff0]/55 bg-[#8ef7df]/25 shadow-[0_0_20px_rgba(112,255,220,0.45)] backdrop-blur-sm">
+        <span className="absolute left-1/2 top-2 h-6 w-5 -translate-x-1/2 rounded-[50%_50%_45%_45%] bg-[#b9f26f] shadow-[0_0_8px_rgba(185,242,111,0.8)]">
+          <span className="absolute left-1 top-2 h-1.5 w-1 rotate-[-18deg] rounded-full bg-[#102a2d]" />
+          <span className="absolute right-1 top-2 h-1.5 w-1 rotate-[18deg] rounded-full bg-[#102a2d]" />
+        </span>
+      </div>
+      <div className="absolute left-1/2 top-8 h-8 w-36 -translate-x-1/2 rounded-[50%] border border-[#c8fff1]/55 bg-gradient-to-b from-[#b8eadf] via-[#467d78] to-[#183844] shadow-[0_8px_18px_rgba(2,12,22,0.45),0_0_22px_rgba(91,255,218,0.35)]">
+        <span className="absolute bottom-1 left-5 h-2 w-2 rounded-full bg-[#ffe889] shadow-[0_0_9px_#ffe889]" />
+        <span className="absolute bottom-0.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[#7effd5] shadow-[0_0_10px_#7effd5]" />
+        <span className="absolute bottom-1 right-5 h-2 w-2 rounded-full bg-[#ff9ee5] shadow-[0_0_9px_#ff9ee5]" />
+      </div>
+      <div className="absolute left-1/2 top-[3.7rem] h-3 w-20 -translate-x-1/2 rounded-[50%] bg-[#85ffe2]/55 blur-[2px]" />
+    </motion.div>
+
+    <motion.div
+      className="absolute right-[12%] top-[4.7rem] h-44 w-28 origin-top bg-gradient-to-b from-[#91ffe4]/35 via-[#75fbd4]/12 to-transparent blur-[1px]"
+      style={{ clipPath: "polygon(38% 0, 62% 0, 100% 100%, 0 100%)" }}
+      animate={{ opacity: [0.35, 0.72, 0.35] }}
+      transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+    />
+
+    <div className="absolute bottom-10 left-8 flex items-end gap-5">
+      {[18, 11, 15].map((height, index) => (
+        <motion.span
+          key={height}
+          className="relative w-1 rounded-full bg-[#76f5c9]/70 shadow-[0_0_10px_rgba(118,245,201,0.8)]"
+          style={{ height }}
+          animate={{ scaleY: [0.86, 1.08, 0.86] }}
+          transition={{ duration: 2 + index * 0.4, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <span className="absolute -left-1.5 -top-2 h-3 w-4 rounded-[50%] bg-[#f58ce0] shadow-[0_0_12px_rgba(245,140,224,0.9)]" />
+        </motion.span>
+      ))}
+    </div>
+  </div>
+);
 
 const TamarVisual = ({ state }: { state: TamarTreeState }) => {
   const scale = getTreeScale(state.level);
@@ -44,22 +121,14 @@ const TamarVisual = ({ state }: { state: TamarTreeState }) => {
 
   return (
     <div className={`relative h-72 overflow-hidden rounded-lg border border-primary/15 bg-gradient-to-b ${backgroundForZone(state)} shadow-inner shadow-primary/10`}>
-      {state.zone === "ufo" && (
-        <motion.div
-          className="absolute right-8 top-8 h-7 w-24 rounded-full border border-primary/20 bg-white/45 shadow-[0_0_28px_rgba(111,130,105,0.24)]"
-          animate={{ y: [0, -6, 0] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <span className="absolute left-8 top-2 h-2 w-8 rounded-full bg-primary/25" />
-        </motion.div>
-      )}
-      {(state.zone === "clouds" || state.zone === "space" || state.zone === "ufo") && (
+      {state.zone === "ufo" && <AlienUfoScene />}
+      {(state.zone === "clouds" || state.zone === "space") && (
         <div className="absolute inset-x-0 top-12 flex justify-center gap-6 opacity-80">
           <span className="h-4 w-24 rounded-full bg-white/55" />
           <span className="mt-6 h-3 w-16 rounded-full bg-white/40" />
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 h-16 bg-primary/12" />
+      <div className={`absolute inset-x-0 bottom-0 h-16 ${state.zone === "ufo" ? "bg-[#102f2c]/55 shadow-[0_-12px_30px_rgba(95,255,206,0.08)]" : "bg-primary/12"}`} />
       <motion.div
         className="absolute bottom-10 left-1/2 h-44 w-40 origin-bottom -translate-x-1/2"
         animate={state.grownToday ? { scale: [scale, scale * 1.08, scale] } : { scale }}

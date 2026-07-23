@@ -133,6 +133,7 @@ In Supabase SQL Editor, run the SQL files in `supabase/migrations` in filename o
 20260707000000_add_cookbook_recommendation_columns.sql
 20260708000000_add_meal_log_nutrition.sql
 20260709000000_create_tamar_tree_tables.sql
+20260710000000_add_admin_reset_user_memory.sql
 ```
 
 You should end up with these important tables:

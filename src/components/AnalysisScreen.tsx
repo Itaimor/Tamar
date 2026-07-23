@@ -27,6 +27,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import { CanopyFeaturePanel } from "@/components/CanopyUpgradeDialog";
 import TamarRecordPanel from "@/components/TamarRecordPanel";
+import ForbiddenFoodsPanel from "@/components/ForbiddenFoodsPanel";
 import { useCanopyAccess } from "@/hooks/useCanopyAccess";
 import {
   AnalysisDashboard,
@@ -499,6 +500,8 @@ const AnalysisScreen = () => {
       )}
 
       <TamarRecordPanel userId={user.id} />
+
+      <ForbiddenFoodsPanel userId={user.id} />
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <section className="rounded-lg border border-white/10 bg-white/[0.035] p-5">

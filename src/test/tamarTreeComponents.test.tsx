@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import TamarTreePanel from "@/components/TamarTreePanel";
-import type { TamarTreeState } from "@/lib/tamarTree";
+import { fetchTamarTreeState, type TamarTreeState } from "@/lib/tamarTree";
 
 const state: TamarTreeState = {
   runId: 1,
@@ -53,5 +53,20 @@ describe("TamarTreePanel", () => {
     expect(screen.getByText("Watered")).toBeInTheDocument();
     expect(screen.getByText("Needs compost")).toBeInTheDocument();
     expect(screen.getByText("Level 4")).toBeInTheDocument();
+  });
+
+  it("renders the alien scene in the UFO grove", async () => {
+    vi.mocked(fetchTamarTreeState).mockResolvedValueOnce({
+      ...state,
+      level: 300,
+      zone: "ufo",
+      zoneLabel: "UFO grove",
+    });
+
+    render(<TamarTreePanel userId="user-1" />);
+
+    expect(await screen.findByTestId("alien-ufo-scene")).toBeInTheDocument();
+    expect(screen.getByText("UFO grove")).toBeInTheDocument();
+    expect(screen.getByText("Level 300")).toBeInTheDocument();
   });
 });

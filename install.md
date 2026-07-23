@@ -1,15 +1,23 @@
 # Installation Guide
 
+## Hosted Or Local
+
+If you only want to use Tamar, open the hosted online version shared by the project team. It already has the required server-side services and credentials configured, so you do not need your own Gemini or Supabase keys.
+
+This guide is for running the full project locally. Local AI features—including chat, food-photo analysis, and nutrition estimates—require your own Gemini API key, and account and recommendation features require your own Supabase project. Without a Gemini key, the non-AI parts of the local app may still load, but the AI-assisted features will not work.
+
 ## Prerequisites
 
 You will need:
 
 - Git.
 - Node.js LTS with `npm`.
-- Python 3.11 or 3.12.
+- Python 3.13 (the repository pins the current patch in `.python-version`).
 - A Supabase project with access to the SQL editor and Storage.
 - A Google Gemini API key for chat, food-photo analysis, and nutrition estimates.
 - Optional: a Pexels API key for filling the recipe image cache.
+
+On Windows, full local model training may also require Microsoft C++ build tools. The hosted or serving-only setup can use the smaller dependency set described in the detailed local setup guide.
 
 On Windows, if PowerShell cannot find `npm`, temporarily add Node to the shell path:
 
@@ -51,7 +59,7 @@ If `py` is unavailable, use `python -m venv ..\.venv` instead.
 Copy-Item .env.example .env.local
 ```
 
-5. Fill `.env.local`.
+5. Fill `.env.local`. Keep the recommender defaults from the template unless you intentionally want to tune them.
 
 ```env
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
@@ -62,18 +70,16 @@ GEMINI_TAMAR_API_KEY=your-server-only-gemini-api-key
 RECOMMENDER_SERVICE_URL=http://127.0.0.1:8000
 RECOMMENDER_SERVICE_SECRET=dev-secret
 
-SUPABASE_RECOMMENDER_BUCKET=recommender-artifacts
-SUPABASE_RECOMMENDER_ARTIFACT=cf_item_factors.npz
-RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS=600
-
 PEXELS_API_KEY=optional-pexels-key
 ```
 
-Keep `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_TAMAR_API_KEY`, and `RECOMMENDER_SERVICE_SECRET` private. Do not expose them in browser code or commit them.
+The copied template also contains artifact and model settings used by the Python workflows. Keep `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_TAMAR_API_KEY`, and `RECOMMENDER_SERVICE_SECRET` private. Do not expose them in browser code or commit them.
 
 6. Apply Supabase migrations.
 
-Run the SQL files in `supabase/migrations/` in filename order. The important resulting tables and buckets include `recipes`, `historical_interactions`, `recipe_interactions`, `cooklists`, `cooklist_recipes`, `meal_logs`, `health_reports`, `user_recommendations`, `recipe_images`, `user_ingredient_risks`, `user_ibs_ingredient_risks`, `user_tamar_tree_runs`, `user_tamar_tree_reward_events`, `user-uploads`, and `recommender-artifacts`.
+Run every SQL file in `supabase/migrations/` in filename order. Together they create the recipe and interaction data, user restrictions, diary and analysis data, recommendations, cooklists, Tamar tree state, Storage buckets, and supporting policies used by the current app. Do not use `supabase/schema.sql` as a replacement for the full sequence.
+
+In Supabase Authentication, enable the sign-in providers you intend to use and add the local Vite URL to the allowed redirect URLs.
 
 7. Seed recipe data for local testing.
 
@@ -93,7 +99,7 @@ cd RecommenderSys
 cd ..
 ```
 
-This reads Supabase data, trains LightFM when available, falls back to matrix factorization when needed, writes `RecommenderSys/artifacts/cf_item_factors.npz`, and uploads the artifact to Supabase Storage.
+This reads Supabase data, trains the configured preference model, prepares recommendation candidates, and publishes the resulting artifact to Supabase Storage. Optional symptom-risk training and model-tuning details are covered in the full local setup guide.
 
 9. Start the Python recommender service in one terminal.
 
@@ -132,7 +138,7 @@ npm run test
 npm run build
 ```
 
-Then sign in, open the homepage, view or save a recipe, log a meal or how-you-feel entry, and refresh recommendations. A healthy local loop stores interactions in Supabase, calls `/api/refresh-recommendations`, updates `user_recommendations`, and renders the `Curated for You` row.
+Then sign in, open the homepage, view or save a recipe, log a meal or how-you-feel entry, add a strict food restriction, and refresh recommendations. A healthy local loop stores the user-owned data in Supabase, refreshes `user_recommendations`, and keeps restricted recipes out of recommendation surfaces.
 
 For the full local flow, see [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_SETUP_WITH_RECOMMENDER.md).
 

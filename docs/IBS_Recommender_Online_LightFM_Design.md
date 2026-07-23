@@ -42,6 +42,7 @@ Implemented scope:
 - Route recommended-recipe eating evidence through a chat-guided recipe feedback flow before writing recipe-backed `meal_logs`.
 - Allow the chat to answer recommendation requests by reading the same `user_recommendations.recommended_recipe_ids` row that powers Home's `Curated for You` section, refreshing through `/api/refresh-recommendations` when the user is signed in.
 - Add structured retrieval-augmented chat context for signed-in users by retrieving recent meals, symptom check-ins, restrictions, personalized ingredient signals, recent recipe activity, and current Curated for You recipes before Gemini answers general chat.
+- Persist explicit first-person allergy statements from general chat as strict `user_restrictions` rows before any Gemini response, then notify open recommendation screens to reload their hard-filter snapshot.
 - Add the `How I Feel` chat flow before `Analyze my Lunch`.
 - Add recommender tables for ingredients, restrictions, meal logs, health reports, exposures, personalized ingredient risks, candidate recipes, model predictions, and IBS population priors.
 - Store offline preference candidates in `public.user_candidate_recipes`.
@@ -51,6 +52,7 @@ Implemented scope:
 - Support immediate meal-log and health-report updates through the Python recommender service.
 - Support optional offline symptom-risk model training in `RecommenderSys/train_symptom_model.py`.
 - Show a user-facing Diary page for logging meals and how the user feels.
+- Let signed-in users add and remove strict allergies, sensitivities, forbidden ingredients, and diet restrictions from a Diary `Forbidden foods` panel, and show the same active safety filters read-only in Analysis.
 - Allow the Diary to search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline, and to add food-history entries from Recent diary into cooklists.
 - Show a user-facing Analysis page that summarizes possible trigger foods, easier foods, recent meal/symptom patterns, and next-step suggestions from the same risk and logging tables; its next-step cards may use lightweight content-based matching over already recommended recipes to suggest a recipe experiment.
 - Allow meal logs created from the Diary, chat food logging, or recipe-feedback chat to carry an optional uploaded image stored in Supabase Storage and referenced by `image_url`.
@@ -446,7 +448,7 @@ This creates initial suspected risk scores before the system has enough personal
 
 # 3. User Input Types
 
-The system receives three main types of input.
+The system receives four main types of input.
 
 ---
 
@@ -535,7 +537,48 @@ For recommended recipes, the play/start action should open a chat-guided feedbac
 
 ---
 
-## 3.2 Meal Logs
+## 3.2 Strict Restrictions And Forbidden Foods
+
+Explicit allergies, strict sensitivities, forbidden ingredients, and diet
+restrictions are stored in `user_restrictions`. They are safety constraints,
+not preference dislikes and not learned symptom-risk evidence.
+
+Users can manage these rows from the Diary `Forbidden foods` panel. Analysis
+shows the same active rows read-only so users can see which hard filters are
+currently protecting their recommendations. Chat may also create allergy rows
+from unambiguous first-person allergy statements.
+
+Adding or removing a row notifies open Home and CookBook screens to reload
+their restriction snapshot. Cached recommendation arrays, general fallback
+recipes, and Chat recommendation results still reapply the active restrictions
+before display. If the restriction list cannot be verified, the UI must show an
+error rather than claiming that no forbidden foods are saved.
+
+```text
+user_restrictions
+-----------------
+id
+user_id
+ingredient_name
+normalized_name
+restriction_type
+severity
+is_strict
+notes
+created_at
+updated_at
+```
+
+The table remains user-owned and RLS-protected. Diary mutations use the
+signed-in browser session and the existing uniqueness key:
+
+```text
+(user_id, normalized_name, restriction_type)
+```
+
+---
+
+## 3.3 Meal Logs
 
 Meal logs describe what the user actually ate.
 
@@ -603,7 +646,7 @@ User consumed ingredient X at time T.
 
 ---
 
-## 3.3 Health Reports
+## 3.4 Health Reports
 
 Health reports describe symptoms after eating.
 
@@ -645,7 +688,7 @@ The Diary page creates `health_reports` through `/api/health-report`. The chat-b
 
 ---
 
-## 3.4 Chat IBS Check-Ins As Diary Input
+## 3.5 Chat IBS Check-Ins As Diary Input
 
 The chat `How I Feel` flow asks for symptoms plus foods eaten in three windows:
 
@@ -1988,8 +2031,9 @@ Flow:
 1. If the user is signed in, call POST /api/refresh-recommendations with the user id.
 2. Read the user's `user_recommendations.recommended_recipe_ids` and `match_scores` row.
 3. Fetch the recipe rows for those ids using the same recipe mapping path as Home.
-4. Format the top recipes as a concise chat response.
-5. If no personalized row is available, fall back to general default recipes.
+4. Reapply the current user's hard restrictions to fetched recipe rows so cached arrays cannot bypass a newly saved allergy.
+5. Format the top safe recipes as a concise chat response.
+6. If no personalized row is available, hard-filter a bounded general fallback pool before displaying it. If restriction state cannot be loaded, or no fallback can be verified as safe, fail closed instead of showing unverified recipes.
 ```
 
 The chat recommendation response is a presentation layer over the existing Curated for You output. It must not create a separate ranking algorithm or call Gemini to invent catalog recommendations. Eating a recommended recipe still requires the chat-guided feedback flow in section 15.7 before writing meal or health evidence.
@@ -2017,7 +2061,7 @@ near-duplicate recipes, such as several variants of the same dish.
 
 ## 15.9 General Chat RAG Context
 
-General Tamar chat uses a bounded structured retrieval context when the user is signed in and sends a valid Supabase session token to `/api/generate`.
+General Tamar chat uses a bounded structured retrieval context when the user is signed in and sends a valid Supabase session token to `/api/generate`. Before that read-only generation path, the client recognizes unambiguous first-person allergy statements (for example, "I'm allergic to potatoes"), stores normalized strict allergy rows through the signed-in user's RLS-protected Supabase session, and refreshes open recommendation views. Negated, uncertain, hypothetical, question-form, and third-party allergy mentions are not persisted automatically.
 
 Retrieved context comes from existing app tables only:
 
@@ -2045,7 +2089,7 @@ Rules:
 5. If context is missing or incomplete, say so briefly instead of fabricating user history.
 ```
 
-This is the first Tamar RAG layer. It is intentionally structured retrieval over app data rather than an embedding/vector knowledge base. A later vetted IBS education corpus may add semantic retrieval, but the recommender remains the source of truth for ranked recipes.
+The allergy-intent write is a deterministic safety action outside Gemini/RAG; the RAG generation path itself remains read-only. This is the first Tamar RAG layer. It is intentionally structured retrieval over app data rather than an embedding/vector knowledge base. A later vetted IBS education corpus may add semantic retrieval, but the recommender remains the source of truth for ranked recipes.
 
 ---
 

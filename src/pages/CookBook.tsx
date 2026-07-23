@@ -32,6 +32,7 @@ import { uploadUserImage } from "@/lib/imageUploads";
 import { supabase } from "@/lib/supabase";
 import {
   fetchActiveHardRestrictions,
+  HARD_RESTRICTIONS_UPDATED_EVENT,
   HardRestriction,
   isRecipeAllowedByHardRestrictions,
 } from "@/lib/recommendationSafety";
@@ -133,6 +134,7 @@ const CookBook = () => {
     restrictions: HardRestriction[];
   } | null>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [restrictionRefreshKey, setRestrictionRefreshKey] = useState(0);
   const [personalPreviewRecipe, setPersonalPreviewRecipe] = useState<CooklistMembership | null>(null);
   const [editingCooklist, setEditingCooklist] = useState<Cooklist | null>(null);
   const [editingCooklistName, setEditingCooklistName] = useState("");
@@ -142,6 +144,24 @@ const CookBook = () => {
   const [dragOverCooklistId, setDragOverCooklistId] = useState<number | null>(null);
   const personalRecipeFromImageInputRef = useRef<HTMLInputElement>(null);
   const cookbookRecommendationRequestRef = useRef(0);
+
+  useEffect(() => {
+    const reloadForRestrictionChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!user || detail?.userId !== user.id) return;
+      setRestrictionRefreshKey((key) => key + 1);
+    };
+
+    window.addEventListener(
+      HARD_RESTRICTIONS_UPDATED_EVENT,
+      reloadForRestrictionChange,
+    );
+    return () =>
+      window.removeEventListener(
+        HARD_RESTRICTIONS_UPDATED_EVENT,
+        reloadForRestrictionChange,
+      );
+  }, [user]);
 
   const getPersonalRecipeDetails = (item: CooklistMembership): RecipeItem => ({
     id: 0,
@@ -468,7 +488,7 @@ const CookBook = () => {
         cookbookRecommendationRequestRef.current += 1;
       }
     };
-  }, [user, session?.access_token, authLoading]);
+  }, [user, session?.access_token, authLoading, restrictionRefreshKey]);
 
   const handleRecipeUse = async (recipe: RecipeItem) => {
     if (user) {
