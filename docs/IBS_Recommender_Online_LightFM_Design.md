@@ -825,6 +825,16 @@ a co-located request cannot observe a partial or unpublished archive.
 
 Recipe metadata embedded for online risk scoring carries aligned presence flags. Unknown nutrition, time, step count, ingredient count, or ingredients remains missing after artifact loading instead of being converted into a misleading observed zero.
 
+The production serving path does not materialize the artifact's complete
+100,000-recipe metadata arrays. It keeps the hybrid factors, biases, IDs, and
+precomputed flavor centroid in a process-level float32 cache keyed by the exact
+artifact file identity, then fetches real metadata only for the bounded
+generation-matched candidate and cookbook IDs. The bounded metadata cache has a
+TTL and item cap. This preserves the same risk inputs while preventing repeated
+requests or concurrent cold requests from duplicating the full artifact in
+memory on a small service instance. Full embedded-metadata loading remains
+available to training, validation, and local diagnostic workflows.
+
 This score should not be used alone.
 
 A highly preferred food may still be ranked low if it has high predicted health risk.

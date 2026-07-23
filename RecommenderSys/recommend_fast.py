@@ -13,6 +13,7 @@ import argparse
 import os
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -69,7 +70,13 @@ ONLINE_SCORE_DELTA_LIMIT = float(
     os.getenv("RECOMMENDER_ONLINE_SCORE_DELTA_LIMIT", "1.0")
 )
 
-_RECIPES_META_CACHE: dict = {"data": None, "loaded_at": None}
+_RECIPES_META_CACHE: dict = {
+    "data": None,
+    "loaded_at": None,
+    "complete_catalog": False,
+}
+_ARTIFACT_MEMORY_CACHE: dict = {"identity": None, "data": None}
+_ARTIFACT_MEMORY_CACHE_LOCK = threading.Lock()
 _SYMPTOM_ARTIFACT_DOWNLOAD: dict = {"attempted_at": None}
 
 
@@ -126,7 +133,11 @@ def download_artifact_from_storage(
             temporary_file.write(data)
 
         # Fully parse and validate before atomically publishing the new file.
-        load_cf_artifact(temporary_path, populate_metadata_cache=False)
+        load_cf_artifact(
+            temporary_path,
+            populate_metadata_cache=False,
+            load_metadata=False,
+        )
         temporary_path.replace(artifact_path)
         return True
     except Exception as e:
@@ -189,19 +200,52 @@ def download_symptom_artifact_from_storage(
 def load_cf_artifact(
     artifact_path: Path = ARTIFACT_PATH,
     populate_metadata_cache: bool = True,
+    load_metadata: bool = True,
+    cache_in_memory: bool = False,
 ) -> dict:
     if not artifact_path.exists():
         raise FileNotFoundError(
             f"CF artifact not found at {artifact_path}. Run recommend_batch.py once to train and save it."
         )
 
-    # Materialize every array while the archive is open. This is required for
-    # Windows-safe atomic replacement after validating a downloaded temp file.
+    artifact_stat = artifact_path.stat()
+    cache_identity = (
+        str(artifact_path.resolve()),
+        artifact_stat.st_mtime_ns,
+        artifact_stat.st_size,
+        load_metadata,
+        populate_metadata_cache,
+    )
+    if cache_in_memory:
+        # The recursive uncached load keeps the expensive archive read under a
+        # process-wide lock. Concurrent first requests cannot materialize
+        # duplicate 100k-item factor matrices and exceed a small host's memory.
+        with _ARTIFACT_MEMORY_CACHE_LOCK:
+            if _ARTIFACT_MEMORY_CACHE["identity"] == cache_identity:
+                return _ARTIFACT_MEMORY_CACHE["data"]
+            loaded = load_cf_artifact(
+                artifact_path,
+                populate_metadata_cache=populate_metadata_cache,
+                load_metadata=load_metadata,
+                cache_in_memory=False,
+            )
+            _ARTIFACT_MEMORY_CACHE["identity"] = cache_identity
+            _ARTIFACT_MEMORY_CACHE["data"] = loaded
+            return loaded
+
+    # Materialize selected arrays while the archive is open. Serving excludes
+    # the large meta_* object arrays and queries only the bounded candidate
+    # recipes; training/tests can still request the complete embedded metadata.
     with np.load(artifact_path, allow_pickle=True) as archive:
-        artifact = {name: archive[name] for name in archive.files}
+        selected_names = [
+            name
+            for name in archive.files
+            if load_metadata or not name.startswith("meta_")
+        ]
+        artifact = {name: archive[name] for name in selected_names}
     recipe_ids = artifact["recipe_ids"].astype(str)
-    item_factors = artifact["item_factors"].astype(float)
-    item_biases = artifact["item_biases"].astype(float)
+    item_factors = artifact["item_factors"].astype(np.float32, copy=False)
+    item_biases = artifact["item_biases"].astype(np.float32, copy=False)
     global_mean_values = np.asarray(artifact["global_mean"], dtype=float).reshape(-1)
     if global_mean_values.size != 1:
         raise ValueError("CF artifact global_mean must contain exactly one value.")
@@ -221,7 +265,6 @@ def load_cf_artifact(
     backend = str(_artifact_scalar(artifact, "backend", "unknown"))
     trained_at = _artifact_scalar(artifact, "trained_at")
     model_name = _artifact_scalar(artifact, "model_name")
-    artifact_stat = artifact_path.stat()
     result = {
         "artifact_version": artifact_version,
         "backend": backend,
@@ -256,8 +299,14 @@ def load_cf_artifact(
         )
     if learned_keys.issubset(artifact):
         learned_user_ids = artifact["learned_user_ids"].astype(str)
-        learned_user_factors = artifact["learned_user_factors"].astype(float)
-        learned_user_biases = artifact["learned_user_biases"].astype(float)
+        learned_user_factors = artifact["learned_user_factors"].astype(
+            np.float32,
+            copy=False,
+        )
+        learned_user_biases = artifact["learned_user_biases"].astype(
+            np.float32,
+            copy=False,
+        )
         learned_users_are_valid = (
             learned_user_factors.ndim == 2
             and learned_user_factors.shape[0] == len(learned_user_ids)
@@ -291,7 +340,10 @@ def load_cf_artifact(
 
     # Load precomputed flavor centroid if present
     if "flavor_centroid" in artifact:
-        result["flavor_centroid"] = artifact["flavor_centroid"].astype(float)
+        result["flavor_centroid"] = artifact["flavor_centroid"].astype(
+            np.float32,
+            copy=False,
+        )
 
     # Load recipe metadata if present and populate in-memory cache
     if "meta_recipe_ids" in artifact:
@@ -385,6 +437,7 @@ def load_cf_artifact(
             if populate_metadata_cache:
                 _RECIPES_META_CACHE["data"] = recipes_meta
                 _RECIPES_META_CACHE["loaded_at"] = datetime.now(timezone.utc)
+                _RECIPES_META_CACHE["complete_catalog"] = True
                 print(
                     f"[Info] Loaded {len(recipes_meta):,} recipe metadata "
                     "items from local CF artifact."
@@ -785,28 +838,41 @@ def recipes_meta_cache_ttl_seconds() -> int:
     return int(os.getenv("RECOMMENDER_RECIPES_META_TTL_SECONDS", "600"))
 
 
-def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: set[str] | None = None) -> dict[str, dict]:
+def fetch_recipes_metadata(
+    supabase: Client,
+    force: bool = False,
+    needed_ids: set[str] | None = None,
+) -> dict[str, dict]:
     """Return actual catalog metadata used by category and health scoring.
 
-    If the metadata was already populated from the artifact, returns the cache.
-    Otherwise, if needed_ids is provided, queries Supabase only for those IDs (fallback).
+    If needed_ids is provided, queries and caches only those candidate recipes.
+    A complete artifact-populated cache remains supported for local workflows.
     If needed_ids is not provided, does paginated query over all recipes (legacy fallback).
     """
     now = datetime.now(timezone.utc)
     cached_at = _RECIPES_META_CACHE["loaded_at"]
-    if (
+    cache_is_fresh = (
         not force
         and cached_at is not None
+        and now - cached_at < timedelta(seconds=recipes_meta_cache_ttl_seconds())
         and _RECIPES_META_CACHE["data"] is not None
-    ):
-        return _RECIPES_META_CACHE["data"]
+    )
 
-    # If needed_ids is provided and cache is not loaded, fetch only the needed recipes
     if needed_ids:
-        data = dict(_RECIPES_META_CACHE["data"]) if _RECIPES_META_CACHE["data"] is not None else {}
-        ids_to_fetch = [rid for rid in needed_ids if rid not in data]
+        normalized_ids = {str(recipe_id) for recipe_id in needed_ids}
+        if cache_is_fresh and _RECIPES_META_CACHE["complete_catalog"]:
+            return _RECIPES_META_CACHE["data"]
+        data = (
+            dict(_RECIPES_META_CACHE["data"])
+            if cache_is_fresh and _RECIPES_META_CACHE["data"] is not None
+            else {}
+        )
+        ids_to_fetch = [rid for rid in normalized_ids if rid not in data]
         if ids_to_fetch:
-            print(f"[Info] Querying metadata for {len(ids_to_fetch)} specific recipe IDs from Supabase (fallback)...")
+            print(
+                f"[Info] Querying metadata for {len(ids_to_fetch)} "
+                "specific recipe IDs from Supabase..."
+            )
             chunk_size = 200
             fetched_rows = []
             for i in range(0, len(ids_to_fetch), chunk_size):
@@ -824,10 +890,27 @@ def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: se
                     fetched_rows.extend(response.data or [])
                 except Exception as exc:
                     print(f"[Warning] Failed to fetch metadata chunk: {exc}")
-            
+
             for row in fetched_rows:
                 data[str(row["id"])] = row
+
+        max_cached = max(
+            CANDIDATE_FETCH_LIMIT,
+            int(os.getenv("RECOMMENDER_RECIPES_META_CACHE_MAX_ITEMS", "2000")),
+        )
+        if len(data) > max_cached:
+            data = {
+                recipe_id: data[recipe_id]
+                for recipe_id in normalized_ids
+                if recipe_id in data
+            }
+        _RECIPES_META_CACHE["data"] = data
+        _RECIPES_META_CACHE["loaded_at"] = now
+        _RECIPES_META_CACHE["complete_catalog"] = False
         return data
+
+    if cache_is_fresh and _RECIPES_META_CACHE["complete_catalog"]:
+        return _RECIPES_META_CACHE["data"]
 
     print("[Warning] Fetching all 100k recipes' metadata from Supabase (legacy fallback)...")
     rows: list[dict] = []
@@ -853,6 +936,7 @@ def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: se
     data = {str(row["id"]): row for row in rows}
     _RECIPES_META_CACHE["data"] = data
     _RECIPES_META_CACHE["loaded_at"] = now
+    _RECIPES_META_CACHE["complete_catalog"] = True
     return data
 
 
@@ -1304,7 +1388,11 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     supabase = load_supabase_client()
     download_artifact_from_storage(supabase)
     download_symptom_artifact_from_storage(supabase)
-    artifact = load_cf_artifact()
+    artifact = load_cf_artifact(
+        populate_metadata_cache=False,
+        load_metadata=False,
+        cache_in_memory=True,
+    )
 
     raw_interactions = fetch_user_interactions(supabase, user_id)
     learned_user_vector, learned_user_bias = get_learned_user_state(user_id, artifact)

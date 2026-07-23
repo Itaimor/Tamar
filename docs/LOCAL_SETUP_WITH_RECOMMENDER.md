@@ -92,6 +92,7 @@ SUPABASE_RECOMMENDER_BUCKET=recommender-artifacts
 SUPABASE_RECOMMENDER_ARTIFACT=cf_item_factors.npz
 SUPABASE_SYMPTOM_MODEL_ARTIFACT=xgboost_symptom_model.pkl
 RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS=600
+RECOMMENDER_RECIPES_META_CACHE_MAX_ITEMS=2000
 RECOMMENDER_SYMPTOM_ARTIFACT_CACHE_TTL_SECONDS=600
 RECOMMENDER_HISTORICAL_POSITIVE_MIN_RATING=4
 RECOMMENDER_ONLINE_VECTOR_WEIGHT=0.35
@@ -288,6 +289,9 @@ After setup, the loop is:
 2. The app inserts a row into `recipe_interactions`.
 3. Homepage refresh calls `/api/refresh-recommendations`.
 4. The Python service loads the saved preference artifact and, when present, the symptom-risk artifact.
+   The serving process caches only the float32 model arrays and fetches recipe
+   metadata for the bounded candidate/cookbook IDs; it does not expand all
+   embedded catalog metadata into RAM.
 5. For LightFM, it starts with the learned batch user representation and blends in only positive interactions newer than the artifact's training boundary. The online influence scales with the amount of new evidence, up to the configured maximum.
 6. It fetches the stored candidate set, fails closed on unavailable hard-restriction data, removes forbidden recipes before risk scoring, and evaluates the remaining candidates with real recipe metadata.
 7. It writes the risk-reranked Home and CookBook arrays to `user_recommendations`.
@@ -340,6 +344,7 @@ SUPABASE_RECOMMENDER_BUCKET
 SUPABASE_RECOMMENDER_ARTIFACT
 SUPABASE_SYMPTOM_MODEL_ARTIFACT
 RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS
+RECOMMENDER_RECIPES_META_CACHE_MAX_ITEMS
 RECOMMENDER_SYMPTOM_ARTIFACT_CACHE_TTL_SECONDS
 RECOMMENDER_ONLINE_VECTOR_WEIGHT
 RECOMMENDER_ONLINE_VECTOR_FULL_STRENGTH

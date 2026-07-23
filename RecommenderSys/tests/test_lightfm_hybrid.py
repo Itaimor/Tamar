@@ -187,6 +187,36 @@ class FakePagedInteractionSupabase:
         return FakePagedInteractionQuery(self.pages, self.calls)
 
 
+class FakeRecipeMetadataQuery:
+    def __init__(self, rows: list[dict], calls: list[tuple]) -> None:
+        self.rows = rows
+        self.calls = calls
+        self.ids: set[str] = set()
+
+    def select(self, columns):
+        self.calls.append(("select", columns))
+        return self
+
+    def in_(self, column, values):
+        self.ids = {str(value) for value in values}
+        self.calls.append(("in", column, sorted(self.ids)))
+        return self
+
+    def execute(self):
+        matching = [row for row in self.rows if str(row["id"]) in self.ids]
+        return type("Response", (), {"data": matching})()
+
+
+class FakeRecipeMetadataSupabase:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.calls: list[tuple] = []
+
+    def table(self, table_name):
+        self.calls.append(("table", table_name))
+        return FakeRecipeMetadataQuery(self.rows, self.calls)
+
+
 class LightFMFeatureTests(unittest.TestCase):
     def test_recipe_features_use_real_metadata_and_bound_ingredients(self):
         recipe = {
@@ -538,6 +568,85 @@ class HomeExclusionTests(unittest.TestCase):
 
 
 class LightFMArtifactTests(unittest.TestCase):
+    def test_serving_load_skips_embedded_metadata_and_caches_float32_factors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_path = Path(directory) / "serving.npz"
+            np.savez_compressed(
+                artifact_path,
+                recipe_ids=np.array(["1", "2"], dtype=object),
+                item_factors=np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float64),
+                item_biases=np.array([0.1, 0.2], dtype=np.float64),
+                global_mean=np.array([3.0]),
+                backend=np.array(["sklearn"], dtype=object),
+                meta_recipe_ids=np.array(["1", "2"], dtype=object),
+                meta_minutes=np.array([10, 20]),
+                meta_nutrition=np.zeros((2, 7)),
+                meta_ingredients=np.array(["rice", "beans"], dtype=object),
+            )
+            recommend_fast._RECIPES_META_CACHE.update(
+                {
+                    "data": None,
+                    "loaded_at": None,
+                    "complete_catalog": False,
+                }
+            )
+            recommend_fast._ARTIFACT_MEMORY_CACHE.update(
+                {"identity": None, "data": None}
+            )
+
+            first = load_cf_artifact(
+                artifact_path,
+                populate_metadata_cache=False,
+                load_metadata=False,
+                cache_in_memory=True,
+            )
+            second = load_cf_artifact(
+                artifact_path,
+                populate_metadata_cache=False,
+                load_metadata=False,
+                cache_in_memory=True,
+            )
+
+        self.assertIs(first, second)
+        self.assertEqual(np.float32, first["item_factors"].dtype)
+        self.assertEqual(np.float32, first["item_biases"].dtype)
+        self.assertIsNone(recommend_fast._RECIPES_META_CACHE["data"])
+
+    def test_candidate_metadata_cache_fetches_only_missing_recipe_ids(self):
+        supabase = FakeRecipeMetadataSupabase(
+            [
+                {"id": 1, "name": "One"},
+                {"id": 2, "name": "Two"},
+            ]
+        )
+        recommend_fast._RECIPES_META_CACHE.update(
+            {
+                "data": None,
+                "loaded_at": None,
+                "complete_catalog": False,
+            }
+        )
+
+        first = recommend_fast.fetch_recipes_metadata(
+            supabase,
+            needed_ids={"1"},
+        )
+        second = recommend_fast.fetch_recipes_metadata(
+            supabase,
+            needed_ids={"1", "2"},
+        )
+
+        self.assertEqual({"1"}, set(first))
+        self.assertEqual({"1", "2"}, set(second))
+        in_calls = [call for call in supabase.calls if call[0] == "in"]
+        self.assertEqual(
+            [
+                ("in", "id", ["1"]),
+                ("in", "id", ["2"]),
+            ],
+            in_calls,
+        )
+
     def test_versioned_artifact_materializes_and_loads_user_item_representations(self):
         model = FakeLightFMModel()
         item_features = object()

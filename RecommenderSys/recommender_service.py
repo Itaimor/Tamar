@@ -92,7 +92,7 @@ def require_service_secret(x_recommender_secret: str | None) -> None:
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
     return {"ok": True}
 
 
