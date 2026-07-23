@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Loader2, Sparkles, Sprout, Trophy } from "lucide-react";
+import { TamarVisual } from "@/components/TamarTreePanel";
 import { TamarTreeState, fetchTamarTreeState } from "@/lib/tamarTree";
 
 type TamarRecordPanelProps = {
@@ -60,28 +61,31 @@ const TamarRecordPanel = ({ userId }: TamarRecordPanelProps) => {
           Loading Tamar record
         </div>
       ) : state ? (
-        <>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat label="Current level" value={String(state.level)} />
-            <Stat label="Current streak" value={String(state.currentStreak)} />
-            <Stat label="Longest streak" value={String(state.bestRunStreak)} />
-            <Stat label="Best level" value={String(state.bestRunLevel)} />
+        <div className="mt-5 grid gap-5 md:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1fr)]">
+          <TamarVisual state={state} />
+          <div className="flex min-w-0 flex-col justify-between gap-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Stat label="Current level" value={String(state.level)} />
+              <Stat label="Current streak" value={String(state.currentStreak)} />
+              <Stat label="Longest streak" value={String(state.bestRunStreak)} />
+              <Stat label="Best level" value={String(state.bestRunLevel)} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
+              <span className="inline-flex items-center gap-2 rounded-lg border border-primary/10 bg-white/65 px-3 py-2 text-sm text-[#667864]">
+                <Sparkles className="h-4 w-4 text-[#8a6b3f]" />
+                {state.totalRewardEvents} reward moments
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-lg border border-primary/10 bg-white/65 px-3 py-2 text-sm text-[#667864]">
+                <Sprout className="h-4 w-4 text-primary" />
+                {state.totalRuns} planted run{state.totalRuns === 1 ? "" : "s"}
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-lg border border-primary/10 bg-white/65 px-3 py-2 text-sm text-[#667864]">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                Next milestone {state.nextMilestoneLevel ? `L${state.nextMilestoneLevel}` : "complete"}
+              </span>
+            </div>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <span className="inline-flex items-center gap-2 rounded-lg border border-primary/10 bg-white/65 px-3 py-2 text-sm text-[#667864]">
-              <Sparkles className="h-4 w-4 text-[#8a6b3f]" />
-              {state.totalRewardEvents} reward moments
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-lg border border-primary/10 bg-white/65 px-3 py-2 text-sm text-[#667864]">
-              <Sprout className="h-4 w-4 text-primary" />
-              {state.totalRuns} planted run{state.totalRuns === 1 ? "" : "s"}
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-lg border border-primary/10 bg-white/65 px-3 py-2 text-sm text-[#667864]">
-              <CalendarDays className="h-4 w-4 text-primary" />
-              Next milestone {state.nextMilestoneLevel ? `L${state.nextMilestoneLevel}` : "complete"}
-            </span>
-          </div>
-        </>
+        </div>
       ) : null}
     </section>
   );

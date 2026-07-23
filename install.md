@@ -4,7 +4,7 @@
 
 If you only want to use Tamar, open the hosted online version shared by the project team. It already has the required server-side services and credentials configured, so you do not need your own Gemini or Supabase keys.
 
-This guide is for running the full project locally. Local AI features—including chat, food-photo analysis, and nutrition estimates—require your own Gemini API key, and account and recommendation features require your own Supabase project. Without a Gemini key, the non-AI parts of the local app may still load, but the AI-assisted features will not work.
+This guide is for running the full project locally. Local AI features, including chat, food-photo analysis, and nutrition estimates, require your own Gemini API key. Account and recommendation features require your own Supabase project. Without a Gemini key, the non-AI parts of the local app may still load, but the AI-assisted features will not work.
 
 ## Prerequisites
 
@@ -75,6 +75,18 @@ PEXELS_API_KEY=optional-pexels-key
 
 The copied template also contains artifact and model settings used by the Python workflows. Keep `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_TAMAR_API_KEY`, and `RECOMMENDER_SERVICE_SECRET` private. Do not expose them in browser code or commit them.
 
+To get your own Gemini key:
+
+1. Open [Google AI Studio](https://aistudio.google.com/) and sign in.
+2. Select **Get API key**, then create a key in a new or existing Google Cloud project.
+3. In `.env.local`, replace `your-server-only-gemini-api-key` with the key you copied:
+
+```env
+GEMINI_TAMAR_API_KEY=your-actual-key
+```
+
+Keep the key server-side: do not rename it with a `VITE_` prefix, share it, or commit `.env.local`. Restart the Vite dev server (`npm run dev`) after adding or changing the key. See [the Gemini API setup guide](docs/create_api_key.md) for detailed verification and troubleshooting.
+
 6. Apply Supabase migrations.
 
 Run every SQL file in `supabase/migrations/` in filename order. Together they create the recipe and interaction data, user restrictions, diary and analysis data, recommendations, cooklists, Tamar tree state, Storage buckets, and supporting policies used by the current app. Do not use `supabase/schema.sql` as a replacement for the full sequence.
@@ -116,6 +128,8 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:8080` or the URL printed by Vite.
+
+After signing in, open `http://127.0.0.1:8080/app?tab=chat` and send a simple message. A normal Tamar response confirms that the local chatbot route can read your Gemini key. If it fails, restart the Vite server and check the Gemini troubleshooting steps below.
 
 ## Post-Install / Verification
 

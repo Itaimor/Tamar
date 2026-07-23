@@ -114,7 +114,7 @@ const AlienUfoScene = () => (
   </div>
 );
 
-const TamarVisual = ({ state }: { state: TamarTreeState }) => {
+export const TamarVisual = ({ state }: { state: TamarTreeState }) => {
   const scale = getTreeScale(state.level);
   const fruitCount = Math.min(14, Math.max(0, Math.floor(state.level / 3)));
   const isDead = state.status === "dead";
