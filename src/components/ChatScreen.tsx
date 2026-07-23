@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useChatSession } from "@/components/ChatSessionProvider";
 import type { IbsTranscriptMessage, RecipeFeedbackRecipe } from "@/components/ChatSessionProvider";
 import { useCanopyAccess } from "@/hooks/useCanopyAccess";
+import { classifyChatFoodEntry, isCancelChatFlowIntent } from "@/lib/chatFoodLogging";
 import { createHealthReport, createMealLog } from "@/lib/diary";
 import {
   FoodImageAnalysis,
@@ -162,6 +163,13 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const canAttachImage = isAwaitingFoodLog || recipeFeedback?.step === "confirm" || isAwaitingPersonalRecipe;
+  const hasActiveGuidedFlow =
+    isAwaitingFoodLog ||
+    isAwaitingPersonalRecipe ||
+    Boolean(pendingCookbookAdd) ||
+    Boolean(recipeFeedback) ||
+    Boolean(ibsTranscript);
+  const visibleChips = hasActiveGuidedFlow ? ["Cancel"] : chips;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -170,6 +178,22 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const stopActiveGuidedFlow = (userText: string, assistantText = "Okay, I stopped the current flow. I will not save anything else from it.") => {
+    setIbsTranscript(null);
+    setIsAwaitingFoodLog(false);
+    setIsAwaitingPersonalRecipe(false);
+    setPendingCookbookAdd(null);
+    setRecipeFeedback(null);
+    setPendingImageUrl("");
+    setPendingFoodImageAnalysis(null);
+    setInputValue("");
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: userText.trim() },
+      { role: "ai", text: assistantText },
+    ]);
+  };
 
   const startFoodLogFlow = useCallback(() => {
     if (!user) {
@@ -182,6 +206,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     setIbsTranscript(null);
     setIsAwaitingPersonalRecipe(false);
     setPendingCookbookAdd(null);
+    setRecipeFeedback(null);
     setIsAwaitingFoodLog(true);
     setPendingImageUrl("");
     setPendingFoodImageAnalysis(null);
@@ -190,10 +215,10 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       { role: "user", text: "Log Food" },
       {
         role: "ai",
-        text: "Tell me what you ate. You can keep it simple, like \"rice bowl with chicken\". Use the camera button if you want to attach an image.",
+        text: "Tell me what you ate. You can keep it simple, like \"rice bowl with chicken\". Use the camera button if you want to attach an image, or say cancel to stop.",
       },
     ]);
-  }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, user]);
+  }, [isLoading, setIbsTranscript, setIsAwaitingFoodLog, setMessages, setRecipeFeedback, user]);
 
   const startRecipeFeedbackFlow = useCallback((recipe: RecipeFeedbackRecipe) => {
     if (!user) {
@@ -529,18 +554,27 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
     if (!user) return;
 
     const trimmedText = text.trim();
-    if (pendingFoodImageAnalysis) {
-      if (isNo(trimmedText)) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "user", text: trimmedText },
-          { role: "ai", text: "No problem. Tell me what to call this meal and I will keep the image attached." },
-        ]);
-        setInputValue("");
-        setPendingFoodImageAnalysis(null);
-        return;
-      }
+    const confirmedPhotoSuggestion = Boolean(
+      pendingFoodImageAnalysis?.is_food &&
+      pendingFoodImageAnalysis.food_name &&
+      isYes(trimmedText),
+    );
+    const entryKind = confirmedPhotoSuggestion ? "food" : classifyChatFoodEntry(trimmedText);
 
+    if (entryKind === "cancel") {
+      stopActiveGuidedFlow(trimmedText, "Food logging canceled. Nothing was added to your Diary.");
+      return;
+    }
+
+    if (entryKind === "not_food") {
+      stopActiveGuidedFlow(
+        trimmedText,
+        "I could not identify a food or drink in that message, so I stopped food logging and did not add anything to your Diary. Choose Log Food when you want to try again.",
+      );
+      return;
+    }
+
+    if (pendingFoodImageAnalysis) {
       if (isYes(trimmedText) && !pendingFoodImageAnalysis.food_name) {
         setMessages((prev) => [
           ...prev,
@@ -553,8 +587,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       }
     }
 
-    const confirmedPhotoSuggestion = pendingFoodImageAnalysis && isYes(trimmedText);
-    const foodName = confirmedPhotoSuggestion ? pendingFoodImageAnalysis.food_name : trimmedText;
+    const foodName = confirmedPhotoSuggestion ? pendingFoodImageAnalysis!.food_name : trimmedText;
     const photoNotes = pendingFoodImageAnalysis?.is_food
       ? buildFoodImageSuggestionNotes(pendingFoodImageAnalysis)
       : "";
@@ -768,6 +801,16 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   const handleSendMessage = async (e?: React.FormEvent | string) => {
     const text = typeof e === "string" ? e : inputValue;
     if (!text.trim() || isLoading) return;
+
+    if (hasActiveGuidedFlow && isCancelChatFlowIntent(text)) {
+      stopActiveGuidedFlow(
+        text,
+        isAwaitingFoodLog
+          ? "Food logging canceled. Nothing was added to your Diary."
+          : "Okay, I stopped the current flow. I will not save anything else from it.",
+      );
+      return;
+    }
 
     if (text === "Recommend Me" || (!isAwaitingFoodLog && !isAwaitingPersonalRecipe && !recipeFeedback && !ibsTranscript && isRecommendationRequest(text))) {
       await handleRecommendationRequest(text);
@@ -994,7 +1037,7 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
       <div className={`bg-background/80 backdrop-blur-md border-t ${docked ? "p-3 md:p-4" : "p-4 md:p-6"}`}>
         {/* Chips */}
         <div className="pb-4 flex gap-2 overflow-x-auto no-scrollbar">
-          {chips.map((chip) => (
+          {visibleChips.map((chip) => (
             <button
               key={chip}
               onClick={() => handleSendMessage(chip)}

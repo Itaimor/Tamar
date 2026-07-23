@@ -116,6 +116,7 @@ Use this section as the starting map for the repository. For deeper module behav
 | `src/lib/recipes.ts` | Recipe fetching, mapping, deterministic match display, image fallback/category logic, and recipe image selection. See [docs/RECIPE_IMAGES_PLAN.md](docs/RECIPE_IMAGES_PLAN.md). |
 | `src/lib/recipeInteractions.ts` | Reads/writes recipe interactions, saved recipes, onboarding feedback counts, and cooklist membership helpers. |
 | `src/lib/diary.ts` | Reads and writes Diary meals/check-ins, expands chat check-in foods, and includes started/completed recipe activity. |
+| `src/lib/chatFoodLogging.ts` | Conservatively validates free-text Chat food logs and recognizes explicit guided-flow cancellation before Diary writes. |
 | `src/lib/tamarTree.ts` | Derives and persists Tamar tree care state, streaks, cosmetic reward events, death/replant records, and tree nudges from existing meal/check-in logs. |
 | `src/lib/foodImageAnalysis.ts` | Client helper for authenticated Gemini food-photo analysis used by Chat, Diary, and CookBook draft flows before the user confirms saved content. |
 | `src/lib/freemium.ts` | Client-side Canopy+/Sapling plan helpers, trial countdown calculations, and throttled reminder storage. |

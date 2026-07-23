@@ -54,6 +54,7 @@ Implemented scope:
 - Allow the Diary to search saved cookbook meals, recent meal history while logging, and the visible Recent diary timeline, and to add food-history entries from Recent diary into cooklists.
 - Show a user-facing Analysis page that summarizes possible trigger foods, easier foods, recent meal/symptom patterns, and next-step suggestions from the same risk and logging tables; its next-step cards may use lightweight content-based matching over already recommended recipes to suggest a recipe experiment.
 - Allow meal logs created from the Diary, chat food logging, or recipe-feedback chat to carry an optional uploaded image stored in Supabase Storage and referenced by `image_url`.
+- Guard Chat `Log Food` writes with conservative food/drink validation. Greetings, acknowledgements, questions, random text, and other messages without recognizable food evidence end the food-log flow without writing `meal_logs`; a visible Cancel action and common cancel phrases also stop any guided chat flow.
 - Allow Gemini-assisted food-photo analysis in Chat `Log Food`, the Diary meal form, and the CookBook personal-recipe form. Dedicated "from image" actions may prefill a meal/recipe title, visible-food notes, ingredient notes, and clarification prompts, but normal image upload fields remain image attachments. The user must confirm or edit the result before it is saved as `meal_logs` evidence or private personal recipe content.
 - Allow users to add personal, non-catalog recipes to cooklists from the CookBook page, Diary, or Tamar chat.
 - Show cookbook-only recommendations in the CookBook page from recipes already saved in the user's cooklists, using risk-reranked catalog recipes plus heuristic personal-recipe ranking.
@@ -122,7 +123,7 @@ When a `meal_logs.image_url` is present, the Diary may show it as meal context. 
 
 Chat uses the same distinction:
 
-1. In `Log Food`, an attached photo is interpreted as food evidence to draft a meal log. If the user replies yes, Tamar logs the suggested meal name; if the user edits or types another name, Tamar logs the user's text with the image attached.
+1. In `Log Food`, an attached photo is interpreted as food evidence to draft a meal log. If the user replies yes, Tamar logs a suggestion only when the analysis classified the image as food and supplied a meal name. If the user edits or types another name, the same conservative food/drink validator used for text-only logging must accept it before the meal is written with the image attached. A negative, cancel, conversational, question, or unrecognized reply stops the flow without a Diary write instead of repeatedly prompting.
 2. In `Add Recipe`, an attached photo is treated as the personal recipe image by default. It is not automatically logged as eaten.
 3. In recommended-recipe feedback, an attached photo is meal context for the confirmed catalog recipe, not a separate recipe-recognition signal.
 
@@ -1969,7 +1970,7 @@ Flow:
 
 The arrow/details control on a recipe card should only reveal recipe metadata such as ingredients and prep time. It should not log a meal. Logging a recommended recipe as eaten requires explicit chat confirmation.
 
-After chat logs a food or confirms a recommended recipe as eaten, Tamar asks whether to add it to the CookBook when it is not already saved. If the user says yes, Tamar asks for a cooklist name and creates that cooklist when needed. Catalog recipes are saved as catalog cooklist rows and preserve recommendation signals; free-text chat foods are saved as private personal recipes.
+After chat logs a food or confirms a recommended recipe as eaten, Tamar asks whether to add it to the CookBook when it is not already saved. If the user says yes, Tamar asks for a cooklist name and creates that cooklist when needed. Catalog recipes are saved as catalog cooklist rows and preserve recommendation signals; free-text chat foods are saved as private personal recipes. While any guided chat flow is active, the normal action chips are replaced by a visible Cancel action. Cancel phrases stop the flow and clear pending image/state data; if a meal was already written before a later CookBook prompt, canceling stops only the remaining prompts and does not undo that confirmed Diary row.
 
 ---
 
