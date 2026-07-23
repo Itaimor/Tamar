@@ -151,7 +151,7 @@ const formatRecommendationMessage = (
 
 const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackRequest = null, onClose }: ChatScreenProps) => {
   const { user, session } = useAuth();
-  const { canopyDialog, openImageUploadPrompt } = useCanopyAccess(user);
+  const { canopyDialog, openImageUploadPrompt, openChatPhotoPrompt, isCanopyPlus } = useCanopyAccess(user);
   const {
     messages,
     setMessages,
@@ -1018,7 +1018,13 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
   };
 
   const handleImageFileSelected = async (file: File | null | undefined) => {
-    if (!user || !file || !canAttachImage) return;
+    if (!user || !file) return;
+    if (!isCanopyPlus) {
+      openChatPhotoPrompt();
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+    if (!canAttachImage) return;
     if (!openImageUploadPrompt()) {
       if (imageInputRef.current) imageInputRef.current.value = "";
       return;
@@ -1191,11 +1197,17 @@ const ChatScreen = ({ docked = false, foodLogRequestKey = 0, recipeFeedbackReque
             <button
               type="button"
               onClick={() => {
-                if (!openImageUploadPrompt()) return;
+                if (!isCanopyPlus) {
+                  openChatPhotoPrompt();
+                  return;
+                }
+                if (!canAttachImage) {
+                  startFoodLogFlow();
+                }
                 imageInputRef.current?.click();
               }}
               className="shrink-0 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={isLoading || isUploadingImage || isAnalyzingFoodImage || !canAttachImage}
+              disabled={isLoading || isUploadingImage || isAnalyzingFoodImage}
               aria-label="Attach image"
             >
               {isUploadingImage || isAnalyzingFoodImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} strokeWidth={1.5} />}

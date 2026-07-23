@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
+import { Camera, Lock } from "lucide-react";
 import {
   CanopyUpgradeDialog,
   type CanopyUpgradeDialogConfig,
@@ -21,15 +22,46 @@ export const useCanopyAccess = (user: User | null | undefined) => {
     navigate("/pricing");
   }, [navigate]);
 
+  const openChatPhotoPrompt = useCallback(() => {
+    if (trialStatus.isCanopyPlus) return true;
+
+    setDialogConfig({
+      icon: (
+        <div className="relative flex items-center justify-center">
+          <Camera className="h-6 w-6 text-[#f7c873]" />
+          <div className="absolute -bottom-1.5 -right-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#f7c873] text-[#203629] shadow-md ring-2 ring-[#fffaf0]">
+            <Lock className="h-2.5 w-2.5 stroke-[2.5]" />
+          </div>
+        </div>
+      ),
+      title: "Locked for Sapling Users",
+      description:
+        "Photo analysis and image attachments in chat are locked for Sapling users, but available on Canopy+.",
+      highlightText: "Locked for Sapling users • Available to Canopy+",
+      primaryLabel: "Upgrade to Canopy+",
+      secondaryLabel: "Maybe later",
+    });
+    return false;
+  }, [trialStatus.isCanopyPlus]);
+
   const openImageUploadPrompt = useCallback(() => {
     if (!user || trialStatus.isCanopyPlus) return true;
 
     if (!trialStatus.featureAccess) {
       setDialogConfig({
-        title: "Camera uploads are in Canopy+",
+        icon: (
+          <div className="relative flex items-center justify-center">
+            <Camera className="h-6 w-6 text-[#f7c873]" />
+            <div className="absolute -bottom-1.5 -right-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#f7c873] text-[#203629] shadow-md ring-2 ring-[#fffaf0]">
+              <Lock className="h-2.5 w-2.5 stroke-[2.5]" />
+            </div>
+          </div>
+        ),
+        title: "Locked for Sapling Users",
         description:
           "Your 30-day Sapling trial has ended. Join Canopy+ to keep uploading meal and recipe images from your camera.",
-        primaryLabel: "Join Canopy+",
+        highlightText: "Locked for Sapling users • Available to Canopy+",
+        primaryLabel: "Upgrade to Canopy+",
       });
       return false;
     }
@@ -37,10 +69,19 @@ export const useCanopyAccess = (user: User | null | undefined) => {
     if (shouldShowCanopyReminder(user.id, "image-upload", 1)) {
       markCanopyReminderShown(user.id, "image-upload");
       setDialogConfig({
+        icon: (
+          <div className="relative flex items-center justify-center">
+            <Camera className="h-6 w-6 text-[#f7c873]" />
+            <div className="absolute -bottom-1.5 -right-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#f7c873] text-[#203629] shadow-md ring-2 ring-[#fffaf0]">
+              <Lock className="h-2.5 w-2.5 stroke-[2.5]" />
+            </div>
+          </div>
+        ),
         title: `Your free plan runs out in ${formatTrialDaysRemaining(trialStatus.daysRemaining)}`,
         description:
           "Camera uploads are included during your first 30 days. Join Canopy+ to keep image uploads after the Sapling trial ends.",
-        primaryLabel: "Join Canopy+",
+        highlightText: "Included in trial • Available on Canopy+",
+        primaryLabel: "Upgrade to Canopy+",
         secondaryLabel: "Continue uploading",
       });
     }
@@ -104,6 +145,7 @@ export const useCanopyAccess = (user: User | null | undefined) => {
     hasCanopyFeatureAccess: trialStatus.featureAccess,
     isCanopyPlus: trialStatus.isCanopyPlus,
     openAnalysisPrompt,
+    openChatPhotoPrompt,
     openImageUploadPrompt,
     openPremiumFeaturePrompt,
     openPricing,
