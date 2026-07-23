@@ -43,6 +43,31 @@ describe("freemium helpers", () => {
     expect(status.featureAccess).toBe(false);
   });
 
+  it("uses a server-controlled trial date for QA accounts", () => {
+    const status = getCanopyTrialStatus(
+      user("2026-07-31T12:00:00.000Z", {
+        qa_account: true,
+        qa_trial_started_at: "2026-06-20T12:00:00.000Z",
+      }),
+      new Date("2026-07-31T12:00:00.000Z"),
+    );
+
+    expect(status.daysUsed).toBe(41);
+    expect(status.featureAccess).toBe(false);
+  });
+
+  it("ignores trial date overrides for normal users", () => {
+    const status = getCanopyTrialStatus(
+      user("2026-07-21T12:00:00.000Z", {
+        qa_trial_started_at: "2026-01-01T12:00:00.000Z",
+      }),
+      new Date("2026-07-31T12:00:00.000Z"),
+    );
+
+    expect(status.daysUsed).toBe(10);
+    expect(status.featureAccess).toBe(true);
+  });
+
   it("keeps Canopy+ users active from app metadata", () => {
     const status = getCanopyTrialStatus(
       user("2026-01-01T12:00:00.000Z", { tamar_plan: "canopy_plus" }),

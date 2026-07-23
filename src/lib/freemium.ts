@@ -56,7 +56,16 @@ export const isCanopyPlusUser = (user: User | null | undefined) => {
 
 export const getCanopyTrialStatus = (user: User | null | undefined, now = new Date()): CanopyTrialStatus => {
   const isCanopyPlus = isCanopyPlusUser(user);
-  const createdAt = user?.created_at ? new Date(user.created_at) : null;
+  const qaTrialStartedAt =
+    user?.app_metadata?.qa_account === true &&
+    typeof user.app_metadata.qa_trial_started_at === "string"
+      ? user.app_metadata.qa_trial_started_at
+      : null;
+  const createdAt = qaTrialStartedAt
+    ? new Date(qaTrialStartedAt)
+    : user?.created_at
+      ? new Date(user.created_at)
+      : null;
   const validCreatedAt = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null;
   const elapsedMs = validCreatedAt ? Math.max(0, now.getTime() - validCreatedAt.getTime()) : 0;
   const daysUsed = validCreatedAt ? Math.floor(elapsedMs / CANOPY_DAY_MS) : 0;
