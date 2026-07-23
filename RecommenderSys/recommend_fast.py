@@ -1,10 +1,10 @@
 """
 Fast no-retrain recommendations from a saved CF item-factor artifact.
 
-This script uses the item vectors learned by recommend_batch.py. It does not
-train SVD. For a target app user, it reads their latest interactions, builds a
-temporary user vector as a weighted average of the learned recipe vectors they
-interacted with, scores the catalog, and upserts top recommendations.
+This script uses the user/item vectors learned by recommend_batch.py. It does
+not train LightFM or SVD. For a target app user, it blends the learned batch
+user representation with positive interactions written after that artifact's
+training boundary, scores the candidate pool, and upserts recommendations.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -40,6 +41,7 @@ from recommender_common import (
 )
 from risk_scoring import (
     RerankedCandidate,
+    SYMPTOM_MODEL_PATH,
     build_feature_row,
     clamp01,
     compute_recipe_ingredient_risk,
@@ -49,6 +51,7 @@ from risk_scoring import (
     fetch_user_restrictions,
     heuristic_symptom_risk,
     is_hard_filtered,
+    load_symptom_model,
     prediction_feature_payload,
     rerank_candidates,
 )
@@ -58,12 +61,38 @@ PREFERENCE_MODEL_NAME = os.getenv("RECOMMENDER_PREFERENCE_MODEL_NAME")
 CANDIDATE_FETCH_LIMIT = int(os.getenv("RECOMMENDER_CANDIDATE_FETCH_LIMIT", "500"))
 MODEL_PREDICTION_WRITE_LIMIT = int(os.getenv("RECOMMENDER_MODEL_PREDICTION_WRITE_LIMIT", "120"))
 COOKBOOK_RECOMMENDATION_LIMIT = int(os.getenv("RECOMMENDER_COOKBOOK_LIMIT", "5"))
+ONLINE_VECTOR_WEIGHT = float(os.getenv("RECOMMENDER_ONLINE_VECTOR_WEIGHT", "0.35"))
+ONLINE_VECTOR_FULL_STRENGTH = float(
+    os.getenv("RECOMMENDER_ONLINE_VECTOR_FULL_STRENGTH", "5.0")
+)
+ONLINE_SCORE_DELTA_LIMIT = float(
+    os.getenv("RECOMMENDER_ONLINE_SCORE_DELTA_LIMIT", "1.0")
+)
 
 _RECIPES_META_CACHE: dict = {"data": None, "loaded_at": None}
+_SYMPTOM_ARTIFACT_DOWNLOAD: dict = {"attempted_at": None}
+
+
+def _artifact_scalar(artifact, name: str, default=None):
+    if name not in artifact:
+        return default
+    values = artifact[name]
+    if values.size == 0:
+        return default
+    return values.reshape(-1)[0].item() if hasattr(values.reshape(-1)[0], "item") else values.reshape(-1)[0]
 
 
 def artifact_cache_ttl_seconds() -> int:
     return int(os.getenv("RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS", "600"))
+
+
+def symptom_artifact_cache_ttl_seconds() -> int:
+    return int(
+        os.getenv(
+            "RECOMMENDER_SYMPTOM_ARTIFACT_CACHE_TTL_SECONDS",
+            str(artifact_cache_ttl_seconds()),
+        )
+    )
 
 
 def is_artifact_cache_fresh(artifact_path: Path = ARTIFACT_PATH) -> bool:
@@ -79,39 +108,186 @@ def download_artifact_from_storage(
     artifact_path: Path = ARTIFACT_PATH,
     force: bool = False,
 ) -> bool:
+    """Refresh the CF artifact without replacing a usable cache on failure."""
     if not force and is_artifact_cache_fresh(artifact_path):
         return True
 
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-
+    temporary_path: Path | None = None
     try:
         data = supabase.storage.from_(get_artifact_bucket()).download(get_artifact_storage_path())
-        artifact_path.write_bytes(data)
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{artifact_path.name}.",
+            suffix=".download",
+            dir=artifact_path.parent,
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            temporary_file.write(data)
+
+        # Fully parse and validate before atomically publishing the new file.
+        load_cf_artifact(temporary_path, populate_metadata_cache=False)
+        temporary_path.replace(artifact_path)
         return True
     except Exception as e:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
         print(f"[Warning] Failed to download CF artifact from Supabase Storage: {e}")
-        return False
+        return artifact_path.exists()
 
 
-def load_cf_artifact(artifact_path: Path = ARTIFACT_PATH) -> dict:
+def download_symptom_artifact_from_storage(
+    supabase: Client,
+    artifact_path: Path = SYMPTOM_MODEL_PATH,
+    force: bool = False,
+) -> bool:
+    """Refresh the optional XGBoost artifact without replacing a valid cache on error."""
+    now = datetime.now(timezone.utc)
+    attempted_at = _SYMPTOM_ARTIFACT_DOWNLOAD["attempted_at"]
+    if not force:
+        if artifact_path.exists():
+            modified_at = datetime.fromtimestamp(artifact_path.stat().st_mtime, tz=timezone.utc)
+            if now - modified_at < timedelta(seconds=symptom_artifact_cache_ttl_seconds()):
+                return True
+        if (
+            attempted_at is not None
+            and now - attempted_at < timedelta(seconds=symptom_artifact_cache_ttl_seconds())
+        ):
+            return artifact_path.exists()
+
+    _SYMPTOM_ARTIFACT_DOWNLOAD["attempted_at"] = now
+    storage_path = os.getenv(
+        "SUPABASE_SYMPTOM_MODEL_ARTIFACT",
+        "xgboost_symptom_model.pkl",
+    ).strip()
+    if not storage_path:
+        return artifact_path.exists()
+
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        data = supabase.storage.from_(get_artifact_bucket()).download(storage_path)
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{artifact_path.name}.",
+            suffix=".download",
+            dir=artifact_path.parent,
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            temporary_file.write(data)
+        if load_symptom_model(temporary_path) is None:
+            raise ValueError("downloaded symptom artifact failed validation")
+        temporary_path.replace(artifact_path)
+        return True
+    except Exception as exc:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+        print(f"[Warning] Failed to download symptom model artifact: {exc}")
+        return artifact_path.exists()
+
+
+def load_cf_artifact(
+    artifact_path: Path = ARTIFACT_PATH,
+    populate_metadata_cache: bool = True,
+) -> dict:
     if not artifact_path.exists():
         raise FileNotFoundError(
             f"CF artifact not found at {artifact_path}. Run recommend_batch.py once to train and save it."
         )
 
-    artifact = np.load(artifact_path, allow_pickle=True)
+    # Materialize every array while the archive is open. This is required for
+    # Windows-safe atomic replacement after validating a downloaded temp file.
+    with np.load(artifact_path, allow_pickle=True) as archive:
+        artifact = {name: archive[name] for name in archive.files}
     recipe_ids = artifact["recipe_ids"].astype(str)
     item_factors = artifact["item_factors"].astype(float)
     item_biases = artifact["item_biases"].astype(float)
-    global_mean = float(artifact["global_mean"][0])
+    global_mean_values = np.asarray(artifact["global_mean"], dtype=float).reshape(-1)
+    if global_mean_values.size != 1:
+        raise ValueError("CF artifact global_mean must contain exactly one value.")
+    global_mean = float(global_mean_values[0])
+    if item_factors.ndim != 2 or item_factors.shape[0] != len(recipe_ids):
+        raise ValueError("CF artifact item_factors are not aligned with recipe_ids.")
+    if item_biases.ndim != 1 or item_biases.shape[0] != len(recipe_ids):
+        raise ValueError("CF artifact item_biases are not aligned with recipe_ids.")
+    if (
+        not np.isfinite(item_factors).all()
+        or not np.isfinite(item_biases).all()
+        or not np.isfinite(global_mean)
+    ):
+        raise ValueError("CF artifact contains non-finite item factors or biases.")
 
+    artifact_version = int(_artifact_scalar(artifact, "artifact_version", 1))
+    backend = str(_artifact_scalar(artifact, "backend", "unknown"))
+    trained_at = _artifact_scalar(artifact, "trained_at")
+    model_name = _artifact_scalar(artifact, "model_name")
+    artifact_stat = artifact_path.stat()
     result = {
+        "artifact_version": artifact_version,
+        "backend": backend,
+        "trained_at": trained_at,
+        "model_name": model_name,
+        "artifact_file_identity": (
+            str(artifact_path.resolve()),
+            artifact_stat.st_mtime_ns,
+            artifact_stat.st_size,
+        ),
         "recipe_ids": recipe_ids,
         "item_factors": item_factors,
         "item_biases": item_biases,
         "global_mean": global_mean,
         "recipe_index": {recipe_id: idx for idx, recipe_id in enumerate(recipe_ids)},
     }
+
+    learned_keys = {
+        "learned_user_ids",
+        "learned_user_factors",
+        "learned_user_biases",
+    }
+    present_learned_keys = learned_keys.intersection(artifact)
+    requires_learned_users = backend.lower() == "lightfm" and artifact_version >= 2
+    if present_learned_keys and present_learned_keys != learned_keys:
+        raise ValueError(
+            "CF artifact contains an incomplete learned-user representation."
+        )
+    if requires_learned_users and present_learned_keys != learned_keys:
+        raise ValueError(
+            "LightFM v2 artifact is missing its learned-user representation."
+        )
+    if learned_keys.issubset(artifact):
+        learned_user_ids = artifact["learned_user_ids"].astype(str)
+        learned_user_factors = artifact["learned_user_factors"].astype(float)
+        learned_user_biases = artifact["learned_user_biases"].astype(float)
+        learned_users_are_valid = (
+            learned_user_factors.ndim == 2
+            and learned_user_factors.shape[0] == len(learned_user_ids)
+            and learned_user_factors.shape[1] == item_factors.shape[1]
+            and learned_user_biases.ndim == 1
+            and learned_user_biases.shape[0] == len(learned_user_ids)
+            and len(set(learned_user_ids)) == len(learned_user_ids)
+            and np.isfinite(learned_user_factors).all()
+            and np.isfinite(learned_user_biases).all()
+        )
+        if not learned_users_are_valid:
+            raise ValueError(
+                "CF artifact learned-user factors are not aligned with user IDs "
+                "and item-factor dimensions."
+            )
+        result.update(
+            {
+                "learned_user_ids": learned_user_ids,
+                "learned_user_factors": learned_user_factors,
+                "learned_user_biases": learned_user_biases,
+                "learned_user_index": {
+                    user_id: index
+                    for index, user_id in enumerate(learned_user_ids)
+                },
+            }
+        )
+    if requires_learned_users and (not trained_at or not model_name):
+        raise ValueError(
+            "LightFM v2 artifact is missing trained_at or model_name metadata."
+        )
 
     # Load precomputed flavor centroid if present
     if "flavor_centroid" in artifact:
@@ -124,21 +300,95 @@ def load_cf_artifact(artifact_path: Path = ARTIFACT_PATH) -> dict:
             meta_minutes = artifact["meta_minutes"]
             meta_nutrition = artifact["meta_nutrition"]
             meta_ingredients = artifact["meta_ingredients"]
+            meta_names = (
+                artifact["meta_names"].astype(str)
+                if "meta_names" in artifact
+                else np.array([""] * len(meta_ids), dtype=object)
+            )
+            meta_n_steps = (
+                artifact["meta_n_steps"]
+                if "meta_n_steps" in artifact
+                else np.zeros(len(meta_ids), dtype=np.int32)
+            )
+            meta_n_ingredients = (
+                artifact["meta_n_ingredients"]
+                if "meta_n_ingredients" in artifact
+                else np.array(
+                    [
+                        len(value.split("|")) if isinstance(value, str) and value else 0
+                        for value in meta_ingredients
+                    ],
+                    dtype=np.int32,
+                )
+            )
+            meta_is_ibs_friendly = (
+                artifact["meta_is_ibs_friendly"]
+                if "meta_is_ibs_friendly" in artifact
+                else np.full(len(meta_ids), -1, dtype=np.int8)
+            )
+            meta_minutes_present = (
+                artifact["meta_minutes_present"]
+                if "meta_minutes_present" in artifact
+                else np.ones(len(meta_ids), dtype=np.int8)
+            )
+            meta_n_steps_present = (
+                artifact["meta_n_steps_present"]
+                if "meta_n_steps_present" in artifact
+                else np.ones(len(meta_ids), dtype=np.int8)
+            )
+            meta_n_ingredients_present = (
+                artifact["meta_n_ingredients_present"]
+                if "meta_n_ingredients_present" in artifact
+                else np.ones(len(meta_ids), dtype=np.int8)
+            )
+            meta_nutrition_present = (
+                artifact["meta_nutrition_present"]
+                if "meta_nutrition_present" in artifact
+                else np.ones(len(meta_ids), dtype=np.int8)
+            )
+            meta_ingredients_present = (
+                artifact["meta_ingredients_present"]
+                if "meta_ingredients_present" in artifact
+                else np.ones(len(meta_ids), dtype=np.int8)
+            )
 
             recipes_meta = {}
             for i, rid in enumerate(meta_ids):
                 ing_str = meta_ingredients[i]
-                ingredients = ing_str.split("|") if isinstance(ing_str, str) else []
-                recipes_meta[rid] = {
+                ingredients = (
+                    ing_str.split("|")
+                    if int(meta_ingredients_present[i]) > 0
+                    and isinstance(ing_str, str)
+                    and ing_str
+                    else []
+                )
+                recipe_meta = {
                     "id": int(rid) if rid.isdigit() else rid,
-                    "minutes": int(meta_minutes[i]),
-                    "nutrition": [float(n) for n in meta_nutrition[i]],
+                    "name": str(meta_names[i]),
                     "ingredients": ingredients
                 }
+                if int(meta_minutes_present[i]) > 0:
+                    recipe_meta["minutes"] = int(meta_minutes[i])
+                if int(meta_n_steps_present[i]) > 0:
+                    recipe_meta["n_steps"] = int(meta_n_steps[i])
+                if int(meta_n_ingredients_present[i]) > 0:
+                    recipe_meta["n_ingredients"] = int(meta_n_ingredients[i])
+                if int(meta_nutrition_present[i]) > 0:
+                    recipe_meta["nutrition"] = [
+                        float(value)
+                        for value in meta_nutrition[i]
+                    ]
+                if int(meta_is_ibs_friendly[i]) >= 0:
+                    recipe_meta["is_ibs_friendly"] = bool(meta_is_ibs_friendly[i])
+                recipes_meta[rid] = recipe_meta
 
-            _RECIPES_META_CACHE["data"] = recipes_meta
-            _RECIPES_META_CACHE["loaded_at"] = datetime.now(timezone.utc)
-            print(f"[Info] Loaded {len(recipes_meta):,} recipe metadata items from local CF artifact.")
+            if populate_metadata_cache:
+                _RECIPES_META_CACHE["data"] = recipes_meta
+                _RECIPES_META_CACHE["loaded_at"] = datetime.now(timezone.utc)
+                print(
+                    f"[Info] Loaded {len(recipes_meta):,} recipe metadata "
+                    "items from local CF artifact."
+                )
         except Exception as exc:
             print(f"[Warning] Failed to parse metadata from CF artifact: {exc}")
 
@@ -146,23 +396,42 @@ def load_cf_artifact(artifact_path: Path = ARTIFACT_PATH) -> dict:
 
 
 def fetch_user_interactions(supabase: Client, user_id: str) -> pd.DataFrame:
-    response = (
-        supabase.table("recipe_interactions")
-        .select("user_id, recipe_id, interaction_type")
-        .eq("user_id", user_id)
-        .execute()
-    )
+    """Fetch the user's complete interaction history without row-cap truncation."""
+    rows: list[dict] = []
+    page_size = max(1, int(os.getenv("SUPABASE_FETCH_PAGE_SIZE", "1000")))
+    start = 0
+    while True:
+        response = (
+            supabase.table("recipe_interactions")
+            .select("id, user_id, recipe_id, interaction_type, created_at")
+            .eq("user_id", user_id)
+            .order("created_at")
+            .order("id")
+            .range(start, start + page_size - 1)
+            .execute()
+        )
+        page = response.data or []
+        if not page:
+            break
+        rows.extend(page)
+        # Advance by the number actually returned. Supabase/PostgREST may cap a
+        # response below the requested page size, and jumping by page_size
+        # would silently skip the intervening rows.
+        start += len(page)
 
-    if not response.data:
-        return pd.DataFrame(columns=["user_id", "recipe_id", "interaction_type"])
+    if not rows:
+        return pd.DataFrame(
+            columns=["user_id", "recipe_id", "interaction_type", "created_at"]
+        )
 
-    return pd.DataFrame(response.data)
+    return pd.DataFrame(rows).drop(columns=["id"], errors="ignore")
 
 
 def fetch_precomputed_candidates(
     supabase: Client,
     user_id: str,
     limit: int = CANDIDATE_FETCH_LIMIT,
+    model_name: str | None = None,
 ) -> list[tuple[str, float]]:
     """Fetch offline preference candidates if the candidate table is populated."""
     try:
@@ -171,8 +440,11 @@ def fetch_precomputed_candidates(
             .select("recipe_id, preference_score")
             .eq("user_id", user_id)
         )
-        if PREFERENCE_MODEL_NAME:
-            query = query.eq("model_name", PREFERENCE_MODEL_NAME)
+        # The artifact's unique generation is authoritative. The environment
+        # override remains only for legacy artifacts without model metadata.
+        selected_model_name = model_name or PREFERENCE_MODEL_NAME
+        if selected_model_name:
+            query = query.eq("model_name", selected_model_name)
         query = query.order("preference_score", desc=True).limit(limit)
         response = query.execute()
     except Exception as exc:
@@ -196,7 +468,7 @@ def upsert_model_predictions(
     if not candidates:
         return
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     rows = []
     for candidate in candidates[:MODEL_PREDICTION_WRITE_LIMIT]:
         try:
@@ -267,6 +539,216 @@ def build_user_vector(user_ratings: pd.DataFrame, artifact: dict) -> Optional[np
     return np.sum(weighted_vectors, axis=0) / np.sum(weights)
 
 
+def effective_online_vector_weight(
+    online_ratings: pd.DataFrame,
+    maximum_weight: float = ONLINE_VECTOR_WEIGHT,
+    full_strength: float = ONLINE_VECTOR_FULL_STRENGTH,
+) -> float:
+    """Scale the online blend by total positive post-training evidence."""
+    if online_ratings.empty or "rating" not in online_ratings.columns:
+        return 0.0
+
+    ratings = pd.to_numeric(online_ratings["rating"], errors="coerce")
+    total_strength = float(ratings.clip(lower=0.0).fillna(0.0).sum())
+    bounded_maximum = max(0.0, min(1.0, float(maximum_weight)))
+    saturation = max(float(full_strength), 1e-9)
+    return bounded_maximum * min(1.0, total_strength / saturation)
+
+
+def interactions_for_online_update(
+    raw_interactions: pd.DataFrame,
+    artifact: dict,
+    use_full_history: bool = False,
+) -> pd.DataFrame:
+    """Select interactions not already represented by the batch user state."""
+    if use_full_history:
+        return raw_interactions
+    trained_at = artifact.get("trained_at")
+    if raw_interactions.empty or not trained_at:
+        return raw_interactions
+    if "created_at" not in raw_interactions.columns:
+        return raw_interactions.iloc[0:0].copy()
+
+    cutoff = pd.to_datetime(trained_at, utc=True, errors="coerce")
+    if pd.isna(cutoff):
+        return raw_interactions
+    created_at = pd.to_datetime(
+        raw_interactions["created_at"],
+        utc=True,
+        errors="coerce",
+    )
+    return raw_interactions.loc[created_at > cutoff].copy()
+
+
+def get_learned_user_state(
+    user_id: str,
+    artifact: dict,
+) -> tuple[Optional[np.ndarray], float]:
+    user_index = artifact.get("learned_user_index") or {}
+    index = user_index.get(str(user_id))
+    if index is None:
+        return None, 0.0
+
+    learned_factors = artifact.get("learned_user_factors")
+    learned_biases = artifact.get("learned_user_biases")
+    if learned_factors is None or learned_biases is None:
+        return None, 0.0
+
+    vector = np.asarray(learned_factors[index], dtype=float)
+    if vector.ndim != 1 or vector.shape[0] != artifact["item_factors"].shape[1]:
+        return None, 0.0
+    return vector, float(learned_biases[index])
+
+
+def blend_user_vectors(
+    learned_vector: Optional[np.ndarray],
+    online_vector: Optional[np.ndarray],
+    online_weight: float = ONLINE_VECTOR_WEIGHT,
+) -> Optional[np.ndarray]:
+    bounded_weight = max(0.0, min(1.0, float(online_weight)))
+    if learned_vector is None:
+        if online_vector is None:
+            return None
+        # A cold user has no learned vector to interpolate against, but fresh
+        # evidence must still obey the same evidence-strength cap. Treat the
+        # missing learned representation as the zero-vector baseline.
+        return bounded_weight * online_vector
+    if online_vector is None:
+        return learned_vector
+    if learned_vector.shape != online_vector.shape:
+        return learned_vector
+
+    return (1.0 - bounded_weight) * learned_vector + bounded_weight * online_vector
+
+
+def reconstruct_artifact_scores(
+    artifact: dict,
+    target_recipe_ids,
+    lightfm_user_vector: Optional[np.ndarray] = None,
+    learned_user_bias: float = 0.0,
+    online_vector: Optional[np.ndarray] = None,
+    online_weight: float = 0.0,
+    delta_limit: float = ONLINE_SCORE_DELTA_LIMIT,
+) -> dict[str, float]:
+    """Reconstruct preference scores only for requested artifact recipes.
+
+    LightFM can reproduce its batch score from the materialized hybrid user
+    representation. The SVD fallback uses this only as a backstop because its
+    exact per-user batch scores remain authoritative in the candidate table.
+    """
+    recipe_index = artifact["recipe_index"]
+    requested_ids = list(dict.fromkeys(str(recipe_id) for recipe_id in target_recipe_ids))
+    matched = [
+        (recipe_id, recipe_index[recipe_id])
+        for recipe_id in requested_ids
+        if recipe_id in recipe_index
+    ]
+    if not matched:
+        return {}
+
+    recipe_ids = [recipe_id for recipe_id, _index in matched]
+    indices = np.asarray([index for _recipe_id, index in matched], dtype=np.int64)
+    item_factors = artifact["item_factors"][indices]
+    scores = (
+        float(artifact["global_mean"])
+        + artifact["item_biases"][indices].astype(float)
+    )
+    is_lightfm = str(artifact.get("backend", "")).lower() == "lightfm"
+
+    if is_lightfm:
+        scores = scores + float(learned_user_bias)
+        vector = (
+            None
+            if lightfm_user_vector is None
+            else np.asarray(lightfm_user_vector, dtype=float)
+        )
+        if (
+            vector is not None
+            and vector.ndim == 1
+            and vector.shape[0] == item_factors.shape[1]
+        ):
+            scores = scores + item_factors.dot(vector)
+    else:
+        vector = (
+            None
+            if online_vector is None
+            else np.asarray(online_vector, dtype=float)
+        )
+        bounded_weight = max(0.0, min(1.0, float(online_weight)))
+        if (
+            vector is not None
+            and vector.ndim == 1
+            and vector.shape[0] == item_factors.shape[1]
+            and bounded_weight > 0.0
+        ):
+            raw_delta = bounded_weight * item_factors.dot(vector)
+            scores = scores + np.clip(
+                raw_delta,
+                -max(0.0, float(delta_limit)),
+                max(0.0, float(delta_limit)),
+            )
+
+    return {
+        recipe_id: float(score)
+        for recipe_id, score in zip(recipe_ids, scores)
+    }
+
+
+def rescore_precomputed_candidates(
+    precomputed_candidates: list[tuple[str, float]],
+    score_by_id: dict[str, float],
+    limit: int = CANDIDATE_FETCH_LIMIT,
+) -> list[tuple[str, float]]:
+    rescored: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for recipe_id, _offline_score in precomputed_candidates:
+        recipe_id = str(recipe_id)
+        if recipe_id in seen or recipe_id not in score_by_id:
+            continue
+        seen.add(recipe_id)
+        rescored.append((recipe_id, float(score_by_id[recipe_id])))
+    rescored.sort(key=lambda item: item[1], reverse=True)
+    return rescored[:limit]
+
+
+def apply_bounded_online_delta(
+    precomputed_candidates: list[tuple[str, float]],
+    artifact: dict,
+    online_vector: Optional[np.ndarray],
+    online_weight: float,
+    delta_limit: float = ONLINE_SCORE_DELTA_LIMIT,
+    limit: int = CANDIDATE_FETCH_LIMIT,
+) -> list[tuple[str, float]]:
+    """Preserve fallback batch scores and add only a capped online adjustment."""
+    recipe_index = artifact["recipe_index"]
+    item_factors = artifact["item_factors"]
+    vector = None if online_vector is None else np.asarray(online_vector, dtype=float)
+    vector_is_valid = (
+        vector is not None
+        and vector.ndim == 1
+        and vector.shape[0] == item_factors.shape[1]
+    )
+    bounded_weight = max(0.0, min(1.0, float(online_weight)))
+    bounded_delta = max(0.0, float(delta_limit))
+
+    rescored: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for recipe_id, offline_score in precomputed_candidates:
+        recipe_id = str(recipe_id)
+        if recipe_id in seen:
+            continue
+        seen.add(recipe_id)
+        score = float(offline_score)
+        item_index = recipe_index.get(recipe_id)
+        if vector_is_valid and bounded_weight > 0.0 and item_index is not None:
+            delta = bounded_weight * float(item_factors[item_index].dot(vector))
+            score += float(np.clip(delta, -bounded_delta, bounded_delta))
+        rescored.append((recipe_id, score))
+
+    rescored.sort(key=lambda item: item[1], reverse=True)
+    return rescored[:limit]
+
+
 # ---------------------------------------------------------------------------
 # Category recommendation helpers.
 #
@@ -304,7 +786,7 @@ def recipes_meta_cache_ttl_seconds() -> int:
 
 
 def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: set[str] | None = None) -> dict[str, dict]:
-    """Return {recipe_id_str: {id, minutes, nutrition}} for recipes.
+    """Return actual catalog metadata used by category and health scoring.
 
     If the metadata was already populated from the artifact, returns the cache.
     Otherwise, if needed_ids is provided, queries Supabase only for those IDs (fallback).
@@ -332,7 +814,10 @@ def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: se
                 try:
                     response = (
                         supabase.table("recipes")
-                        .select("id, minutes, nutrition, ingredients")
+                        .select(
+                            "id, name, minutes, n_steps, n_ingredients, "
+                            "nutrition, ingredients, is_ibs_friendly"
+                        )
                         .in_("id", chunk)
                         .execute()
                     )
@@ -351,7 +836,10 @@ def fetch_recipes_metadata(supabase: Client, force: bool = False, needed_ids: se
     while True:
         response = (
             supabase.table("recipes")
-            .select("id, minutes, nutrition, ingredients")
+            .select(
+                "id, name, minutes, n_steps, n_ingredients, "
+                "nutrition, ingredients, is_ibs_friendly"
+            )
             .order("id")
             .range(start, start + page_size - 1)
             .execute()
@@ -651,10 +1139,16 @@ def compute_cookbook_recommendations(
 # against running a sentence-transformer model on 100k recipes.
 # ---------------------------------------------------------------------------
 
-# Cached at module scope. The centroid depends on the artifact's recipe_index
-# and the cached recipes_meta; we tie its freshness to the metadata TTL so
-# new catalog rows can join the seed pool when they appear.
-_FLAVOR_CENTROID_CACHE: dict = {"centroid": None, "computed_at": None, "n_seeds": 0}
+# Cached at module scope. Only the centroid is invariant for a model
+# generation; per-recipe similarities are computed for the bounded candidate
+# IDs on each request. The exact generation key prevents a hot artifact refresh
+# from reusing the prior generation's centroid.
+_FLAVOR_CENTROID_CACHE: dict = {
+    "artifact_key": None,
+    "centroid": None,
+    "computed_at": None,
+    "n_seeds": 0,
+}
 
 
 def identify_flavor_seed_ids(recipes_meta: dict, keywords: frozenset[str]) -> list[str]:
@@ -696,19 +1190,42 @@ def compute_flavor_centroid(
     return np.mean(np.array(vectors), axis=0)
 
 
+def flavor_artifact_cache_key(artifact: dict) -> tuple:
+    recipe_ids = artifact["recipe_ids"]
+    return (
+        int(artifact.get("artifact_version", 1)),
+        str(artifact.get("backend", "")),
+        str(artifact.get("model_name") or ""),
+        str(artifact.get("trained_at") or ""),
+        artifact.get("artifact_file_identity"),
+        len(recipe_ids),
+        str(recipe_ids[0]) if len(recipe_ids) else "",
+        str(recipe_ids[-1]) if len(recipe_ids) else "",
+    )
+
+
 def compute_flavor_scores(
     centroid: np.ndarray,
-    item_factors: np.ndarray,
-    recipe_ids: np.ndarray,
+    artifact: dict,
+    candidate_ids,
 ) -> dict[str, float]:
-    """Cosine similarity from each recipe embedding to the flavor centroid.
-
-    Vectorized over the whole catalog (100k recipes -> microseconds). Returns
-    {recipe_id_str: similarity} for every recipe in the artifact.
-    """
+    """Compute cosine-to-centroid only for the bounded candidate factor rows."""
     centroid_norm = float(np.linalg.norm(centroid))
     if centroid_norm < 1e-9:
         return {}
+
+    recipe_index = artifact["recipe_index"]
+    matched = [
+        (recipe_id, recipe_index[recipe_id])
+        for recipe_id in dict.fromkeys(str(value) for value in candidate_ids)
+        if recipe_id in recipe_index
+    ]
+    if not matched:
+        return {}
+
+    recipe_ids = [recipe_id for recipe_id, _index in matched]
+    indices = np.asarray([index for _recipe_id, index in matched], dtype=np.int64)
+    item_factors = artifact["item_factors"][indices]
     item_norms = np.linalg.norm(item_factors, axis=1)
     # Clamp zero-norm vectors so the division is safe; affected recipes get
     # similarity ~0 which pushes them out of the top-K anyway.
@@ -720,30 +1237,38 @@ def compute_flavor_scores(
 def get_flavor_artifact(
     recipes_meta: dict,
     artifact: dict,
+    candidate_ids,
     force: bool = False,
 ) -> tuple[Optional[np.ndarray], dict[str, float]]:
-    """Return (centroid, scores_by_id) for the Flavor row, cached across calls.
+    """Return the generation centroid and bounded candidate similarities.
 
-    The centroid is invariant per artifact+catalog so we cache both it and
-    the full scores map. TTL matches the recipes-metadata cache.
+    The centroid is invariant per artifact+catalog, so it is cached by exact
+    artifact generation. Candidate similarities remain request-local.
     """
     now = datetime.now(timezone.utc)
     cached_at = _FLAVOR_CENTROID_CACHE["computed_at"]
+    artifact_key = flavor_artifact_cache_key(artifact)
     if (
         not force
-        and _FLAVOR_CENTROID_CACHE["centroid"] is not None
+        and _FLAVOR_CENTROID_CACHE["artifact_key"] == artifact_key
         and cached_at is not None
         and (now - cached_at).total_seconds() < recipes_meta_cache_ttl_seconds()
     ):
-        return _FLAVOR_CENTROID_CACHE["centroid"], _FLAVOR_CENTROID_CACHE["scores"]
+        centroid = _FLAVOR_CENTROID_CACHE["centroid"]
+        scores = (
+            compute_flavor_scores(centroid, artifact, candidate_ids)
+            if centroid is not None
+            else {}
+        )
+        return centroid, scores
 
     # If precomputed flavor centroid is in the artifact, use it directly!
     precomputed_centroid = artifact.get("flavor_centroid")
     if precomputed_centroid is not None:
         centroid = precomputed_centroid.astype(float)
-        scores = compute_flavor_scores(centroid, artifact["item_factors"], artifact["recipe_ids"])
+        scores = compute_flavor_scores(centroid, artifact, candidate_ids)
+        _FLAVOR_CENTROID_CACHE["artifact_key"] = artifact_key
         _FLAVOR_CENTROID_CACHE["centroid"] = centroid
-        _FLAVOR_CENTROID_CACHE["scores"] = scores
         _FLAVOR_CENTROID_CACHE["computed_at"] = now
         _FLAVOR_CENTROID_CACHE["n_seeds"] = 0
         print("[Info] Loaded precomputed flavor centroid from artifact.")
@@ -754,10 +1279,10 @@ def get_flavor_artifact(
     centroid = compute_flavor_centroid(seed_ids, artifact["recipe_index"], artifact["item_factors"])
     scores: dict[str, float] = {}
     if centroid is not None:
-        scores = compute_flavor_scores(centroid, artifact["item_factors"], artifact["recipe_ids"])
+        scores = compute_flavor_scores(centroid, artifact, candidate_ids)
 
+    _FLAVOR_CENTROID_CACHE["artifact_key"] = artifact_key
     _FLAVOR_CENTROID_CACHE["centroid"] = centroid
-    _FLAVOR_CENTROID_CACHE["scores"] = scores
     _FLAVOR_CENTROID_CACHE["computed_at"] = now
     _FLAVOR_CENTROID_CACHE["n_seeds"] = len(seed_ids)
     print(
@@ -778,38 +1303,96 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     """
     supabase = load_supabase_client()
     download_artifact_from_storage(supabase)
+    download_symptom_artifact_from_storage(supabase)
     artifact = load_cf_artifact()
 
     raw_interactions = fetch_user_interactions(supabase, user_id)
-    user_ratings = process_interactions_to_ratings(raw_interactions)
-    user_vector = build_user_vector(user_ratings, artifact)
+    learned_user_vector, learned_user_bias = get_learned_user_state(user_id, artifact)
+    is_lightfm_artifact = str(artifact.get("backend", "")).lower() == "lightfm"
+    # If a current LightFM artifact lacks this particular user's materialized
+    # state, rebuild from their full history. Applying trained_at in that case
+    # would silently discard older evidence.
+    online_interactions = interactions_for_online_update(
+        raw_interactions,
+        artifact,
+        use_full_history=is_lightfm_artifact and learned_user_vector is None,
+    )
+    online_ratings = process_interactions_to_ratings(online_interactions)
+    online_user_vector = build_user_vector(online_ratings, artifact)
+    online_weight = effective_online_vector_weight(online_ratings)
+    user_vector = (
+        blend_user_vectors(
+            learned_user_vector,
+            online_user_vector,
+            online_weight=online_weight,
+        )
+        if is_lightfm_artifact
+        else None
+    )
     excluded_recipe_ids = get_excluded_recipe_ids(raw_interactions)
     cookbook_rows = fetch_cookbook_memberships(supabase, user_id)
 
-    recipe_ids = artifact["recipe_ids"]
-    item_factors = artifact["item_factors"]
-    item_biases = artifact["item_biases"]
     global_mean = artifact["global_mean"]
 
-    # CF score for every recipe in the artifact, used both as the fallback
-    # preference source and as a category-row backstop.
-    if user_vector is None:
-        scores = global_mean + item_biases
+    # Fetch the bounded, generation-matched candidate set before doing latent
+    # scoring. Catalog cookbook recipes are added because they need preference
+    # scores even when they did not make the user's offline top-N.
+    precomputed_candidates = fetch_precomputed_candidates(
+        supabase,
+        user_id,
+        model_name=artifact.get("model_name"),
+    )
+    cookbook_catalog_ids = {
+        str(row["recipe_id"])
+        for row in cookbook_rows
+        if row.get("recipe_id") is not None
+        and str(row.get("recipe_source") or "catalog") != "personal"
+        and not str(row["recipe_id"]).startswith("personal-")
+    }
+    score_targets = [
+        *(recipe_id for recipe_id, _score in precomputed_candidates),
+        *cookbook_catalog_ids,
+    ]
+    score_by_id = reconstruct_artifact_scores(
+        artifact,
+        score_targets,
+        lightfm_user_vector=user_vector,
+        learned_user_bias=learned_user_bias,
+        online_vector=online_user_vector,
+        online_weight=online_weight,
+    )
+    if is_lightfm_artifact:
+        rescored_precomputed_candidates = rescore_precomputed_candidates(
+            precomputed_candidates,
+            score_by_id,
+        )
     else:
-        scores = global_mean + item_biases + item_factors.dot(user_vector)
-
-    ranked_indices = np.argsort(scores)[::-1]
-    cf_ranked_ids = [str(recipe_ids[idx]) for idx in ranked_indices]
-    score_by_id = {str(recipe_ids[i]): float(scores[i]) for i in range(len(recipe_ids))}
-
-    precomputed_candidates = fetch_precomputed_candidates(supabase, user_id)
-    if precomputed_candidates:
-        candidate_pairs = precomputed_candidates[:CANDIDATE_FETCH_LIMIT]
+        rescored_precomputed_candidates = apply_bounded_online_delta(
+            precomputed_candidates,
+            artifact,
+            online_user_vector,
+            online_weight,
+        )
+        score_by_id.update(rescored_precomputed_candidates)
+    if rescored_precomputed_candidates:
+        candidate_pairs = rescored_precomputed_candidates
     else:
-        candidate_pairs = [
-            (recipe_id, score_by_id[recipe_id])
-            for recipe_id in cf_ranked_ids[:CANDIDATE_FETCH_LIMIT]
-        ]
+        # Explicit cold/no-candidate fallback: reconstruct the full artifact
+        # only when the bounded candidate generation is absent or unusable.
+        fallback_scores = reconstruct_artifact_scores(
+            artifact,
+            artifact["recipe_ids"],
+            lightfm_user_vector=user_vector,
+            learned_user_bias=learned_user_bias,
+            online_vector=online_user_vector,
+            online_weight=online_weight,
+        )
+        score_by_id.update(fallback_scores)
+        candidate_pairs = sorted(
+            fallback_scores.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:CANDIDATE_FETCH_LIMIT]
 
     # Auxiliary signals for the category rows.
     # Both fetches tolerate empty results — categories simply come up short
@@ -836,7 +1419,11 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
     # returns ({}, None) on first call when no seeds match the artifact, which
     # leaves the Flavor row empty and the frontend falls back to its placeholder.
     try:
-        _flavor_centroid, flavor_scores_by_id = get_flavor_artifact(recipes_meta, artifact)
+        _flavor_centroid, flavor_scores_by_id = get_flavor_artifact(
+            recipes_meta,
+            artifact,
+            (recipe_id for recipe_id, _score in candidate_pairs),
+        )
     except Exception as exc:
         print(f"[Warning] Failed to build flavor centroid: {exc}")
         flavor_scores_by_id = {}
@@ -947,7 +1534,7 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         user_id=user_id,
         cookbook_rows=cookbook_rows,
         score_by_id=score_by_id,
-        precomputed_candidates=precomputed_candidates,
+        precomputed_candidates=rescored_precomputed_candidates,
         recipes_meta=recipes_meta,
         restrictions=restrictions,
         personal_signals=personal_signals,
@@ -978,7 +1565,7 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
             "cookbook_recipe_sources": [item["recipe_source"] for item in cookbook_recommendations],
             "cookbook_match_scores": [item["score"] for item in cookbook_recommendations],
             "cookbook_reasons": [item["reason"] for item in cookbook_recommendations],
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         supabase.table("user_recommendations").upsert(payload).execute()
 

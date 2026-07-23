@@ -2,7 +2,9 @@ pandas>=2.0
 numpy>=1.24
 scipy>=1.10
 scikit-learn>=1.3
-lightfm>=1.17
+# Maintained, API-compatible LightFM distribution with CPython 3.13 Linux
+# wheels. It still installs/imports as `lightfm`.
+lightfm-next==1.19.0
 xgboost>=2.0
 supabase>=2.0.0
 python-dotenv>=1.0.0

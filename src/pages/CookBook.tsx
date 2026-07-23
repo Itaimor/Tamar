@@ -30,6 +30,11 @@ import { useCanopyAccess } from "@/hooks/useCanopyAccess";
 import { FoodImageAnalysis, analyzeFoodImage } from "@/lib/foodImageAnalysis";
 import { uploadUserImage } from "@/lib/imageUploads";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchActiveHardRestrictions,
+  HardRestriction,
+  isRecipeAllowedByHardRestrictions,
+} from "@/lib/recommendationSafety";
 
 type CookbookRecommendation = {
   recipeId: string;
@@ -38,6 +43,13 @@ type CookbookRecommendation = {
   reason?: string | null;
   membership?: CooklistMembership;
   recipe?: RecipeItem;
+};
+
+type StoredCookbookRecommendations = {
+  cookbook_recipe_ids?: string[] | null;
+  cookbook_recipe_sources?: string[] | null;
+  cookbook_match_scores?: number[] | null;
+  cookbook_reasons?: string[] | null;
 };
 
 type DraggedCooklistRecipe = {
@@ -115,6 +127,11 @@ const CookBook = () => {
   const [pickerNewCooklistName, setPickerNewCooklistName] = useState("");
   const [cookbookSearch, setCookbookSearch] = useState("");
   const [cookbookRecommendations, setCookbookRecommendations] = useState<CookbookRecommendation[]>([]);
+  const [cookbookRecommendationUserId, setCookbookRecommendationUserId] = useState<string | null>(null);
+  const [cookbookRestrictionState, setCookbookRestrictionState] = useState<{
+    userId: string;
+    restrictions: HardRestriction[];
+  } | null>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [personalPreviewRecipe, setPersonalPreviewRecipe] = useState<CooklistMembership | null>(null);
   const [editingCooklist, setEditingCooklist] = useState<Cooklist | null>(null);
@@ -124,6 +141,7 @@ const CookBook = () => {
   const [draggedRecipe, setDraggedRecipe] = useState<DraggedCooklistRecipe | null>(null);
   const [dragOverCooklistId, setDragOverCooklistId] = useState<number | null>(null);
   const personalRecipeFromImageInputRef = useRef<HTMLInputElement>(null);
+  const cookbookRecommendationRequestRef = useRef(0);
 
   const getPersonalRecipeDetails = (item: CooklistMembership): RecipeItem => ({
     id: 0,
@@ -198,19 +216,74 @@ const CookBook = () => {
       .map((item) => item.recommendation);
   };
 
+  const keepCookbookRecommendationsSafe = (
+    recommendations: CookbookRecommendation[],
+    restrictions: HardRestriction[],
+  ): CookbookRecommendation[] =>
+    recommendations.filter((recommendation) =>
+      isRecipeAllowedByHardRestrictions(recommendation.recipe, restrictions),
+    );
+
+  const keepCookbookRecommendationsSafeForCurrentUser = (
+    recommendations: CookbookRecommendation[],
+  ): CookbookRecommendation[] => {
+    if (!user || cookbookRestrictionState?.userId !== user.id) return [];
+    return keepCookbookRecommendationsSafe(
+      recommendations,
+      cookbookRestrictionState.restrictions,
+    );
+  };
+
   const loadCookbookRecommendations = async (
     groupedRecipes: Record<number, CooklistMembership[]>,
     catalogRecipes: Record<string, RecipeItem>,
+    requestId: number,
   ) => {
+    const isCurrentRequest = () =>
+      cookbookRecommendationRequestRef.current === requestId;
+    if (!isCurrentRequest()) return;
+
     if (!user || !supabase) {
       setCookbookRecommendations([]);
+      setCookbookRecommendationUserId(null);
+      setCookbookRestrictionState(null);
       return;
     }
 
-    const fallbackRecommendations = buildLocalCookbookRecommendations(groupedRecipes, catalogRecipes);
+    setRecommendationsLoading(true);
+    setCookbookRecommendations([]);
+    setCookbookRecommendationUserId(null);
+    setCookbookRestrictionState(null);
+
+    let hardRestrictions: Awaited<ReturnType<typeof fetchActiveHardRestrictions>> = [];
+    try {
+      hardRestrictions = await fetchActiveHardRestrictions(user.id);
+      if (!isCurrentRequest()) return;
+    } catch (error) {
+      if (!isCurrentRequest()) return;
+      console.error(
+        "Failed to load hard restrictions; hiding cookbook recommendations:",
+        error,
+      );
+      setRecommendationsLoading(false);
+      return;
+    }
+    setCookbookRecommendationUserId(user.id);
+    setCookbookRestrictionState({ userId: user.id, restrictions: hardRestrictions });
+
+    const keepSafeRecommendations = (
+      recommendations: CookbookRecommendation[],
+    ): CookbookRecommendation[] =>
+      keepCookbookRecommendationsSafe(recommendations, hardRestrictions);
+    const fallbackRecommendations = keepSafeRecommendations(
+      buildLocalCookbookRecommendations(groupedRecipes, catalogRecipes),
+    );
     setCookbookRecommendations(fallbackRecommendations);
 
-    const renderCookbookRecommendations = async (recData: any) => {
+    const renderCookbookRecommendations = async (
+      recData: StoredCookbookRecommendations,
+    ) => {
+      if (!isCurrentRequest()) return;
       const memberships = Object.values(groupedRecipes).flat();
       const ids = (recData?.cookbook_recipe_ids || []) as string[];
       const sources = (recData?.cookbook_recipe_sources || []) as string[];
@@ -234,10 +307,15 @@ const CookBook = () => {
         })
         .filter((item): item is CookbookRecommendation => Boolean(item));
 
-      setCookbookRecommendations(storedRecommendations.length > 0 ? storedRecommendations.slice(0, 5) : fallbackRecommendations);
+      const safeStoredRecommendations = keepSafeRecommendations(storedRecommendations);
+      if (!isCurrentRequest()) return;
+      setCookbookRecommendations(
+        safeStoredRecommendations.length > 0
+          ? safeStoredRecommendations.slice(0, 5)
+          : fallbackRecommendations,
+      );
     };
 
-    setRecommendationsLoading(true);
     try {
       // 1. Fetch cached cookbook recommendations from Supabase first
       const { data, error } = await supabase
@@ -245,6 +323,7 @@ const CookBook = () => {
         .select("cookbook_recipe_ids,cookbook_recipe_sources,cookbook_match_scores,cookbook_reasons")
         .eq("user_id", user.id)
         .maybeSingle();
+      if (!isCurrentRequest()) return;
 
       if (error) {
         if (isMissingCookbookRecommendationColumns(error)) {
@@ -260,6 +339,7 @@ const CookBook = () => {
 
       if (data && data.cookbook_recipe_ids && data.cookbook_recipe_ids.length > 0) {
         await renderCookbookRecommendations(data);
+        if (!isCurrentRequest()) return;
       }
       setRecommendationsLoading(false);
 
@@ -274,6 +354,7 @@ const CookBook = () => {
           body: JSON.stringify({ user_id: user.id }),
         })
           .then(async (refreshResponse) => {
+            if (!isCurrentRequest()) return;
             if (!refreshResponse.ok) {
               console.error("Cookbook recommendation refresh failed:", refreshResponse.status, await refreshResponse.text());
             } else {
@@ -284,16 +365,19 @@ const CookBook = () => {
                 .eq("user_id", user.id)
                 .maybeSingle();
 
-              if (updatedData) {
+              if (isCurrentRequest() && updatedData) {
                 await renderCookbookRecommendations(updatedData);
               }
             }
           })
           .catch((err) => {
-            console.error("Background cookbook recommendation refresh failed:", err);
+            if (isCurrentRequest()) {
+              console.error("Background cookbook recommendation refresh failed:", err);
+            }
           });
       }
     } catch (error) {
+      if (!isCurrentRequest()) return;
       if (!isMissingCookbookRecommendationColumns(error)) {
         console.error("Failed to load cookbook recommendations:", error);
       }
@@ -303,13 +387,20 @@ const CookBook = () => {
   };
 
   useEffect(() => {
+    const requestId = ++cookbookRecommendationRequestRef.current;
+    const isCurrentRequest = () =>
+      cookbookRecommendationRequestRef.current === requestId;
+
     const loadCooklists = async () => {
       if (!user) {
+        if (!isCurrentRequest()) return;
         setCooklists([]);
         setCooklistRecipesById({});
         setRecipesMap({});
         setPersonalRecipeCooklistId(null);
         setCookbookRecommendations([]);
+        setCookbookRecommendationUserId(null);
+        setCookbookRestrictionState(null);
         setLoading(false);
         return;
       }
@@ -317,7 +408,9 @@ const CookBook = () => {
       setLoading(true);
       try {
         await ensureDefaultCooklist(user.id);
+        if (!isCurrentRequest()) return;
         const lists = await fetchCooklists(user.id);
+        if (!isCurrentRequest()) return;
         setCooklists(lists);
         setPersonalRecipeCooklistId((current) =>
           current && lists.some((cooklist) => cooklist.id === current) ? current : lists[0]?.id || null
@@ -326,6 +419,7 @@ const CookBook = () => {
         const membershipEntries = await Promise.all(
           lists.map(async (cooklist) => [cooklist.id, await fetchCooklistMemberships(user.id, cooklist.id)] as const)
         );
+        if (!isCurrentRequest()) return;
 
         const groupedRecipes: Record<number, CooklistMembership[]> = {};
         const catalogRecipeIds = new Set<string>();
@@ -338,9 +432,10 @@ const CookBook = () => {
 
         setCooklistRecipesById(groupedRecipes);
 
-        let catalogMap: Record<string, RecipeItem> = {};
+        const catalogMap: Record<string, RecipeItem> = {};
         if (catalogRecipeIds.size > 0) {
           const recipes = await fetchRecipesByIds([...catalogRecipeIds]);
+          if (!isCurrentRequest()) return;
           recipes.forEach((recipe) => {
             if (recipe) catalogMap[String(recipe.id)] = recipe;
           });
@@ -349,17 +444,30 @@ const CookBook = () => {
           setRecipesMap({});
         }
 
-        await loadCookbookRecommendations(groupedRecipes, catalogMap);
+        await loadCookbookRecommendations(
+          groupedRecipes,
+          catalogMap,
+          requestId,
+        );
       } catch (error) {
-        toast.error("Failed to load cooklists.");
+        if (isCurrentRequest()) {
+          toast.error("Failed to load cooklists.");
+        }
       } finally {
-        setLoading(false);
+        if (isCurrentRequest()) {
+          setLoading(false);
+        }
       }
     };
 
     if (!authLoading) {
       loadCooklists();
     }
+    return () => {
+      if (cookbookRecommendationRequestRef.current === requestId) {
+        cookbookRecommendationRequestRef.current += 1;
+      }
+    };
   }, [user, session?.access_token, authLoading]);
 
   const handleRecipeUse = async (recipe: RecipeItem) => {
@@ -620,7 +728,11 @@ const CookBook = () => {
             [sourceCooklistId]: (current[sourceCooklistId] || []).filter((recipe) => recipe.id !== item.id),
             [targetCooklist.id]: [moved || { ...item, cooklist_id: targetCooklist.id }, ...(current[targetCooklist.id] || [])],
           };
-          setCookbookRecommendations(buildLocalCookbookRecommendations(next, recipesMap));
+          setCookbookRecommendations(
+            keepCookbookRecommendationsSafeForCurrentUser(
+              buildLocalCookbookRecommendations(next, recipesMap),
+            ),
+          );
           return next;
         });
       } else {
@@ -651,7 +763,11 @@ const CookBook = () => {
               ? current[targetCooklist.id] || []
               : [movedItem, ...(current[targetCooklist.id] || [])],
           };
-          setCookbookRecommendations(buildLocalCookbookRecommendations(next, recipesMap));
+          setCookbookRecommendations(
+            keepCookbookRecommendationsSafeForCurrentUser(
+              buildLocalCookbookRecommendations(next, recipesMap),
+            ),
+          );
           return next;
         });
       }
@@ -751,6 +867,15 @@ const CookBook = () => {
   const allCooklistRecipes = cooklists.flatMap((cooklist) => cooklistRecipesById[cooklist.id] || []);
   const searchQuery = normalizeSearch(cookbookSearch);
   const formatMatchScore = (score?: number | null) => `${Math.round((score || 0.9) * 100)}%`;
+  const visibleCookbookRecommendations =
+    user &&
+    cookbookRecommendationUserId === user.id &&
+    cookbookRestrictionState?.userId === user.id
+      ? keepCookbookRecommendationsSafe(
+          cookbookRecommendations,
+          cookbookRestrictionState.restrictions,
+        )
+      : [];
 
   const handleRecommendationClick = (recommendation: CookbookRecommendation) => {
     if (recommendation.source === "personal" && recommendation.membership) {
@@ -788,19 +913,19 @@ const CookBook = () => {
           {recommendationsLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
         </div>
 
-        {recommendationsLoading && cookbookRecommendations.length === 0 ? (
+        {recommendationsLoading && visibleCookbookRecommendations.length === 0 ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <div key={index} className="h-20 rounded-lg bg-secondary animate-pulse" />
             ))}
           </div>
-        ) : cookbookRecommendations.length === 0 ? (
+        ) : visibleCookbookRecommendations.length === 0 ? (
           <div className="rounded-lg border border-dashed border-primary/20 bg-primary/5 p-4 text-sm text-[#667864]">
             Add recipes to your CookBook to get your picks.
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            {cookbookRecommendations.map((recommendation) => {
+            {visibleCookbookRecommendations.map((recommendation) => {
               const recipe = recommendation.recipe;
               const title = recipe?.title || recommendation.membership?.recipe_title || recommendation.recipeId;
               const image = recipe?.image || recommendation.membership?.image_url || "/images/empty_plate.png";

@@ -704,6 +704,11 @@ preference_score(user, recipe)
 Implementation note:
 
 `RecommenderSys/recommend_batch.py` now attempts LightFM training first and stores the resulting preference candidates in `public.user_candidate_recipes`. If LightFM is unavailable or fails to train in the current environment, the batch job falls back to the existing matrix-factorization CF artifact so the rest of the recommender pipeline remains usable.
+Production training installs the maintained, API-compatible `lightfm-next`
+distribution, which exposes the standard `lightfm` import package and provides
+Linux wheels for the repository-pinned Python runtime. The online serving
+process intentionally omits LightFM because it consumes the persisted latent
+representations rather than fitting a model.
 
 ---
 
@@ -714,33 +719,32 @@ LightFM is a good fit because it supports both:
 1. **Collaborative filtering**
 2. **User and item features**
 
-This matters because your project has recipe metadata and user metadata.
-
-LightFM is the chosen preference model for this design because it can learn from interaction history while also using richer information, such as:
+This matters because Tamar has both interaction history and persisted metadata. The implemented feature builder is `RecommenderSys/lightfm_features.py`; it creates bounded, namespaced sparse features so long recipes or histories do not dominate the representation.
 
 ### Item features
 
 ```text
-recipe ingredients
-recipe tags
-food category
-calories
-protein
-fat
-carbs
+up to 24 normalized recipe ingredients
+cooking-time bucket
+step-count bucket
+ingredient-count bucket
+Food.com calories and six nutrition %DV buckets
+is_ibs_friendly when known
 ```
 
 ### User features
 
 ```text
-diet type
-liked ingredients
-disliked ingredients
-known sensitivities
-IBS subtype
+app or historical cohort
+bounded taste features derived from positive app interactions
+stored restriction type and restricted ingredient
+personal ingredient-risk bucket, weighted by confidence
+IBS trigger-group risk bucket, weighted by confidence
 ```
 
-This makes it stronger for cold start because new users and new recipes can still be represented through their features.
+Only fields that actually exist in the current Supabase schema are used. Tags, food category, diet type, and IBS subtype must not be claimed as active LightFM features until they are stored and wired into this builder.
+
+LightFM identity features remain useful for observed users/items. For an active user or catalog recipe with no positive training interaction, the untrained identity entry is zeroed while its side features remain. This avoids random cold-start identity noise and lets metadata drive the initial representation.
 
 ---
 
@@ -761,7 +765,9 @@ completed = 5.0
 dismissed = 0.0
 ```
 
-Each user-recipe pair receives the strongest observed interaction weight, and LightFM learns from that weighted interaction signal.
+Each user-recipe pair receives the strongest observed app interaction weight, and LightFM learns from that weighted interaction signal. A zero-weight dismissal is omitted because WARP treats non-zero matrix entries as positive examples rather than explicit negatives.
+
+Food.com ratings are explicit 1–5 values, so they are converted to positive implicit feedback only when they meet `RECOMMENDER_HISTORICAL_POSITIVE_MIN_RATING` (default `4`). Lower historical ratings are not fed to WARP as positives.
 
 This keeps the online system simple while still allowing the model to learn from different strengths of engagement.
 
@@ -803,6 +809,21 @@ For each user-recipe pair, LightFM outputs:
 ```text
 preference_score
 ```
+
+The versioned preference artifact stores the hybrid item representations and biases plus each active user's learned hybrid representation and bias. These are the representations returned by LightFM after applying the user/item feature matrices, not raw identity embeddings.
+
+It also stores `backend`, `model_name`, and `trained_at`. `model_name` is an
+exact generation key (`<base>@<trained_at token>`), not a stable alias. A batch
+run stages candidate rows under that new key first and publishes the matching
+artifact only after every candidate write succeeds. A serving process with an
+older cached artifact therefore continues to query the intact older generation
+instead of mixing new factors with old candidates. Rows are replaced within an
+exact active-user/generation pair so a retry cannot leave extra recipes in that
+generation. The batch job also builds into a same-directory staging file and
+atomically promotes the local serving cache only after Storage publication, so
+a co-located request cannot observe a partial or unpublished archive.
+
+Recipe metadata embedded for online risk scoring carries aligned presence flags. Unknown nutrition, time, step count, ingredient count, or ingredients remains missing after artifact loading instead of being converted into a misleading observed zero.
 
 This score should not be used alone.
 
@@ -1065,16 +1086,16 @@ If this user eats this recipe in the current context, how likely are symptoms?
 
 This gives the system a separate risk score that can be subtracted from the preference score during final ranking. A recipe can therefore be highly preferred by LightFM but still ranked lower if XGBoost predicts a high symptom risk.
 
-The XGBoost model predicts:
+The XGBoost model targets the observed symptom/no-symptom label and emits:
 
 ```text
-P(symptoms | user, recipe, context)
+symptom_risk_score(recipe, causal_context)
 ```
 
-Output:
+The output is bounded to `[0, 1]`. Because the current XGBoost fit uses class weighting and is not yet calibrated, this value is a ranking risk score, not a clinical probability.
 
 ```text
-xgboost_risk ∈ [0,1]
+0 <= symptom_risk_score <= 1
 ```
 
 ---
@@ -1088,7 +1109,7 @@ Examples:
 ```text
 garlic + onion may be worse than either alone
 lactose + high fat may be worse than lactose alone
-large portion + high FODMAP may increase risk
+several trigger groups + recent trigger load may increase risk
 ```
 
 XGBoost can learn these interactions automatically.
@@ -1100,37 +1121,33 @@ XGBoost can learn these interactions automatically.
 ### Recipe features
 
 ```text
-contains_garlic
-contains_onion
-contains_wheat
-contains_lactose
-contains_fructans
-contains_polyols
-calories
-fat
-fiber
-protein
-carbs
-portion_size
+catalog-recipe and missingness flags
+actual ingredient count, step count, and cooking time
+Food.com calories in kcal
+Food.com fat, sugar, sodium, protein, saturated-fat, and carbohydrate %DV
+presence and ingredient counts for all eight Tamar IBS trigger groups
+number/fraction of ingredients mapped to trigger groups
 ```
 
-### User features
+### Personalized risk outside the XGBoost matrix
 
 ```text
-IBS subtype
-known sensitivities
-personal ingredient risk scores
-personal ingredient confidence scores
+current personalized ingredient risk
+current IBS population prior fallback
 ```
+
+These signals still affect every recommendation through `recipe_final_ingredient_risk` and the final combined-risk formula. They are deliberately not columns in a newly trained XGBoost artifact: the database currently stores aggregate risk snapshots, not a time-indexed snapshot for every historical meal, so including them would make historical training sparse while serving uses current values.
 
 ### Context features
 
 ```text
-recent meals
-recent symptom history
-recent FODMAP load
-time of day
+recent meal count and trigger load
+recent symptom maximum/mean and positive-report count
+explicit recent no-symptom fraction
+hours since the last meal/symptom, with missingness flags
 ```
+
+The feature order is explicit and stored with `feature_schema_version = 2` in the artifact. Food.com's recipe nutrition array is never relabeled as grams: only calories are kcal and the remaining catalog fields are percent daily value. Current-meal calories, portion, and macro values are deliberately not model inputs because they are known for a historical log but not while ranking a future recipe; keeping them out preserves training/serving parity. Time of day is also omitted until Tamar stores a reliable user timezone rather than treating UTC as local physiological time. Ingredient aliases are token-bounded and directional, with explicit protections for plant milks, cream of tartar, non-wheat flours, and safe broad foods.
 
 ---
 
@@ -1153,6 +1170,16 @@ symptoms_after_meal = 0
 if the user explicitly reported no symptoms.
 
 Do not always assume no report means no symptoms.
+
+The implemented trainer uses only catalog-backed meal logs so it can join the exact recipe row. Each explicit report is assigned to at most one nearest preceding meal in its 48-hour attribution window, and each meal receives at most one outcome. A follow-up report whose nearest meal is already labeled is skipped instead of cascading backward onto an older meal. This prevents one check-in or follow-up sequence from becoming duplicate labels for several meals:
+
+- severity greater than `0.20` is positive;
+- an explicit `no_symptoms` report is negative;
+- no qualifying report produces no training example.
+
+Features are built from context strictly before the meal. Evaluation prefers a user-disjoint split. Its chronological fallback purges any training row whose outcome was not yet reported before the first test meal. If neither holdout is safe, the artifact is marked `no_valid_holdout` and publishes no test metric rather than reporting a random same-user split.
+
+Training requires at least `RECOMMENDER_SYMPTOM_MIN_TRAINING_ROWS` independent explicit outcomes (default `100`), `RECOMMENDER_SYMPTOM_MIN_CLASS_ROWS` for each class (default `20`), and `RECOMMENDER_SYMPTOM_MIN_USERS` distinct users (default `5`). XGBoost receives class weighting from the evaluation-training partition. After holdout metrics are computed, the production model is refit on all eligible rows before upload. The artifact stores ROC AUC, log loss, and Brier score when a valid holdout exists and marks weighted probabilities as not calibrated; online code treats the output as a bounded risk score until enough independent data supports calibration.
 
 ---
 
@@ -1184,14 +1211,16 @@ Experienced users may rely more on personal evidence.
 
 Allergy and restriction data is used before this score is computed.
 
-If a recipe contains an ingredient that matches a user's allergy or strict restriction, the recipe is removed by hard filtering and does not receive a final score.
+If a recipe contains an ingredient that matches a user's active allergy, strict sensitivity, forbidden ingredient, or diet violation, the recipe is removed by hard filtering and does not receive a final score. Matching is normalized, token-bounded, directional, plural/hyphen tolerant, and uses a small allergen alias map. For example, `peanut` excludes `peanut butter`, but the narrower `peanut butter` restriction does not automatically exclude plain peanuts.
+
+This path fails closed: when active restriction state cannot be read, recommendation refresh aborts instead of treating the user as unrestricted; when hard restrictions exist but a candidate's ingredient metadata is missing, that candidate is excluded.
 
 The allergy/sensitivity datasets are still important because they help:
 
 1. Normalize ingredient names and aliases.
 2. Map recipe ingredients to known allergens or sensitivity groups.
 3. Populate `user_restrictions` for hard filtering.
-4. Create ingredient/category flags for XGBoost, such as `contains_lactose`, `contains_wheat`, or `contains_nuts`.
+4. Create the eight recipe trigger-group presence/count features used by XGBoost.
 5. Initialize IBS-based `population_risk_score` values for non-allergy sensitivities.
 
 Strict allergies are not treated as a soft risk penalty.
@@ -1202,7 +1231,7 @@ They are treated as:
 exclude recipe before ranking
 ```
 
-Non-allergy sensitivities can contribute to the risk score through XGBoost features, personalized ingredient risks, and IBS-based population priors.
+Non-allergy sensitivities contribute through personalized ingredient risks and IBS-based population priors. XGBoost separately uses the candidate recipe's trigger profile and causal recent context.
 
 ---
 
@@ -1217,7 +1246,7 @@ Do expensive work offline.
 Do only filtering and reranking online.
 ```
 
-Do not train models or score every recipe during a user request.
+Do not train models or run ingredient/symptom-risk inference over the full catalog during a user request.
 
 ---
 
@@ -1227,11 +1256,12 @@ Run periodically, for example once per day or every few hours.
 
 Offline jobs:
 
-1. Train or update LightFM preference model.
-2. Train or update XGBoost risk model.
-3. Generate top candidate recipes per user.
-4. Store candidate recipes in Supabase.
-5. Store model artifacts.
+1. Train or update the hybrid LightFM preference model.
+2. Persist hybrid item state, learned active-user state, `model_name`, and `trained_at` in the preference artifact.
+3. Generate and replace the top candidate set per active user/model in Supabase.
+4. Train the symptom-risk model from independent, catalog-backed labeled outcomes.
+5. Persist the versioned feature schema, units, split strategy, metrics, and training boundary in the symptom artifact.
+6. Upload both validated artifacts to the private Supabase Storage bucket.
 
 Example table:
 
@@ -1279,6 +1309,22 @@ LIMIT 500;
 
 Now the system works on 500 recipes instead of the full recipe database.
 
+The query is constrained to the artifact's `model_name`, so candidate rows and latent factors come from the same generation.
+
+### Step 1A - Apply Fresh Preference Evidence
+
+For a LightFM artifact, serving starts from the user's learned hybrid vector and bias. It then builds an online vector only from positive app interactions whose `created_at` is later than the artifact's `trained_at` boundary:
+
+```text
+effective_online_weight =
+configured_max_weight
+* min(1, cumulative_new_interaction_weight / full_strength)
+```
+
+The default maximum online weight is `0.35`, reaching full strength at cumulative weight `5`. Thus one low-weight view cannot move the representation as much as a save, while the learned batch user vector remains the long-term base. If an active user is absent from the learned-user state, the same evidence weight scales the online vector against a zero-vector cold baseline; a single view does not receive full latent influence. Interaction history is fetched in ordered pages so a Supabase row cap cannot silently omit recent evidence or saved/liked exclusions. The bounded stored candidate set is rescored with this blended representation.
+
+The SVD fallback has no learned hybrid user vector. Its exact stored batch candidate scores remain the base and post-training interactions contribute only a capped online score delta; serving does not replace those batch scores with a different reconstructed heuristic.
+
 ---
 
 ### Step 2 - Apply Hard Filters
@@ -1298,6 +1344,15 @@ recipe_ingredients
 ```
 
 Hard filtering should happen before risk scoring.
+
+If restriction state cannot be fetched, the request fails closed. If active hard restrictions exist and a candidate has no ingredient metadata, that candidate is removed rather than assumed safe. The same policy applies to Home arrays, catalog and personal CookBook recommendations, and client-side fallback rows.
+
+Home and CookBook assign each asynchronous recommendation load a monotonic
+request generation. Cleanup invalidates older loads, and state/background
+refresh writes verify generation ownership before committing. CookBook also
+reapplies the current user's hard restrictions at render time. A late response
+from an earlier user or refresh therefore cannot overwrite or bypass the newer
+restriction snapshot.
 
 ---
 
@@ -1329,6 +1384,8 @@ xgboost.predict(candidate_feature_matrix)
 ```
 
 This is fast because the matrix contains only a few hundred recipes.
+
+The service refreshes the symptom artifact through a temporary file, validates its prediction interface and feature contract, and atomically replaces the cache. A malformed download cannot overwrite the last usable artifact.
 
 ---
 
@@ -1390,7 +1447,9 @@ Current category logic:
   personalized list as a fallback when recent popularity is sparse.
 - `Bursting with Flavor`: recipes ranked by cosine similarity to a bold-flavor
   seed centroid in LightFM item-embedding space, then filtered by explicit
-  flavor ingredient keywords.
+  flavor ingredient keywords. The centroid is cached by exact artifact
+  generation, while similarity is computed only for the current candidate
+  factor rows.
 - `Healthy & Mindful`: risk-reranked candidates filtered by nutrition thresholds
   for calories and total fat.
 - `Quick & Satisfying`: risk-reranked candidates filtered by cooking time.
@@ -1418,15 +1477,22 @@ The online system does not:
 
 - Train LightFM
 - Train XGBoost
-- Score all recipes
+- Run health-risk inference over all recipes
 - Run expensive full-database candidate search
 
 It only:
 
 1. Fetches precomputed candidates.
-2. Applies hard filters.
-3. Scores ingredient and symptom risk for a few hundred candidates.
-4. Reranks them.
+2. Reconstructs preference scores only for those factor rows (plus catalog
+   recipes needed by the user's CookBook sidebar).
+3. Applies hard filters.
+4. Scores ingredient and symptom risk for a few hundred candidates.
+5. Reranks them.
+
+If an artifact generation has no usable candidate rows for a user, serving has
+one explicit cold/recovery fallback: it reconstructs preference scores across
+the artifact to obtain a bounded candidate set. Hard filtering and health-risk
+inference still run only over that bounded set, never over the full catalog.
 
 This is realistic and scalable.
 
@@ -1440,7 +1506,7 @@ These should affect recommendations immediately:
 
 ### User adds allergy
 
-Update hard filters immediately.
+Validate and store the normalized active restriction immediately. The next recommendation refresh reads restrictions before scoring; Home and CookBook fallback data is filtered with the same directional matcher so cached/default rows cannot bypass the new restriction.
 
 ```text
 Do not wait for retraining.
@@ -1456,7 +1522,7 @@ Update personalized ingredient risks immediately.
 
 ### User views/starts/saves/completes/likes/dismisses a recipe
 
-Store the interaction immediately.
+Store the interaction immediately. A refresh uses positive evidence written after the artifact boundary as a strength-scaled online delta on top of the learned batch preference state. Dismissals remain zero-weight and are used for exclusion/telemetry rather than as WARP positives.
 
 ---
 
@@ -1505,7 +1571,11 @@ ibs_population_ingredient_priors
 
 ## 14.1 user_candidate_recipes
 
-Stores precomputed recommendations from LightFM.
+Stores precomputed preference candidates from hybrid LightFM or the explicit
+matrix-factorization/popularity fallback. Serving filters by the exact
+generation in the artifact's `model_name`. Batch training stages a unique
+generation's candidates before publishing its artifact, so older cached
+artifacts continue using their matching older rows until they refresh.
 
 ```text
 user_id
@@ -1984,16 +2054,19 @@ Input:
 
 ```text
 recipe_interactions
-recipe features
-user features
+Food.com ratings >= configured positive threshold
+actual recipe metadata features
+active-user taste/restriction/risk features
 ```
 
 Output:
 
 ```text
-preference model
-top candidates per user
+versioned hybrid item + learned-user artifact
+replacement top-candidate set per active user/model
 ```
+
+Training passes both sparse user and item feature matrices to LightFM for fitting, prediction, and representation extraction. Unobserved identity entries are zeroed so cold entities use side features instead of random identity factors. The artifact boundary separates the batch-learned representation from later online evidence.
 
 Training frequency:
 
@@ -2010,16 +2083,17 @@ Input:
 ```text
 meal_logs
 health_reports
-recipe features
-user features
-ingredient risk features
+actual catalog recipe ingredients/nutrition/time/count features
+causal recent meal/symptom context
 ```
 
 Output:
 
 ```text
-symptom risk model
+validated, versioned symptom-risk artifact
 ```
+
+One explicit report labels at most one nearest preceding catalog meal. Missing reports are not negatives. New models exclude current aggregate personal-risk snapshots, current-meal portion/logged nutrition, and UTC time of day because those values cannot be reproduced precisely at recommendation time. Evaluation uses a user-disjoint split when possible or an outcome-availability-purged chronological split.
 
 Training frequency:
 

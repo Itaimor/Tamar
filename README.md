@@ -21,6 +21,10 @@ The deeper engineering documentation remains under [docs/](docs/), especially th
 This project is developed for the *Recommender Systems Workshop* at Tel Aviv University.
 More information can be found on the [Workshop Website](https://courses.cs.tau.ac.il/recsys/).
 
+## Free-Tier Availability
+
+This project uses free-tier hosting. Supabase may pause inactive free projects, and Render may spin down or run free services more slowly. As a result, the app may be temporarily unavailable or the first request after a period of inactivity may take longer than usual. If this happens or the app does not load, please contact us using one of the email addresses below.
+
 ## Authors
 
 - Yael Kelman - yaelsagi@mail.tau.ac.il
@@ -136,11 +140,12 @@ Use this section as the starting map for the repository. For deeper module behav
 
 | Path | Purpose |
 | --- | --- |
-| `RecommenderSys/recommend_batch.py` | Batch training flow that reads Supabase data, trains LightFM preference candidates when available, falls back to matrix-factorization CF, saves the item-factor artifact, and uploads candidates. |
-| `RecommenderSys/recommend_fast.py` | Fast per-user recommendation refresh using saved/precomputed preference candidates, hard filters, ingredient risk, symptom risk, and final reranking. |
-| `RecommenderSys/risk_scoring.py` | Shared health-risk scoring, strict restriction filtering, IBS priors, optional symptom-model scoring, and final reranking helpers. |
+| `RecommenderSys/lightfm_features.py` | Bounded LightFM user/item feature construction from real recipe metadata, interaction-derived taste, restrictions, and ingredient-risk signals. |
+| `RecommenderSys/recommend_batch.py` | Batch hybrid LightFM training with user/item features, learned user representations, generation-safe candidate/artifact publication, and matrix-factorization fallback. |
+| `RecommenderSys/recommend_fast.py` | Candidate-first per-user refresh that combines the learned batch user representation with evidence-weighted post-training interactions, then applies hard filters, ingredient risk, symptom risk, and final reranking. |
+| `RecommenderSys/risk_scoring.py` | Shared fail-safe restriction filtering, real-recipe XGBoost feature construction, IBS/personal ingredient risk, symptom-model scoring, and final reranking helpers. |
 | `RecommenderSys/health_events.py` | Meal-log, health-report, exposure, restriction, recipe-ingredient sync, and personalized ingredient-risk update helpers. |
-| `RecommenderSys/train_symptom_model.py` | Offline symptom-risk model training from meal logs and health reports. Uses XGBoost when available. |
+| `RecommenderSys/train_symptom_model.py` | Leakage-aware offline symptom-risk training from catalog-backed meals, explicit symptom/no-symptom outcomes, real recipe metadata, and causal prior context. Uses XGBoost when available. |
 | `RecommenderSys/recommender_service.py` | FastAPI service used by the frontend/API bridge for online refreshes plus meal, health, and restriction endpoints. |
 | `RecommenderSys/recommender_common.py` | Shared recommender constants, category logic, and utilities. |
 | `RecommenderSys/seed_database.py` | Seeds Supabase with Food.com data or fallback mock recipe/interactions. |

@@ -28,6 +28,11 @@ import {
 } from "@/lib/recipes";
 import { fetchAnalysisDashboard } from "@/lib/analysis";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchActiveHardRestrictions,
+  filterRecipesForHardRestrictions,
+  HardRestriction,
+} from "@/lib/recommendationSafety";
 import IbsOnboardingCard from "@/components/IbsOnboardingCard";
 import { fetchIbsOnboardingCompleted } from "@/lib/ibsProfile";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,6 +41,20 @@ import ImageWithSkeleton from "@/components/ImageWithSkeleton";
 
 type SavedRecipeRow = {
   recipe_id: string | number;
+};
+
+type StoredHomeRecommendations = {
+  recommended_recipe_ids?: string[] | null;
+  match_scores?: number[] | null;
+  trending_recipe_ids?: string[] | null;
+  trending_match_scores?: number[] | null;
+  flavor_recipe_ids?: string[] | null;
+  flavor_match_scores?: number[] | null;
+  healthy_recipe_ids?: string[] | null;
+  healthy_match_scores?: number[] | null;
+  quick_recipe_ids?: string[] | null;
+  quick_match_scores?: number[] | null;
+  updated_at?: string | null;
 };
 
 type HomeProps = {
@@ -62,6 +81,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const recommendationRequestRef = useRef(0);
   const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
   const [curatedRecipes, setCuratedRecipes] = useState<RecipeItem[]>([]);
   const [trendingRecipes, setTrendingRecipes] = useState<RecipeItem[]>([]);
@@ -69,6 +89,10 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
   const [healthyRecipes, setHealthyRecipes] = useState<RecipeItem[]>([]);
   const [quickRecipes, setQuickRecipes] = useState<RecipeItem[]>([]);
   const [onboardingRecipes, setOnboardingRecipes] = useState<RecipeItem[]>([]);
+  const [hardRestrictionState, setHardRestrictionState] = useState<{
+    userId: string;
+    restrictions: HardRestriction[];
+  } | null>(null);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true);
   const [isIbsOnboardingCompleted, setIsIbsOnboardingCompleted] = useState(true);
   const [currentMedoidIdx, setCurrentMedoidIdx] = useState(0);
@@ -161,15 +185,54 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
   }, [user]);
 
   useEffect(() => {
+    const requestId = ++recommendationRequestRef.current;
+    const isCurrentRequest = () =>
+      recommendationRequestRef.current === requestId;
+
     const loadRecommendations = async () => {
+      let hardRestrictions: HardRestriction[] = [];
+      const keepSafe = (recipes: RecipeItem[]) =>
+        user
+          ? filterRecipesForHardRestrictions(recipes, hardRestrictions)
+          : recipes;
+      const clearRecommendationRows = () => {
+        setCuratedRecipes([]);
+        setTrendingRecipes([]);
+        setFlavorRecipes([]);
+        setHealthyRecipes([]);
+        setQuickRecipes([]);
+        setOnboardingRecipes([]);
+      };
+
+      if (user) {
+        setHardRestrictionState(null);
+        try {
+          hardRestrictions = await fetchActiveHardRestrictions(user.id);
+          if (!isCurrentRequest()) return;
+          setHardRestrictionState({ userId: user.id, restrictions: hardRestrictions });
+        } catch (error) {
+          if (!isCurrentRequest()) return;
+          console.error("Failed to load hard restrictions; hiding recipe recommendations:", error);
+          clearRecommendationRows();
+          setCachedHeroRecipe(null);
+          setIsOnboardingCompleted(true);
+          return;
+        }
+      } else {
+        setHardRestrictionState(null);
+      }
+
       if (user && supabase) {
         try {
           const tasteFeedbackCount = await fetchTasteFeedbackCount(user.id);
+          if (!isCurrentRequest()) return;
           if (tasteFeedbackCount === 0) {
             // The taste-feedback questionnaire is mandatory on cold start: it always
             // shows here regardless of whether the user skipped the app tour/tutorial.
-            const starters = await loadTasteOnboardingRecipes();
-            const defaultRecs = await fetchDefaultRecipes(6);
+            const starters = keepSafe(await loadTasteOnboardingRecipes());
+            if (!isCurrentRequest()) return;
+            const defaultRecs = keepSafe(await fetchDefaultRecipes(6));
+            if (!isCurrentRequest()) return;
             setOnboardingRecipes(starters);
             setCuratedRecipes(defaultRecs);
             updateHeroCache(defaultRecs);
@@ -188,6 +251,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
               },
               body: JSON.stringify({ user_id: user.id }),
             });
+            if (!isCurrentRequest()) return;
 
             if (!refreshResponse.ok) {
               const message = await refreshResponse.text();
@@ -207,11 +271,16 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
             )
             .eq("user_id", user.id)
             .maybeSingle();
+          if (!isCurrentRequest()) return;
 
-          const renderRecommendations = async (recData: any) => {
-            if (recData && recData.recommended_recipe_ids && recData.recommended_recipe_ids.length > 0) {
-              const recIds = recData.recommended_recipe_ids as string[];
-              const loaded = await fetchRecipesByIds(recIds);
+          const renderRecommendations = async (
+            recData: StoredHomeRecommendations,
+          ) => {
+            if (!isCurrentRequest()) return;
+            if (recData) {
+              const recIds = (recData.recommended_recipe_ids || []) as string[];
+              const loaded = recIds.length > 0 ? await fetchRecipesByIds(recIds) : [];
+              if (!isCurrentRequest()) return;
               console.info("Loaded CF recommendations", {
                 userId: user.id,
                 recIds,
@@ -239,7 +308,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
               ): Promise<RecipeItem[]> => {
                 if (!ids || ids.length === 0) return [];
                 const items = await fetchRecipesByIds(ids);
-                return withMatchScores(items, scores);
+                return keepSafe(withMatchScores(items, scores));
               };
 
               const [trending, flavor, healthy, quick] = await Promise.all([
@@ -260,12 +329,13 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
                   recData.quick_match_scores as number[] | null,
                 ),
               ]);
+              if (!isCurrentRequest()) return;
 
-              setCuratedRecipes(withMatchScores(loaded, recData.match_scores));
-              if (trending.length > 0) setTrendingRecipes(trending);
-              if (flavor.length > 0) setFlavorRecipes(flavor);
-              if (healthy.length > 0) setHealthyRecipes(healthy);
-              if (quick.length > 0) setQuickRecipes(quick);
+              setCuratedRecipes(keepSafe(withMatchScores(loaded, recData.match_scores)));
+              setTrendingRecipes(trending);
+              setFlavorRecipes(flavor);
+              setHealthyRecipes(healthy);
+              setQuickRecipes(quick);
               setIsOnboardingCompleted(true);
             }
           };
@@ -273,6 +343,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
           // If we have cached recommendations, render them immediately
           if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
             await renderRecommendations(data);
+            if (!isCurrentRequest()) return;
           }
 
           // 2. Trigger the refresh in the background (non-blocking)
@@ -286,6 +357,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
               body: JSON.stringify({ user_id: user.id }),
             })
               .then(async (refreshResponse) => {
+                if (!isCurrentRequest()) return;
                 if (!refreshResponse.ok) {
                   const message = await refreshResponse.text();
                   console.error("Recommendation refresh failed:", refreshResponse.status, message);
@@ -304,13 +376,15 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
                     .eq("user_id", user.id)
                     .maybeSingle();
 
-                  if (updatedData) {
+                  if (isCurrentRequest() && updatedData) {
                     await renderRecommendations(updatedData);
                   }
                 }
               })
               .catch((err) => {
-                console.error("Background recommendation refresh failed:", err);
+                if (isCurrentRequest()) {
+                  console.error("Background recommendation refresh failed:", err);
+                }
               });
           }
 
@@ -318,20 +392,24 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
             return;
           }
         } catch (error) {
-          console.error("Failed to load recommendations:", error);
+          if (isCurrentRequest()) {
+            console.error("Failed to load recommendations:", error);
+          }
         }
       }
 
       if (user) {
         setIsOnboardingCompleted(true);
-        const defaultRecs = await fetchDefaultRecipes(6);
+        const defaultRecs = keepSafe(await fetchDefaultRecipes(6));
+        if (!isCurrentRequest()) return;
         setCuratedRecipes(defaultRecs);
         updateHeroCache(defaultRecs);
         queueRecipeImages(defaultRecs);
         return;
       }
 
-      const defaultRecs = await fetchDefaultRecipes(6);
+      const defaultRecs = keepSafe(await fetchDefaultRecipes(6));
+      if (!isCurrentRequest()) return;
       setCuratedRecipes(defaultRecs);
       updateHeroCache(defaultRecs);
       queueRecipeImages(defaultRecs);
@@ -343,6 +421,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
         String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
       try {
         const dashboard = await fetchAnalysisDashboard(user.id);
+        if (!isCurrentRequest()) return;
         const gentleNames = new Set(dashboard.easierFoods.map((f) => normalize(f.name)));
         // annotate currently loaded rows with fuzzy normalization matching
         const annotate = (list: RecipeItem[]) =>
@@ -368,12 +447,28 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
       }
     };
     loadGentleIngredients();
+    return () => {
+      if (recommendationRequestRef.current === requestId) {
+        recommendationRequestRef.current += 1;
+      }
+    };
   }, [user, session?.access_token, recommendationRefreshKey]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadOtherSections = async () => {
+      if (user) {
+        setTrendingRecipes([]);
+        setFlavorRecipes([]);
+        setHealthyRecipes([]);
+        setQuickRecipes([]);
+        return;
+      }
+
       try {
         const allRecipes = await fetchDefaultRecipes(30);
+        if (cancelled) return;
         setTrendingRecipes(allRecipes.slice(6, 12));
         setFlavorRecipes(allRecipes.slice(12, 18));
         setHealthyRecipes(allRecipes.slice(18, 24));
@@ -384,7 +479,26 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
       }
     };
     loadOtherSections();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const activeHardRestrictions =
+    user && hardRestrictionState?.userId === user.id
+      ? hardRestrictionState.restrictions
+      : null;
+  const keepDisplaySafe = (recipes: RecipeItem[]) => {
+    if (!user) return recipes;
+    if (activeHardRestrictions === null) return [];
+    return filterRecipesForHardRestrictions(recipes, activeHardRestrictions);
+  };
+  const visibleCuratedRecipes = keepDisplaySafe(curatedRecipes);
+  const visibleTrendingRecipes = keepDisplaySafe(trendingRecipes);
+  const visibleFlavorRecipes = keepDisplaySafe(flavorRecipes);
+  const visibleHealthyRecipes = keepDisplaySafe(healthyRecipes);
+  const visibleQuickRecipes = keepDisplaySafe(quickRecipes);
+  const visibleOnboardingRecipes = keepDisplaySafe(onboardingRecipes);
 
   const handleToggleSave = async (item: { id: number; title: string }) => {
     if (!user) {
@@ -470,7 +584,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
   const handleSwipe = async (like: boolean) => {
     if (!user || onboardingBusy) return;
 
-    const recipe = onboardingRecipes[currentMedoidIdx];
+    const recipe = visibleOnboardingRecipes[currentMedoidIdx];
     if (!recipe) return;
 
     setOnboardingBusy(true);
@@ -485,7 +599,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
         interactionType: like ? "liked" : "dismissed",
       });
 
-      if (currentMedoidIdx < onboardingRecipes.length - 1) {
+      if (currentMedoidIdx < visibleOnboardingRecipes.length - 1) {
         setCurrentMedoidIdx(prev => prev + 1);
       } else {
         setIsOnboardingCompleted(true);
@@ -500,12 +614,26 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
   };
 
   const handleResetOnboarding = async () => {
-    const starters = await loadTasteOnboardingRecipes();
+    const activeRestrictions =
+      user && hardRestrictionState?.userId === user.id
+        ? hardRestrictionState.restrictions
+        : null;
+    if (user && activeRestrictions === null) {
+      setOnboardingRecipes([]);
+      setCuratedRecipes([]);
+      return;
+    }
+
+    const keepSafe = (recipes: RecipeItem[]) =>
+      user
+        ? filterRecipesForHardRestrictions(recipes, activeRestrictions || [])
+        : recipes;
+    const starters = keepSafe(await loadTasteOnboardingRecipes());
     setOnboardingRecipes(starters);
     setIsOnboardingCompleted(false);
     setCurrentMedoidIdx(0);
     setFeedback({});
-    const defaultRecs = await fetchDefaultRecipes(6);
+    const defaultRecs = keepSafe(await fetchDefaultRecipes(6));
     setCuratedRecipes(defaultRecs);
   };
 
@@ -548,19 +676,19 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
 
   const sections = recipeSections.map((sec) => {
     if (sec.title === "Curated for You") {
-      return { ...sec, items: ensureUniqueRecipeRowImages(curatedRecipes) };
+      return { ...sec, items: ensureUniqueRecipeRowImages(visibleCuratedRecipes) };
     }
     if (sec.title === "Trending in Your Area") {
-      return { ...sec, items: ensureUniqueRecipeRowImages(trendingRecipes) };
+      return { ...sec, items: ensureUniqueRecipeRowImages(visibleTrendingRecipes) };
     }
     if (sec.title === "Bursting with Flavor") {
-      return { ...sec, items: ensureUniqueRecipeRowImages(flavorRecipes) };
+      return { ...sec, items: ensureUniqueRecipeRowImages(visibleFlavorRecipes) };
     }
     if (sec.title === "Healthy & Mindful") {
-      return { ...sec, items: ensureUniqueRecipeRowImages(healthyRecipes) };
+      return { ...sec, items: ensureUniqueRecipeRowImages(visibleHealthyRecipes) };
     }
     if (sec.title === "Quick & Satisfying") {
-      return { ...sec, items: ensureUniqueRecipeRowImages(quickRecipes) };
+      return { ...sec, items: ensureUniqueRecipeRowImages(visibleQuickRecipes) };
     }
     return sec;
   });
@@ -601,7 +729,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
     }));
   };
 
-  const heroRecipe = curatedRecipes[0] || cachedHeroRecipe;
+  const heroRecipe = visibleCuratedRecipes[0] || (!user ? cachedHeroRecipe : null);
   const heroTitle = heroRecipe?.title || "Mediterranean Harvest Bowl";
   const heroDescription =
     heroRecipe?.description ||
@@ -699,7 +827,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
         )}
 
         <Dialog
-          open={!deferColdStartSetup && !isOnboardingCompleted && onboardingRecipes.length > 0}
+          open={!deferColdStartSetup && !isOnboardingCompleted && visibleOnboardingRecipes.length > 0}
           onOpenChange={() => {}}
         >
           <DialogContent
@@ -709,7 +837,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
             onInteractOutside={(e) => e.preventDefault()}
             className="max-w-md w-[calc(100vw-2rem)] p-6 rounded-xl border border-primary/15 bg-white/95 shadow-2xl shadow-primary/20 backdrop-blur-md"
           >
-            {onboardingRecipes.length > 0 && (
+            {visibleOnboardingRecipes.length > 0 && (
               <>
                 <DialogHeader className="space-y-1 text-left">
                   <div className="flex items-center gap-2 text-primary text-xs uppercase tracking-widest font-extrabold">
@@ -733,21 +861,21 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
                       className="absolute inset-0"
                     >
                       <ImageWithSkeleton
-                        src={onboardingRecipes[currentMedoidIdx].image}
-                        alt={onboardingRecipes[currentMedoidIdx].title}
+                        src={visibleOnboardingRecipes[currentMedoidIdx].image}
+                        alt={visibleOnboardingRecipes[currentMedoidIdx].title}
                         className="w-full h-full object-cover"
                         skeletonClassName="bg-secondary"
                       />
-                      {onboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
+                      {visibleOnboardingRecipes[currentMedoidIdx].image === "/images/empty_plate.png" && (
                         <div className="absolute inset-0 bg-primary/15 pointer-events-none" />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-[#1f3d2b]/85 via-[#1f3d2b]/12 to-transparent" />
                       <div className="absolute bottom-4 left-4 right-4">
                         <span className="bg-primary/20 text-primary border border-primary/50 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded mb-2 inline-block">
-                          Taste match {currentMedoidIdx + 1} of {onboardingRecipes.length}
+                          Taste match {currentMedoidIdx + 1} of {visibleOnboardingRecipes.length}
                         </span>
-                        <h5 className="text-lg font-bold text-white leading-tight">{onboardingRecipes[currentMedoidIdx].title}</h5>
-                        <p className="text-white/75 text-xs mt-0.5">Cook Time: {onboardingRecipes[currentMedoidIdx].time}</p>
+                        <h5 className="text-lg font-bold text-white leading-tight">{visibleOnboardingRecipes[currentMedoidIdx].title}</h5>
+                        <p className="text-white/75 text-xs mt-0.5">Cook Time: {visibleOnboardingRecipes[currentMedoidIdx].time}</p>
                       </div>
                     </motion.div>
                   </AnimatePresence>
@@ -773,7 +901,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
                 </div>
 
                 <div className="flex justify-center gap-1.5 mt-6">
-                  {onboardingRecipes.map((_, idx) => (
+                  {visibleOnboardingRecipes.map((_, idx) => (
                     <div
                       key={idx}
                       className={`h-1.5 rounded-full transition-all duration-300 ${

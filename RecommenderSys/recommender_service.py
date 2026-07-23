@@ -1,17 +1,18 @@
 """
-HTTP service for online CF recommendation refreshes.
+HTTP service for online hybrid preference and health-risk refreshes.
 
-Deploy this Python service somewhere that supports numpy/pandas/scikit-surprise
+Deploy this Python service somewhere that supports the recommender service
 dependencies, such as Render or Railway. The frontend API route calls it with a
-server-side secret; it loads the saved CF artifact from Supabase Storage and
-updates user_recommendations for the requested user.
+server-side secret; it validates cached preference/symptom artifacts from
+Supabase Storage and updates user_recommendations for the requested user.
 """
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 from dotenv import load_dotenv
 
 from health_events import (
@@ -59,11 +60,19 @@ class HealthReportRequest(BaseModel):
     no_symptoms: bool = False
 
 
+NonBlankRestrictionName = constr(strip_whitespace=True, min_length=1)
+
+
 class RestrictionRequest(BaseModel):
     user_id: str
-    ingredient_name: str
-    restriction_type: str
-    severity: str = "strict"
+    ingredient_name: NonBlankRestrictionName
+    restriction_type: Literal[
+        "allergy",
+        "strict_sensitivity",
+        "forbidden_ingredient",
+        "diet_violation",
+    ]
+    severity: Literal["low", "medium", "high", "strict"] = "strict"
     is_strict: bool = True
     notes: str | None = None
 

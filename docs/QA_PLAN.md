@@ -174,7 +174,38 @@ Prepare these accounts before the session. Use separate email addresses so priva
 | A5 Returning user | Saved recipes, cooklists, meals, check-ins, recommendations | Rich dashboards, search, edit/delete, insight nudges. |
 | A6 Privacy pair | Two normal users with distinct data | Verify one user never sees another user's private data. |
 
+#### Seeded Section 4.3 Accounts
+
+These Supabase Auth users were seeded and verified on July 23, 2026. They are
+test-only accounts and must not contain real user data.
+
+All accounts use the shared password: `TamarQA!moRCpM9r0vvY9a`
+
+| Account | Sign-in email | Seeded details |
+| --- | --- | --- |
+| A0 Anonymous | No account; remain signed out | Use a private/incognito window or sign out before testing. |
+| A1 New Sapling | `tamar.qa.a1.new.sapling@example.com` | Empty first-run account with no meals, saved recipes, or recommendations. |
+| A2 Active Sapling | `tamar.qa.a2.active.sapling@example.com` | Trial start is set 10 days before the latest seeding run. |
+| A3 Expired Sapling | `tamar.qa.a3.expired.sapling@example.com` | Trial start is set 40 days before the latest seeding run; no Canopy+ metadata. |
+| A4 Canopy+ | `tamar.qa.a4.canopy@example.com` | `app_metadata` includes `canopy_plus: true` and `tamar_plan: canopy_plus`. |
+| A5 Returning user | `tamar.qa.a5.returning@example.com` | Seeded cooklists, catalog recipes, interactions, recommendations, three meals, three health reports, and an IBS profile. |
+| A6 Privacy user 1 | `tamar.qa.a6.privacy.one@example.com` | Contains a meal marked `PRIVATE A6A`; authenticated RLS verification confirmed this user cannot read A6B data. |
+| A6 Privacy user 2 | `tamar.qa.a6.privacy.two@example.com` | Contains a meal marked `PRIVATE A6B`; authenticated RLS verification confirmed this user cannot read A6A data. |
+
+Sign out before switching accounts. To refresh these fixtures, run
+`node scripts/seed-qa-accounts.mjs`; the script prints the shared password it
+sets. To preserve the password shown above, set `QA_ACCOUNT_PASSWORD` to that
+value before rerunning the script.
+
 Canopy+ metadata is read from `app_metadata`, not user-editable metadata. Supported flags include `canopy_plus`, `tamar_canopy`, `is_canopy_plus`, or plan-like values such as `canopy_plus` on `tamar_plan`, `plan`, or `subscription_tier`.
+
+For Admin API-created QA fixtures, A2 and A3 may use the server-controlled
+`app_metadata.qa_trial_started_at` override together with
+`app_metadata.qa_account = true`. Supabase Auth does not permit backdating
+`auth.users.created_at` through its supported Admin API, so this override lets
+the UI exercise active and expired trial states without affecting normal users.
+Run `node scripts/seed-qa-accounts.mjs` to create or refresh the section 4.3
+fixtures.
 
 ### 4.4 Tree Fixture States
 
@@ -195,6 +226,38 @@ Ask a developer or admin to provide test users or seeded rows for these Tamar tr
 | Level 100 | Zone label Cloud canopy. |
 | Level 200 | Zone label Atmosphere. |
 | Level 300 | Zone label UFO grove. |
+
+#### Seeded Tree QA Accounts
+
+The following Supabase Auth users were seeded and their email/password sign-in was verified on July 23, 2026. They are test-only accounts and must not contain real user data.
+
+All accounts use the shared password: `TamarTree-QA-2026!`
+
+| Tree state | Sign-in email |
+| --- | --- |
+| Fresh run | `qa-tree-fresh@tamar-qa.example` |
+| Water only today | `qa-tree-water-only@tamar-qa.example` |
+| Compost only today | `qa-tree-compost-only@tamar-qa.example` |
+| Full care today | `qa-tree-full-care@tamar-qa.example` |
+| Repeated care today | `qa-tree-repeated-care@tamar-qa.example` |
+| Six days without care | `qa-tree-six-days@tamar-qa.example` |
+| Seven days without care | `qa-tree-seven-days-dead@tamar-qa.example` |
+| Replanted after death | `qa-tree-replanted@tamar-qa.example` |
+| Level 7 — Young oasis | `qa-tree-level-7@tamar-qa.example` |
+| Level 30 — Fruit canopy | `qa-tree-level-30@tamar-qa.example` |
+| Level 100 — Cloud canopy | `qa-tree-level-100@tamar-qa.example` |
+| Level 200 — Atmosphere | `qa-tree-level-200@tamar-qa.example` |
+| Level 300 — UFO grove | `qa-tree-level-300@tamar-qa.example` |
+
+To use a fixture:
+
+1. Run `npm run dev`.
+2. Open `http://localhost:8080`.
+3. Choose **Sign in**, not sign up, and enter the fixture email plus the shared password.
+4. Skip the first-run guide if it appears, then open **Diary** to inspect the Tamar tree.
+5. Sign out before moving to the next fixture.
+
+These states were seeded relative to July 23, 2026 in the Jerusalem timezone. Tree state is date-sensitive: the warning/death fixtures will advance as calendar days pass, and browser-local dates outside the Jerusalem timezone may cross midnight at a different time. Ask a developer or admin to reseed the fixture dates before a later QA pass.
 
 ## 5. Test Devices
 
@@ -362,6 +425,7 @@ Route: `/`
 - [ ] Horizontal swipe works on phone.
 - [ ] Placeholder images show a clean fallback, not broken image icons.
 - [ ] Repeated or duplicate image behavior looks acceptable within a row.
+- [ ] For a user with an explicit allergy or strict food restriction, recipes containing the forbidden ingredient are hard-filtered before scoring and do not appear in any Home recommendation row, including fallback results.
 
 ### Recipe Card Actions
 
