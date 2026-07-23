@@ -47,7 +47,7 @@ const TamarTreeBadge = ({ userId, onOpenDiary, onOpenChat }: TamarTreeBadgeProps
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`relative rounded-full p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/25 ${badgeTone}`}
+          className={`relative rounded-full p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/25 shrink-0 ${badgeTone}`}
           aria-label="Open Tamar tree status"
         >
           {loading && !state ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sprout className="h-5 w-5" />}
@@ -56,7 +56,7 @@ const TamarTreeBadge = ({ userId, onOpenDiary, onOpenChat }: TamarTreeBadgeProps
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 rounded-lg border-primary/15 bg-[#fbf7ec] p-0 text-foreground shadow-xl shadow-primary/10">
+      <PopoverContent align="end" className="w-[calc(100vw-2rem)] max-w-xs sm:w-72 rounded-lg border-primary/15 bg-[#fbf7ec] p-0 text-foreground shadow-xl shadow-primary/10">
         <div className="border-b border-primary/10 px-4 py-3">
           <p className="text-sm font-bold text-[#1f3d2b]">Your Tamar</p>
           <p className="mt-1 text-xs leading-relaxed text-[#667864]">

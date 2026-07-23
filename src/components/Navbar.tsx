@@ -233,16 +233,16 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
 
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${scrolled || forceSolid ? 'border-b border-primary/10 bg-[#fbf7ec]/92 shadow-sm shadow-primary/10 backdrop-blur-xl' : 'bg-gradient-to-b from-[#fbf7ec]/90 to-[#fbf7ec]/20 backdrop-blur-sm'}`}>
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3 md:px-12">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1.5 sm:gap-4 px-3 sm:px-6 md:px-12 py-2.5 sm:py-3 max-w-full overflow-hidden">
         <div 
-          className="flex items-center gap-2 cursor-pointer transition-transform hover:scale-105"
+          className="flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 transition-transform hover:scale-105 select-none"
           onClick={() => navigate("/")}
         >
-          <img src="/favicon.ico" alt="Tamar Logo" className="w-8 h-8 rounded-lg shadow-lg border border-primary/20" />
-          <h1 className="text-primary text-2xl font-black tracking-tighter italic">TAMAR</h1>
+          <img src="/favicon.ico" alt="Tamar Logo" className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg shadow-lg border border-primary/20 shrink-0" />
+          <h1 className="text-primary text-xl sm:text-2xl font-black tracking-tighter italic shrink-0">TAMAR</h1>
         </div>
 
-        <div className="hidden justify-center lg:flex">
+        <div className="hidden justify-center lg:flex min-w-0">
           <div className="flex items-center gap-1 rounded-full border border-primary/10 bg-white/45 px-2 py-1.5 shadow-sm shadow-primary/5 backdrop-blur-xl">
             <a 
               href="#" 
@@ -287,12 +287,12 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 md:gap-6">
+        <div className="flex items-center justify-end gap-1 sm:gap-2.5 md:gap-4 lg:gap-6 shrink-0">
           {user && !isCanopyPlus && (
             <button
               type="button"
               onClick={() => navigate("/pricing")}
-              className="hidden h-9 items-center gap-2 rounded-full border border-[#d7b86f]/50 bg-[#203629] px-3 text-xs font-black uppercase tracking-[0.08em] text-[#f7c873] shadow-md shadow-primary/15 transition hover:-translate-y-0.5 hover:bg-[#2f4f3d] sm:inline-flex"
+              className="hidden h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-full border border-[#d7b86f]/50 bg-[#203629] px-2.5 sm:px-3 text-[11px] sm:text-xs font-black uppercase tracking-[0.08em] text-[#f7c873] shadow-md shadow-primary/15 transition hover:-translate-y-0.5 hover:bg-[#2f4f3d] sm:inline-flex shrink-0"
             >
               <TreePalm className="h-4 w-4" />
               Canopy+
@@ -301,7 +301,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+            className="rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25 shrink-0"
             aria-label="Search recipes"
             data-tour="search"
           >
@@ -318,7 +318,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="relative rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="relative rounded-full p-1.5 text-[#536451] transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25 shrink-0"
                 aria-label={unreadInsightCount > 0 ? `Open insights, ${unreadInsightCount} new` : "Open insights"}
               >
                 <Lightbulb className="w-5 h-5" />
@@ -329,7 +329,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 rounded-lg border-primary/15 bg-[#fbf7ec] p-0 text-foreground shadow-xl shadow-primary/10">
+            <PopoverContent align="end" className="w-[calc(100vw-2rem)] max-w-xs sm:w-80 rounded-lg border-primary/15 bg-[#fbf7ec] p-0 text-foreground shadow-xl shadow-primary/10">
               <div className="border-b border-primary/10 px-4 py-3">
                 <p className="text-sm font-bold text-[#1f3d2b]">Insights</p>
                 <p className="mt-1 text-xs text-[#667864]">
@@ -390,9 +390,9 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
             type="button"
             aria-label={user ? "Open account" : "Sign up"}
             onClick={() => setAuthOpen(true)}
-            className="w-9 h-9 bg-primary rounded-full flex items-center justify-center cursor-pointer overflow-hidden hover:ring-2 ring-primary/25 transition-all text-sm font-bold text-white shadow-sm shadow-primary/20"
+            className="w-8 h-8 sm:w-9 sm:h-9 bg-primary rounded-full flex items-center justify-center cursor-pointer overflow-hidden hover:ring-2 ring-primary/25 transition-all text-xs sm:text-sm font-bold text-white shadow-sm shadow-primary/20 shrink-0"
           >
-            {user && initials ? initials : <User className="w-5 h-5 text-white" />}
+            {user && initials ? initials : <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
           </button>
 
           {/* Mobile Navigation Menu */}
@@ -400,10 +400,10 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
             <SheetTrigger asChild>
               <button
                 type="button"
-                className="lg:hidden p-2 text-[#536451] hover:text-primary focus:outline-none transition-colors rounded-lg hover:bg-primary/10 cursor-pointer"
+                className="lg:hidden p-1.5 sm:p-2 text-[#536451] hover:text-primary focus:outline-none transition-colors rounded-lg hover:bg-primary/10 cursor-pointer shrink-0"
                 aria-label="Open menu"
               >
-                <Menu className="w-6 h-6" />
+                <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </SheetTrigger>
             <SheetContent
@@ -486,7 +486,7 @@ const Navbar = ({ forceSolid = false }: NavbarProps) => {
         </div>
       </div>
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="border-primary/15 bg-[#fbf7ec] text-foreground sm:max-w-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl border-primary/15 bg-[#fbf7ec] p-4 sm:p-6 text-foreground sm:rounded-lg">
           <DialogHeader>
             <DialogTitle className="text-2xl text-[#1f3d2b]">Search recipes</DialogTitle>
             <DialogDescription className="text-[#667864]">
