@@ -288,6 +288,9 @@ After setup, the loop is:
 1. User views/saves/starts a recipe.
 2. The app inserts a row into `recipe_interactions`.
 3. Homepage refresh calls `/api/refresh-recommendations`.
+   Home renders stored recommendations first, or safe general recipes when no
+   stored row exists, and performs one refresh in the background so a cold
+   recommender host cannot block the page skeleton.
 4. The Python service loads the saved preference artifact and, when present, the symptom-risk artifact.
    The serving process caches only the float32 model arrays and fetches recipe
    metadata for the bounded candidate/cookbook IDs; it does not expand all

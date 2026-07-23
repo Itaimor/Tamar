@@ -190,6 +190,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
       recommendationRequestRef.current === requestId;
 
     const loadRecommendations = async () => {
+      let backgroundRefreshApplied = false;
       let hardRestrictions: HardRestriction[] = [];
       const keepSafe = (recipes: RecipeItem[]) =>
         user
@@ -240,23 +241,6 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
             setFeedback({});
             setIsOnboardingCompleted(false);
             return;
-          }
-
-          if (session?.access_token) {
-            const refreshResponse = await fetch("/api/refresh-recommendations", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ user_id: user.id }),
-            });
-            if (!isCurrentRequest()) return;
-
-            if (!refreshResponse.ok) {
-              const message = await refreshResponse.text();
-              console.error("Recommendation refresh failed:", refreshResponse.status, message);
-            }
           }
 
           const { data, error } = await supabase
@@ -340,7 +324,9 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
             }
           };
 
-          // If we have cached recommendations, render them immediately
+          // Render stored recommendations before waking or calling the online
+          // service. Render's free tier can cold-start slowly, and Home should
+          // never hold its entire page skeleton open while that work runs.
           if (data && data.recommended_recipe_ids && data.recommended_recipe_ids.length > 0) {
             await renderRecommendations(data);
             if (!isCurrentRequest()) return;
@@ -376,7 +362,12 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
                     .eq("user_id", user.id)
                     .maybeSingle();
 
-                  if (isCurrentRequest() && updatedData) {
+                  if (
+                    isCurrentRequest()
+                    && updatedData?.recommended_recipe_ids
+                    && updatedData.recommended_recipe_ids.length > 0
+                  ) {
+                    backgroundRefreshApplied = true;
                     await renderRecommendations(updatedData);
                   }
                 }
@@ -402,6 +393,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
         setIsOnboardingCompleted(true);
         const defaultRecs = keepSafe(await fetchDefaultRecipes(6));
         if (!isCurrentRequest()) return;
+        if (backgroundRefreshApplied) return;
         setCuratedRecipes(defaultRecs);
         updateHeroCache(defaultRecs);
         queueRecipeImages(defaultRecs);

@@ -1449,6 +1449,14 @@ any Home row is filled. Personalized ingredient risk, IBS population priors,
 symptom risk, `combined_risk_score`, and `final_score` are computed once over
 the candidate pool, then the category rows select from that risk-reranked pool.
 
+Home is cache-first: after loading active hard restrictions, it reads and
+renders the existing `user_recommendations` row before starting one online
+refresh in the background. If no stored row exists, it renders safe general
+recipes while that refresh runs. A sleeping or slow recommender host therefore
+does not keep the entire Home page in skeleton state, and one page load does not
+send duplicate refresh requests. A successful background refresh replaces the
+display with the newly written recommendation row.
+
 Current category logic:
 
 - `Curated for You`: the top risk-reranked personalized candidates.
