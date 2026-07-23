@@ -30,31 +30,41 @@ npm --version
 
 1. Clone the repository and enter the project folder.
 
-```powershell
+```bash
 git clone <repo-url> Tamar
 cd Tamar
 ```
 
 2. Install frontend dependencies.
 
-```powershell
+```bash
 npm install
 ```
 
-3. Create and activate the Python environment for the recommender service.
+3. Create and activate the Python environment for the recommender service inside the project root.
 
-```powershell
-cd ..
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r .\Tamar\RecommenderSys\requirements.txt
-cd .\Tamar
+**On macOS / Linux (Bash / Zsh):**
+```bash
+python3 -m venv .venv
+./.venv/bin/python -m pip install --upgrade pip
+./.venv/bin/python -m pip install -r RecommenderSys/requirements.txt
 ```
 
-If `py` is unavailable, use `python -m venv ..\.venv` instead.
+**On Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r RecommenderSys\requirements.txt
+```
 
 4. Copy the environment template.
 
+**On macOS / Linux:**
+```bash
+cp .env.example .env.local
+```
+
+**On Windows:**
 ```powershell
 Copy-Item .env.example .env.local
 ```
@@ -95,9 +105,17 @@ In Supabase Authentication, enable the sign-in providers you intend to use and a
 
 7. Seed recipe data for local testing.
 
+**On macOS / Linux:**
+```bash
+cd RecommenderSys
+../.venv/bin/python seed_database.py 1000
+cd ..
+```
+
+**On Windows:**
 ```powershell
 cd RecommenderSys
-..\..\.venv\Scripts\python.exe seed_database.py 1000
+..\.venv\Scripts\python.exe seed_database.py 1000
 cd ..
 ```
 
@@ -105,9 +123,17 @@ The seeder uses Food.com data when available and otherwise creates demo data for
 
 8. Train and upload the collaborative-filtering artifact.
 
+**On macOS / Linux:**
+```bash
+cd RecommenderSys
+../.venv/bin/python recommend_batch.py
+cd ..
+```
+
+**On Windows:**
 ```powershell
 cd RecommenderSys
-..\..\.venv\Scripts\python.exe recommend_batch.py
+..\.venv\Scripts\python.exe recommend_batch.py
 cd ..
 ```
 
@@ -115,15 +141,21 @@ This reads Supabase data, trains the configured preference model, prepares recom
 
 9. Start the Python recommender service in one terminal.
 
+**On macOS / Linux:**
+```bash
+cd RecommenderSys
+../.venv/bin/python -m uvicorn recommender_service:app --host 127.0.0.1 --port 8000
+```
+
+**On Windows:**
 ```powershell
-cd <path-to-your-clone>\Tamar\RecommenderSys
-..\..\.venv\Scripts\python.exe -m uvicorn recommender_service:app --host 127.0.0.1 --port 8000
+cd RecommenderSys
+..\.venv\Scripts\python.exe -m uvicorn recommender_service:app --host 127.0.0.1 --port 8000
 ```
 
 10. Start the React/Vite app in another terminal.
 
-```powershell
-cd <path-to-your-clone>\Tamar
+```bash
 npm run dev
 ```
 
@@ -135,6 +167,12 @@ After signing in, open `http://127.0.0.1:8080/app?tab=chat` and send a simple me
 
 Check the Python service:
 
+**On macOS / Linux:**
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+**On Windows:**
 ```powershell
 Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/health
 ```
@@ -147,7 +185,7 @@ Expected response:
 
 Check the frontend:
 
-```powershell
+```bash
 npm run test
 npm run build
 ```
@@ -163,3 +201,4 @@ For the full local flow, see [docs/LOCAL_SETUP_WITH_RECOMMENDER.md](docs/LOCAL_S
 - If chat or image analysis fails, verify `GEMINI_TAMAR_API_KEY` and keep it server-side only.
 - If image uploads fail, confirm the `user-uploads` bucket and object policies from the migrations.
 - If recipe images are missing, the app can still render fallback images. Configure `PEXELS_API_KEY` only if you want to fill the `recipe_images` cache.
+
