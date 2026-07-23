@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -873,7 +874,10 @@ def fetch_recipes_metadata(
                 f"[Info] Querying metadata for {len(ids_to_fetch)} "
                 "specific recipe IDs from Supabase..."
             )
-            chunk_size = 200
+            chunk_size = max(
+                1,
+                int(os.getenv("RECOMMENDER_RECIPES_META_QUERY_CHUNK_SIZE", "500")),
+            )
             fetched_rows = []
             for i in range(0, len(ids_to_fetch), chunk_size):
                 chunk = ids_to_fetch[i : i + chunk_size]
@@ -1020,6 +1024,70 @@ def fetch_cookbook_memberships(supabase: Client, user_id: str) -> list[dict]:
         return []
 
     return response.data or []
+
+
+def fetch_parallel_recommendation_inputs(
+    supabase: Client,
+    user_id: str,
+    model_name: str | None,
+) -> dict:
+    """Fetch independent online inputs concurrently.
+
+    Hard-restriction failures still propagate and abort the refresh.
+    """
+
+    def safe_trending_ids() -> list[str]:
+        try:
+            return compute_trending_recipe_ids(supabase)
+        except Exception as exc:
+            print(f"[Warning] Failed to compute trending recipes: {exc}")
+            return []
+
+    max_workers = max(
+        1,
+        int(os.getenv("RECOMMENDER_PARALLEL_READ_WORKERS", "8")),
+    )
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            "raw_interactions": executor.submit(
+                fetch_user_interactions,
+                supabase,
+                user_id,
+            ),
+            "cookbook_rows": executor.submit(
+                fetch_cookbook_memberships,
+                supabase,
+                user_id,
+            ),
+            "precomputed_candidates": executor.submit(
+                fetch_precomputed_candidates,
+                supabase,
+                user_id,
+                CANDIDATE_FETCH_LIMIT,
+                model_name,
+            ),
+            "trending_ranked_ids": executor.submit(safe_trending_ids),
+            "restrictions": executor.submit(
+                fetch_user_restrictions,
+                supabase,
+                user_id,
+            ),
+            "personal_signals": executor.submit(
+                fetch_user_ingredient_risks,
+                supabase,
+                user_id,
+            ),
+            "population_signals": executor.submit(
+                fetch_population_priors,
+                supabase,
+            ),
+            "recent_context": executor.submit(
+                fetch_recent_user_context,
+                supabase,
+                user_id,
+            ),
+        }
+        return {name: future.result() for name, future in futures.items()}
 
 
 def group_cookbook_memberships(rows: list[dict]) -> dict[str, dict]:
@@ -1394,7 +1462,12 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         cache_in_memory=True,
     )
 
-    raw_interactions = fetch_user_interactions(supabase, user_id)
+    inputs = fetch_parallel_recommendation_inputs(
+        supabase,
+        user_id,
+        artifact.get("model_name"),
+    )
+    raw_interactions = inputs["raw_interactions"]
     learned_user_vector, learned_user_bias = get_learned_user_state(user_id, artifact)
     is_lightfm_artifact = str(artifact.get("backend", "")).lower() == "lightfm"
     # If a current LightFM artifact lacks this particular user's materialized
@@ -1418,18 +1491,14 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         else None
     )
     excluded_recipe_ids = get_excluded_recipe_ids(raw_interactions)
-    cookbook_rows = fetch_cookbook_memberships(supabase, user_id)
+    cookbook_rows = inputs["cookbook_rows"]
 
     global_mean = artifact["global_mean"]
 
     # Fetch the bounded, generation-matched candidate set before doing latent
     # scoring. Catalog cookbook recipes are added because they need preference
     # scores even when they did not make the user's offline top-N.
-    precomputed_candidates = fetch_precomputed_candidates(
-        supabase,
-        user_id,
-        model_name=artifact.get("model_name"),
-    )
+    precomputed_candidates = inputs["precomputed_candidates"]
     cookbook_catalog_ids = {
         str(row["recipe_id"])
         for row in cookbook_rows
@@ -1497,11 +1566,7 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
         print(f"[Warning] Failed to fetch recipes metadata for category predicates: {exc}")
         recipes_meta = {}
 
-    try:
-        trending_ranked_ids = compute_trending_recipe_ids(supabase)
-    except Exception as exc:
-        print(f"[Warning] Failed to compute trending recipes: {exc}")
-        trending_ranked_ids = []
+    trending_ranked_ids = inputs["trending_ranked_ids"]
 
     # Flavor centroid in CF embedding space (Route A). Cached at module scope;
     # returns ({}, None) on first call when no seeds match the artifact, which
@@ -1518,10 +1583,10 @@ def recommend_for_user(user_id: str, k: int = 6, upload: bool = True) -> list[tu
 
     # Health-risk layer: hard restrictions, direct personalized ingredient
     # risk, IBS population priors, optional symptom model, final rerank.
-    restrictions = fetch_user_restrictions(supabase, user_id)
-    personal_signals = fetch_user_ingredient_risks(supabase, user_id)
-    population_signals = fetch_population_priors(supabase)
-    recent_context = fetch_recent_user_context(supabase, user_id)
+    restrictions = inputs["restrictions"]
+    personal_signals = inputs["personal_signals"]
+    population_signals = inputs["population_signals"]
+    recent_context = inputs["recent_context"]
     risk_ranked_candidates = rerank_candidates(
         candidates=candidate_pairs,
         recipes_meta=recipes_meta,

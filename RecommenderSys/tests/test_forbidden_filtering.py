@@ -328,5 +328,70 @@ class RestrictionRequestValidationTests(unittest.TestCase):
             )
 
 
+@unittest.skipUnless(
+    importlib.util.find_spec("fastapi") is not None,
+    "FastAPI service dependency is not installed",
+)
+class RecommendationRefreshSchedulingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        import recommender_service
+
+        recommender_service._recommendation_users_in_progress.clear()
+
+    def tearDown(self) -> None:
+        import recommender_service
+
+        recommender_service._recommendation_users_in_progress.clear()
+
+    def test_refresh_is_accepted_once_and_duplicate_work_is_coalesced(self) -> None:
+        from fastapi import BackgroundTasks
+        import recommender_service
+
+        request = recommender_service.RecommendationRequest(
+            user_id="test-user",
+            k=6,
+        )
+        first_tasks = BackgroundTasks()
+        duplicate_tasks = BackgroundTasks()
+
+        with patch.dict(
+            "os.environ",
+            {"RECOMMENDER_SERVICE_SECRET": ""},
+            clear=False,
+        ):
+            first = recommender_service.recommend_user(
+                request,
+                first_tasks,
+                x_recommender_secret=None,
+            )
+            duplicate = recommender_service.recommend_user(
+                request,
+                duplicate_tasks,
+                x_recommender_secret=None,
+            )
+
+        self.assertTrue(first["accepted"])
+        self.assertFalse(first["already_in_progress"])
+        self.assertEqual(1, len(first_tasks.tasks))
+        self.assertTrue(duplicate["already_in_progress"])
+        self.assertEqual(0, len(duplicate_tasks.tasks))
+
+    def test_failed_background_refresh_releases_user_slot(self) -> None:
+        import recommender_service
+
+        recommender_service._recommendation_users_in_progress.add("test-user")
+        with patch.object(
+            recommender_service,
+            "recommend_for_user",
+            side_effect=RuntimeError("test failure"),
+        ), patch("builtins.print"):
+            recommender_service.run_recommendation_refresh("test-user", 6)
+
+        self.assertNotIn(
+            "test-user",
+            recommender_service._recommendation_users_in_progress,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

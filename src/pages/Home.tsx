@@ -62,6 +62,8 @@ type HomeProps = {
 };
 
 const HERO_RECIPE_STORAGE_KEY = "tamar:lastHeroRecipe";
+const RECOMMENDATION_POLL_INTERVAL_MS = 10_000;
+const RECOMMENDATION_POLL_ATTEMPTS = 18;
 
 const getFirstNSentences = (text: string, n: number): string => {
   if (!text) return "";
@@ -334,6 +336,7 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
 
           // 2. Trigger the refresh in the background (non-blocking)
           if (session?.access_token) {
+            const previousUpdatedAt = data?.updated_at || null;
             fetch("/api/refresh-recommendations", {
               method: "POST",
               headers: {
@@ -348,27 +351,44 @@ const Home = ({ deferColdStartSetup = false }: HomeProps) => {
                   const message = await refreshResponse.text();
                   console.error("Recommendation refresh failed:", refreshResponse.status, message);
                 } else {
-                  // If it succeeded, fetch the updated recommendations and update the UI state
-                  const { data: updatedData } = await supabase
-                    .from("user_recommendations")
-                    .select(
-                      "recommended_recipe_ids, match_scores, " +
-                        "trending_recipe_ids, trending_match_scores, " +
-                        "flavor_recipe_ids, flavor_match_scores, " +
-                        "healthy_recipe_ids, healthy_match_scores, " +
-                        "quick_recipe_ids, quick_match_scores, " +
-                        "updated_at"
-                    )
-                    .eq("user_id", user.id)
-                    .maybeSingle();
-
-                  if (
-                    isCurrentRequest()
-                    && updatedData?.recommended_recipe_ids
-                    && updatedData.recommended_recipe_ids.length > 0
+                  // Render acknowledges the queued refresh immediately. Poll
+                  // the user-owned row until the worker publishes a newer one.
+                  for (
+                    let attempt = 0;
+                    attempt < RECOMMENDATION_POLL_ATTEMPTS;
+                    attempt += 1
                   ) {
-                    backgroundRefreshApplied = true;
-                    await renderRecommendations(updatedData);
+                    await new Promise((resolve) =>
+                      window.setTimeout(resolve, RECOMMENDATION_POLL_INTERVAL_MS)
+                    );
+                    if (!isCurrentRequest()) return;
+
+                    const { data: updatedData, error: updatedError } = await supabase
+                      .from("user_recommendations")
+                      .select(
+                        "recommended_recipe_ids, match_scores, " +
+                          "trending_recipe_ids, trending_match_scores, " +
+                          "flavor_recipe_ids, flavor_match_scores, " +
+                          "healthy_recipe_ids, healthy_match_scores, " +
+                          "quick_recipe_ids, quick_match_scores, " +
+                          "updated_at"
+                      )
+                      .eq("user_id", user.id)
+                      .maybeSingle();
+
+                    if (updatedError) {
+                      console.error("Failed to poll refreshed recommendations:", updatedError);
+                      return;
+                    }
+                    if (
+                      updatedData?.recommended_recipe_ids
+                      && updatedData.recommended_recipe_ids.length > 0
+                      && updatedData.updated_at !== previousUpdatedAt
+                    ) {
+                      backgroundRefreshApplied = true;
+                      await renderRecommendations(updatedData);
+                      return;
+                    }
                   }
                 }
               })

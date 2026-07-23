@@ -1457,6 +1457,14 @@ does not keep the entire Home page in skeleton state, and one page load does not
 send duplicate refresh requests. A successful background refresh replaces the
 display with the newly written recommendation row.
 
+The authenticated service endpoint acknowledges a valid refresh with HTTP 202
+and performs the refresh on the persistent Python service after the response.
+Only one refresh per user may run in a service process at a time. Home polls its
+user-owned `user_recommendations.updated_at` at a low frequency for up to three
+minutes and renders the newer row when publication completes. This prevents a
+serverless frontend bridge timeout from turning successful but longer cold
+refreshes into HTTP 504 responses.
+
 Current category logic:
 
 - `Curated for You`: the top risk-reranked personalized candidates.
@@ -1500,7 +1508,7 @@ The online system does not:
 
 It only:
 
-1. Fetches precomputed candidates.
+1. Fetches precomputed candidates and independent user/risk inputs concurrently.
 2. Reconstructs preference scores only for those factor rows (plus catalog
    recipes needed by the user's CookBook sidebar).
 3. Applies hard filters.

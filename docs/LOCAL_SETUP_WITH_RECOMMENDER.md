@@ -93,6 +93,8 @@ SUPABASE_RECOMMENDER_ARTIFACT=cf_item_factors.npz
 SUPABASE_SYMPTOM_MODEL_ARTIFACT=xgboost_symptom_model.pkl
 RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS=600
 RECOMMENDER_RECIPES_META_CACHE_MAX_ITEMS=2000
+RECOMMENDER_RECIPES_META_QUERY_CHUNK_SIZE=500
+RECOMMENDER_PARALLEL_READ_WORKERS=8
 RECOMMENDER_SYMPTOM_ARTIFACT_CACHE_TTL_SECONDS=600
 RECOMMENDER_HISTORICAL_POSITIVE_MIN_RATING=4
 RECOMMENDER_ONLINE_VECTOR_WEIGHT=0.35
@@ -289,8 +291,9 @@ After setup, the loop is:
 2. The app inserts a row into `recipe_interactions`.
 3. Homepage refresh calls `/api/refresh-recommendations`.
    Home renders stored recommendations first, or safe general recipes when no
-   stored row exists, and performs one refresh in the background so a cold
-   recommender host cannot block the page skeleton.
+   stored row exists. The Python endpoint accepts the job with HTTP 202, runs
+   one background refresh per user, and Home polls `updated_at` for the newer
+   row so a cold recommender host cannot block or time out the frontend bridge.
 4. The Python service loads the saved preference artifact and, when present, the symptom-risk artifact.
    The serving process caches only the float32 model arrays and fetches recipe
    metadata for the bounded candidate/cookbook IDs; it does not expand all
@@ -348,6 +351,8 @@ SUPABASE_RECOMMENDER_ARTIFACT
 SUPABASE_SYMPTOM_MODEL_ARTIFACT
 RECOMMENDER_ARTIFACT_CACHE_TTL_SECONDS
 RECOMMENDER_RECIPES_META_CACHE_MAX_ITEMS
+RECOMMENDER_RECIPES_META_QUERY_CHUNK_SIZE
+RECOMMENDER_PARALLEL_READ_WORKERS
 RECOMMENDER_SYMPTOM_ARTIFACT_CACHE_TTL_SECONDS
 RECOMMENDER_ONLINE_VECTOR_WEIGHT
 RECOMMENDER_ONLINE_VECTOR_FULL_STRENGTH

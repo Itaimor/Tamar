@@ -8,10 +8,11 @@ Supabase Storage and updates user_recommendations for the requested user.
 """
 
 import os
+import threading
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from pydantic import BaseModel, constr
 from dotenv import load_dotenv
 
@@ -83,6 +84,8 @@ class SyncCatalogRequest(BaseModel):
 
 
 app = FastAPI(title="Tamar Recommender Service")
+_recommendation_users_in_progress: set[str] = set()
+_recommendation_users_lock = threading.Lock()
 
 
 def require_service_secret(x_recommender_secret: str | None) -> None:
@@ -96,17 +99,40 @@ async def health() -> dict:
     return {"ok": True}
 
 
-@app.post("/recommend-user")
+def run_recommendation_refresh(user_id: str, k: int) -> None:
+    try:
+        recommend_for_user(user_id, k=k, upload=True)
+    except Exception as exc:
+        print(f"[Error] Background recommendation refresh failed: {exc}")
+    finally:
+        with _recommendation_users_lock:
+            _recommendation_users_in_progress.discard(user_id)
+
+
+@app.post("/recommend-user", status_code=202)
 def recommend_user(
     payload: RecommendationRequest,
+    background_tasks: BackgroundTasks,
     x_recommender_secret: str | None = Header(default=None),
 ) -> dict:
     require_service_secret(x_recommender_secret)
 
-    recommendations = recommend_for_user(payload.user_id, k=payload.k, upload=True)
+    with _recommendation_users_lock:
+        already_in_progress = payload.user_id in _recommendation_users_in_progress
+        if not already_in_progress:
+            _recommendation_users_in_progress.add(payload.user_id)
+
+    if not already_in_progress:
+        background_tasks.add_task(
+            run_recommendation_refresh,
+            payload.user_id,
+            payload.k,
+        )
+
     return {
         "ok": True,
-        "recommended_recipe_ids": [recipe_id for recipe_id, _ in recommendations],
+        "accepted": True,
+        "already_in_progress": already_in_progress,
     }
 
 
