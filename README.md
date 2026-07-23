@@ -31,7 +31,7 @@ This project uses free-tier hosting. Supabase may pause inactive free projects, 
 
 - Yael Kelman - yaelsagi@mail.tau.ac.il
 - Ram Kedem - ramkedem@mail.tau.ac.il
-- Itay Mor - itai@edventureil.com
+- Itai Mor - itaim1@mail.tau.ac.il
 - Yehonatan Barel - yehonatanb3@mail.tau.ac.il
 
 ## Screenshots
