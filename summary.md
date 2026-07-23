@@ -2,34 +2,64 @@
 
 ## Datasets Used
 
-- **Food.com recipes and interactions** - the main recipe catalog and historical user-item interaction source for collaborative filtering. The local seeding flow is implemented in [RecommenderSys/seed_database.py](RecommenderSys/seed_database.py), and baseline dataset loading/evaluation helpers live in [RecommenderSys/src/](RecommenderSys/src/).
-- **Food.com nutrition fields** - catalog nutrition arrays are used when estimating meal calories, protein, and fat for recipe-backed diary entries.
-- **IBS and FODMAP ingredient knowledge** - local ingredient mappings and trigger candidates are stored in [RecommenderSys/IBS_models/fodmap_mapping.csv](RecommenderSys/IBS_models/fodmap_mapping.csv) and app-side matching helpers such as [src/lib/ibsIngredients.ts](src/lib/ibsIngredients.ts).
-- **User-generated Tamar data** - Supabase stores recipe interactions, cooklists, meal logs, symptom reports, IBS check-ins, restrictions, personal ingredient risk, tree progress, and recommendation rows.
-- **Gemini-assisted image and text inputs** - food photos and free-text meal descriptions can draft meal or personal recipe details, but the app only persists learning evidence after user confirmation.
+- **Food.com recipes and interactions** — main recipe catalog and historical user-item interaction source for collaborative filtering. Available on [Kaggle Food.com Dataset](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions). Local seeding flow is implemented in [RecommenderSys/seed_database.py](RecommenderSys/seed_database.py), and baseline dataset loading/evaluation helpers live in [RecommenderSys/src/](RecommenderSys/src/).
+- **Food.com nutrition fields** — catalog nutrition arrays used when estimating meal calories, protein, and fat for recipe-backed diary entries.
+- **IBS and FODMAP ingredient knowledge** — local ingredient mappings and trigger candidates stored in [RecommenderSys/IBS_models/fodmap_mapping.csv](RecommenderSys/IBS_models/fodmap_mapping.csv) and app-side matching helpers in [src/lib/ibsIngredients.ts](src/lib/ibsIngredients.ts).
+- **User-generated Tamar data** — stored in Supabase (recipe interactions, cooklists, meal logs, symptom reports, IBS check-ins, restrictions, personal ingredient risk, tree progress, and recommendation rows).
+- **Gemini-assisted image and text inputs** — food photos and free-text meal descriptions used to draft meal or personal recipe details (persisted only after user confirmation).
 
-NHANES-style sensitivity co-occurrence was considered during design but is intentionally deferred and is not part of the current scoring implementation.
+Additional data-related information:
+- NHANES-style sensitivity co-occurrence was considered during design but is intentionally deferred and is not part of the current scoring implementation.
+
+&nbsp;<br>
 
 ## Technologies and Frameworks
 
-- **Frontend** - React, TypeScript, Vite, Tailwind CSS, shadcn/Radix UI primitives, React Router, React Query, Recharts, Framer Motion, and Lucide icons.
-- **Backend and API layer** - TypeScript API handlers under `api/`, local Vite middleware, Python FastAPI, and Uvicorn.
-- **Recommendation and modeling** - LightFM, NumPy, pandas, SciPy, scikit-learn, XGBoost, and a matrix-factorization fallback.
-- **Data platform** - Supabase Auth, PostgreSQL, Row Level Security policies, and Supabase Storage buckets for recommender artifacts and user uploads.
-- **AI** - Google Gemini through `@google/generative-ai` for Tamar chat, food-photo analysis, and editable nutrition estimates.
-- **Quality tools** - Vitest, Testing Library, ESLint, and the manual QA plan in [docs/QA_PLAN.md](docs/QA_PLAN.md).
+### Frontend
+
+- **React & TypeScript** — for modular SPA component architecture and type safety.
+- **Vite** — for fast local development server and optimized production build bundling.
+- **Tailwind CSS & shadcn/Radix UI** — for design system tokens, accessible primitives, and UI styling.
+- **React Router & React Query** — for client-side routing, data fetching, and state caching.
+- **Recharts, Framer Motion & Lucide Icons** — for UI analytics visualizations, micro-animations, and icons.
+
+### Backend
+
+- **TypeScript API Handlers (`api/`)** — for serverless request routing and bridging client requests to Supabase and Gemini.
+- **FastAPI & Uvicorn** — for hosting Python recommendation endpoints and model inference microservice.
+
+### Algorithmic
+
+- **LightFM** — for hybrid implicit matrix factorization recommendation.
+- **XGBoost & scikit-learn** — for symptom risk prediction and content-based recipe features.
+- **NumPy, pandas, SciPy** — for matrix operations, feature extraction, and dataset preparation.
+
+### Data Platforms
+
+- **Supabase (PostgreSQL & RLS)** — for relational data storage, authentication, and Row Level Security policies.
+- **Supabase Storage** — for storing recommender model artifacts and user meal image uploads.
+
+### AI
+
+- **Google Gemini (`@google/generative-ai`)** — for food-photo analysis, automated nutrition estimation, and Tamar conversational Assistant.
+
+&nbsp;<br>
 
 ## Main Algorithms
 
-- **LightFM preference model** - learns implicit preference from Food.com history and app interactions such as viewed, saved, started, completed, liked, and dismissed recipes.
-- **Matrix-factorization fallback** - keeps candidate generation usable when LightFM is unavailable in the local environment.
-- **Strict restriction filtering** - allergies and hard restrictions remove unsafe recipes before scoring.
-- **Personalized ingredient risk** - meal logs and symptom reports create exposure evidence and update per-user ingredient risk.
-- **IBS population priors** - IBS/FODMAP ingredient knowledge provides risk defaults when a user has little direct evidence.
-- **XGBoost-compatible symptom risk** - optional offline model training estimates digestive symptom risk from recipe, user, and context features.
-- **Final reranking** - candidate recipes are ranked with `final_score = preference_score - lambda * combined_risk_score`.
-- **Analysis content-based experiment suggestion** - a bounded weighted term-frequency cosine similarity model suggests one already-recommended recipe to test, while penalizing strong watchlist ingredients.
-- **CookBook recommendation heuristic** - catalog cookbook recipes reuse the risk-reranking path, while private personal recipes are ranked with bounded recency, cooklist, and ingredient-note heuristics.
+A brief summary of the key algorithms and features developed:
+
+- **LightFM preference model** — learns implicit preference from Food.com history and app interactions (viewed, saved, started, completed, liked, dismissed).
+- **Matrix-factorization fallback** — keeps candidate generation usable when LightFM is unavailable in the local environment.
+- **Strict restriction filtering** — allergies and hard restrictions remove unsafe recipes before scoring.
+- **Personalized ingredient risk** — meal logs and symptom reports create exposure evidence and update per-user ingredient risk.
+- **IBS population priors** — IBS/FODMAP ingredient knowledge provides risk defaults when a user has little direct evidence.
+- **XGBoost-compatible symptom risk** — optional offline model training estimates digestive symptom risk from recipe, user, and context features.
+- **Final reranking** — candidate recipes are ranked with `final_score = preference_score - lambda * combined_risk_score`.
+- **Analysis content-based experiment suggestion** — a bounded weighted term-frequency cosine similarity model suggests one already-recommended recipe to test, while penalizing strong watchlist ingredients.
+- **CookBook recommendation heuristic** — catalog cookbook recipes reuse the risk-reranking path, while private personal recipes are ranked with bounded recency, cooklist, and ingredient-note heuristics.
+
+&nbsp;<br>
 
 ## System Architecture
 
@@ -47,10 +77,12 @@ This design keeps expensive training offline while the live app only filters and
 
 ## Development Environment
 
-- **VS Code / Cursor** - used for frontend, API, and documentation work.
-- **ChatGPT / Codex** - used for development assistance, recommender design review, and documentation alignment.
-- **Supabase SQL Editor** - used to apply migrations and inspect project tables.
-- **Local terminals** - one process for Vite and one process for the Python recommender service.
+- **Cursor & VS Code** — used for UI development, API implementation, and algorithmic module integration.
+- **ChatGPT / Codex** — used for algorithmic modules design review, refactoring, and documentation alignment.
+- **Supabase SQL Editor** — used to apply schema migrations and inspect database state.
+- **Local Terminals** — concurrent processes for Vite dev server and Python FastAPI recommender service.
+
+&nbsp;<br>
 
 ## Development Evolution
 
@@ -62,39 +94,43 @@ This design keeps expensive training offline while the live app only filters and
 - **Milestone 6:** Added Gemini-assisted chat, food-photo analysis, editable nutrition estimates, personal cookbook recipes, and the Tamar tree habit loop.
 - **Milestone 7:** Added freemium gates, cookbook-only recommendations, QA documentation, and final submission assets.
 
+&nbsp;<br>
+
 ## Evaluation
 
 The project separates recommendation quality from health-risk and product-quality checks:
 
-- Preference models can be evaluated with RMSE and Precision@K using the baseline helpers in [RecommenderSys/src/evaluate.py](RecommenderSys/src/evaluate.py), plus Precision@K, Recall@K, NDCG@K, and MAP@K as described in the design document.
-- Symptom-risk modeling can be evaluated with AUC, F1, precision, recall, and log loss when enough labeled meal/symptom data exists.
-- Combined recommendation behavior should track average predicted risk in top-K recommendations, number of high-risk recipes shown, and preference score among lower-risk recipes.
-- The Analysis recipe experiment is evaluated with candidate-pool validity, duplicate rate, watchlist penalty correctness, recipe-link validity, and user-facing comprehension.
-- Frontend helper behavior is covered by Vitest tests under [src/test/](src/test/), while full app journeys are covered by [docs/QA_PLAN.md](docs/QA_PLAN.md).
+- **Offline Recommendation Metrics**: Evaluated with RMSE and Precision@K using baseline helpers in [RecommenderSys/src/evaluate.py](RecommenderSys/src/evaluate.py), as well as Precision@K, Recall@K, NDCG@K, and MAP@K.
+- **Symptom Risk Metrics**: Evaluated with AUC, F1, precision, recall, and log loss on labeled meal/symptom history.
+- **Combined Ranking Quality**: Measured via average predicted risk in top-K recommendations, count of high-risk items shown, and preference retention among low-risk candidates.
+- **Experiment Model Validity**: Verified via candidate-pool validity, duplicate rate, watchlist penalty correctness, and user comprehension.
+- **Automated & Manual Testing**: Covered by Vitest test suites under [src/test/](src/test/) and end-to-end user journey validation in [docs/QA_PLAN.md](docs/QA_PLAN.md).
+
+&nbsp;<br>
 
 ## Main Features
 
-- Personalized recipe recommendations that balance taste and IBS-related risk.
-- Cold-start onboarding for taste and IBS ingredient sensitivity signals.
-- Supabase authentication with email/password and OAuth provider support.
-- Home recommendation rows, recipe detail pages, and saved recipe interactions.
-- CookBook with cooklists, personal recipes, and cookbook-only suggestions.
-- Diary for meals, symptom reports, nutrition tracking, and uploaded meal images.
-- Analysis page for foods to watch, easier foods, recent trends, nutrition, Tamar Record, and bounded recipe experiments.
-- Tamar chat with structured private context, recommendation presentation, food logging, and recipe feedback.
-- Food-photo analysis and editable nutrition estimation through Gemini.
-- Tamar tree companion that rewards consistent logging without affecting recommendation ranking.
-- Sapling / Canopy+ freemium gates for selected premium features.
+- **Core Recommendation Engine**: Hybrid LightFM collaborative filtering combined with IBS-aware personalized ingredient risk reranking (`final_score = preference - lambda * risk`).
+- **Cold-Start Onboarding**: Interactive preference and dietary restriction onboarding for initial user profile bootstrapping.
+- **Food & Symptom Diary**: Meal logging, symptom tracking, calorie/macro breakdowns, and photo-based meal input via Gemini.
+- **IBS Pattern Analysis**: Interactive triggers vs. easy food analysis, watchlist penalties, and candidate recipe experiment suggestions.
+- **Tamar AI Assistant**: Context-aware chat with recipe suggestions, food logging, and diet feedback.
+- **Tamar Tree Companion**: Gamified habit progress loop rewarding consistent meal/symptom tracking.
+- **Freemium Monetization Model**: Sapling tier vs. Canopy+ premium feature gating.
+
+&nbsp;<br>
 
 ## Open Issues, Limitations, and Future Work
 
-- NHANES-based risk propagation is intentionally deferred and should not be assumed in current results.
-- XGBoost symptom-risk quality depends on having enough confirmed meal and symptom history.
-- Gemini food-photo analysis can miss hidden ingredients; Tamar treats it as editable draft state only.
-- Canopy+ checkout is represented in the UI but payment processing is not live.
-- Production deployment requires hosting the frontend/API and Python recommender service separately.
-- Further evaluation should add larger offline metrics runs, real user feedback loops, and stronger calibration checks for health-risk predictions.
+- **NHANES Risk Propagation**: Co-occurrence risk propagation was designed but intentionally deferred.
+- **Symptom Risk Training Data**: XGBoost symptom model performance requires consistent long-term meal/symptom logs per user.
+- **AI Photo Input Verification**: Gemini food-photo recognition serves as editable draft state to mitigate hidden allergen risk.
+- **Live Payments Integration**: Canopy+ checkout flow is prototyped in UI without active payment gateway hooks.
+- **Production Infrastructure**: Deployment requires split hosting for static/API edge handlers and Python compute microservice.
+
+&nbsp;<br>
 
 ## Additional Comments
 
-Tamar is intentionally not a diagnosis tool. The product language uses pattern-tracking terms such as "worth watching" and "seems easier" rather than claiming that a user is sensitive or intolerant. The recommendation system is designed to keep preference learning, health-risk modeling, and motivational habit features separate so engagement mechanics do not leak into health conclusions.
+Tamar is strictly designed as a nutritional pattern tracking and recommendation system, not a medical diagnostic tool. UI language uses non-diagnostic terms like "worth watching" and "seems easier". The system maintains clear separation between recommendation scoring, risk estimation, and habit mechanics to ensure gamification features do not distort health recommendations.
+
